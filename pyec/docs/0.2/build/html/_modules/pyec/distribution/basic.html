@@ -1,0 +1,336 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.basic &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.basic</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy.linalg</span> <span class="kn">as</span> <span class="nn">la</span>
+<span class="kn">import</span> <span class="nn">binascii</span><span class="o">,</span> <span class="nn">struct</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">ConfigBuilder</span>
+<span class="kn">from</span> <span class="nn">pyec.util.registry</span> <span class="kn">import</span> <span class="n">BENCHMARKS</span>
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+
+<div class="viewcode-block" id="Distribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Distribution">[docs]</a><span class="k">class</span> <span class="nc">Distribution</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A Distribution that can be sampled&quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Distribution</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Get a single sample from the distribution&quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Distribution.batch"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Distribution.batch">[docs]</a>   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampleSize</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Get a sample from the distribution&quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div></div>
+<div class="viewcode-block" id="ProposalDistribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution">[docs]</a><span class="k">class</span> <span class="nc">ProposalDistribution</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A proposal distribution for e.g. simulated annealing&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ProposalDistribution.adjust"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution.adjust">[docs]</a>   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rate</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;given the current acceptance rate, alter the distribution as needed&quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ProposalDistribution.densityRatio"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution.densityRatio">[docs]</a>   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">i</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;given two points, give the ratio of the densities p(x1) / p(x2)&quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div></div>
+<div class="viewcode-block" id="PopulationDistribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution">[docs]</a><span class="k">class</span> <span class="nc">PopulationDistribution</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A distribution governing a population algorithm&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PopulationDistribution.update"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.update">[docs]</a>   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">population</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Update the distribution with the latest population</span>
+<span class="sd">          </span>
+<span class="sd">         population is a list of (point, score) tuples</span>
+
+<span class="sd">         If config.sorted is True, the list will be sorted by descending score.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="PopulationDistribution.run"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.run">[docs]</a>   <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">fitness</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">extraArgs</span><span class="o">=</span><span class="p">[],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+     <span class="kn">from</span> <span class="nn">pyec.trainer</span> <span class="kn">import</span> <span class="n">Trainer</span>
+     <span class="k">if</span> <span class="n">fitness</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">fitness</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">function</span><span class="p">,</span> <span class="o">*</span><span class="n">extraArgs</span><span class="p">)</span>
+     <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">segment</span> <span class="o">=</span> <span class="n">segment</span>
+     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="s">&#39;center&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">center</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">scale</span>
+     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="s">&#39;numInputs&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">numInputs</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">numInputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">numOutputs</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">numOutputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">numHidden</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">numHidden</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">netPattern</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">netPattern</span>
+     <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="n">fitness</span>
+     <span class="k">try</span><span class="p">:</span>
+        <span class="n">fitness</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="n">fitness</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
+     <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>
+     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="s">&#39;initial&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span> <span class="o">=</span> <span class="n">fitness</span><span class="o">.</span><span class="n">initial</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initial</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span>
+     <span class="n">trainer</span> <span class="o">=</span> <span class="n">Trainer</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+     <span class="n">trainer</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+     <span class="bp">self</span><span class="o">.</span><span class="n">trainer</span> <span class="o">=</span> <span class="n">trainer</span>
+     <span class="k">return</span> <span class="n">fitness</span>
+</div>
+<div class="viewcode-block" id="PopulationDistribution.convert"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.convert">[docs]</a>   <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">         Convert a point to a scorable representation</span>
+<span class="sd">         </span>
+<span class="sd">         x - the candidate solution</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">x</span>
+</div>
+   <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="PopulationDistribution.configure"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.configure">[docs]</a>   <span class="k">def</span> <span class="nf">configure</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">generations</span><span class="p">,</span> <span class="n">populationSize</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">function</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Return a Config object</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">cls</span><span class="o">.</span><span class="n">configurator</span><span class="p">()</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="n">generations</span><span class="p">,</span> <span class="n">populationSize</span><span class="p">,</span> <span class="n">dimension</span><span class="p">,</span> <span class="n">function</span><span class="p">)</span>
+      </div>
+   <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="PopulationDistribution.configurator"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.configurator">[docs]</a>   <span class="k">def</span> <span class="nf">configurator</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Return a ConfigurationBuilder</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">ConfigBuilder</span><span class="p">()</span>
+
+
+</div></div>
+<div class="viewcode-block" id="Gaussian"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Gaussian">[docs]</a><span class="k">class</span> <span class="nc">Gaussian</span><span class="p">(</span><span class="n">ProposalDistribution</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot; A Gaussian Proposal Distribution &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Gaussian</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="mf">1.</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;spaceScale&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">spaceScale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">spaceScale</span> <span class="o">/</span> <span class="mf">2.</span>
+      <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;varInit&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">varInit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">varInit</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span> <span class="o">=</span> <span class="mf">1.05</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">usePrior</span> <span class="o">=</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;usePrior&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">usePrior</span> <span class="ow">or</span> <span class="bp">False</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="n">center</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">usePrior</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;prior&#39;</span><span class="p">):</span>
+         <span class="n">center</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;prior&#39;</span><span class="p">]</span>
+      <span class="c"># vary the mixture point</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">variance</span><span class="p">()</span>
+      <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;idx&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="s">&#39;__len__&#39;</span><span class="p">):</span>
+         <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="p">[</span><span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]]</span>
+      <span class="n">varied</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">*</span> <span class="n">var</span> <span class="o">+</span> <span class="n">center</span>
+      
+      
+      <span class="c"># check bounds; call again if outside bounds</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bounded</span><span class="p">:</span>
+         <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">varied</span><span class="p">):</span>
+               <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+         <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;Recursion error: &quot;</span><span class="p">,</span> <span class="n">varied</span>
+            <span class="k">print</span> <span class="nb">abs</span><span class="p">(</span><span class="n">varied</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">center</span><span class="p">)</span>
+            <span class="k">print</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span>
+      <span class="k">return</span> <span class="n">varied</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="n">idx</span><span class="o">=</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+   
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">center</span><span class="p">):</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">variance</span><span class="p">()</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">):</span>
+         <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+         <span class="c">#print x</span>
+      <span class="n">diff</span> <span class="o">=</span> <span class="n">center</span> <span class="o">-</span> <span class="n">x</span>
+      <span class="k">if</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">diff</span> <span class="o">*</span> <span class="n">diff</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mf">5.</span> <span class="o">*</span> <span class="n">var</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">0.0</span>
+      <span class="n">covar</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="n">var</span> <span class="o">*</span> <span class="n">identity</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+      <span class="n">diff</span> <span class="o">=</span> <span class="n">center</span> <span class="o">-</span> <span class="n">x</span>
+      <span class="nb">pow</span> <span class="o">=</span> <span class="o">-.</span><span class="mi">5</span> <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="n">la</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">covar</span><span class="p">),</span> <span class="n">diff</span><span class="p">))</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="p">((((</span><span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">la</span><span class="o">.</span><span class="n">det</span><span class="p">(</span><span class="n">covar</span><span class="p">))</span> <span class="o">**</span> <span class="o">-.</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="nb">pow</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">d</span>       
+                     
+   <span class="k">def</span> <span class="nf">variance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span>
+            
+   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rate</span><span class="p">):</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rate</span><span class="p">,</span> <span class="s">&#39;__len__&#39;</span><span class="p">):</span>
+         <span class="k">if</span> <span class="n">rate</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">23</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">/=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span> <span class="o">/</span> <span class="mf">5.</span><span class="p">:</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+         <span class="k">return</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">*</span> <span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">rate</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span>  <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">rate</span><span class="p">)):</span>
+         <span class="k">if</span> <span class="n">rate</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">23</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">/=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span> <span class="o">/</span> <span class="mf">5.</span><span class="p">:</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+      <span class="c">#print rate, self.var</span>
+
+   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">usePrior</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+         <span class="k">return</span> <span class="n">exp</span><span class="p">((</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">var</span><span class="o">**</span><span class="mi">2</span><span class="p">)))</span> <span class="o">*</span> <span class="p">((</span><span class="n">x2</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">-</span> <span class="p">(</span><span class="n">x1</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()))</span>
+         
+</div>
+<div class="viewcode-block" id="Bernoulli"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Bernoulli">[docs]</a><span class="k">class</span> <span class="nc">Bernoulli</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">dim</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bitFlipProb</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bitFlipProb</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span> 
+</div>
+<div class="viewcode-block" id="BernoulliTernary"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.BernoulliTernary">[docs]</a><span class="k">class</span> <span class="nc">BernoulliTernary</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">BernoulliTernary</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">dim</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="n">numBytes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ceil</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">/</span> <span class="mf">8.0</span><span class="p">))</span>
+      <span class="n">numFull</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">/</span> <span class="mi">8</span>
+      <span class="n">initial</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+      <span class="k">if</span> <span class="n">numBytes</span> <span class="o">!=</span> <span class="n">numFull</span><span class="p">:</span>
+         <span class="n">extra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">%</span> <span class="mi">8</span>
+         <span class="n">initMask</span> <span class="o">=</span> <span class="mi">0</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">extra</span><span class="p">):</span>
+            <span class="n">initMask</span> <span class="o">&lt;&lt;=</span> <span class="mi">1</span>
+            <span class="n">initMask</span> <span class="o">|=</span> <span class="mi">1</span>
+         <span class="n">initial</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s">&#39;B&#39;</span><span class="p">,</span><span class="n">initMask</span><span class="p">)</span>
+            
+      <span class="n">base</span> <span class="o">=</span> <span class="nb">long</span><span class="p">(</span><span class="n">binascii</span><span class="o">.</span><span class="n">hexlify</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">bytes</span><span class="p">(</span><span class="n">numBytes</span><span class="p">)),</span> <span class="mi">16</span><span class="p">)</span>
+      <span class="n">known</span> <span class="o">=</span> <span class="nb">long</span><span class="p">(</span><span class="n">binascii</span><span class="o">.</span><span class="n">hexlify</span><span class="p">(</span><span class="n">initial</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\xff</span><span class="s">&#39;</span><span class="o">*</span><span class="n">numFull</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">known</span><span class="p">)</span>
+      
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span> 
+
+
+
+</div>
+<div class="viewcode-block" id="FixedCube"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.FixedCube">[docs]</a><span class="k">class</span> <span class="nc">FixedCube</span><span class="p">(</span><span class="n">ProposalDistribution</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">FixedCube</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">center</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;in_bounds&#39;</span><span class="p">):</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">,</span> <span class="s">&#39;extent&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">in_bounds</span><span class="o">.</span><span class="n">extent</span><span class="p">()</span>
+            
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="n">point</span> <span class="o">=</span> <span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">-</span> <span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span>
+      <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">bounded</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">point</span><span class="p">):</span>
+         <span class="n">point</span> <span class="o">=</span> <span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">-</span> <span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span>
+      <span class="k">return</span> <span class="n">point</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span> 
+
+   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+      <span class="k">return</span> <span class="mf">1.</span>
+
+   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rate</span><span class="p">):</span>
+      <span class="k">pass</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

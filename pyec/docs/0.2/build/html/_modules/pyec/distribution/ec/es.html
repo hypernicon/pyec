@@ -1,0 +1,257 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.es &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.es</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">pyec.distribution.convolution</span> <span class="kn">import</span> <span class="n">Convolution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">Gaussian</span> <span class="k">as</span> <span class="n">SimpleGaussian</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">BernoulliTernary</span> <span class="k">as</span> <span class="n">SimpleBernoulli</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">FixedCube</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.mutators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.sample</span> <span class="kn">import</span> <span class="n">DAGSampler</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.mutators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.selectors</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">ConfigBuilder</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>  
+      
+<span class="k">class</span> <span class="nc">SimpleExtension</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">toExtend</span><span class="p">,</span> <span class="n">extension</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">toExtend</span> <span class="o">=</span> <span class="n">toExtend</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">extension</span> <span class="o">=</span> <span class="n">extension</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">toExtend</span><span class="o">.</span><span class="n">config</span>
+    
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">toExtend</span><span class="o">.</span><span class="n">__call__</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">extension</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">generation</span><span class="p">,</span> <span class="n">population</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">toExtend</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">generation</span><span class="p">,</span> <span class="n">population</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ESConfigurator"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.es.ESConfigurator">[docs]</a><span class="k">class</span> <span class="nc">ESConfigurator</span><span class="p">(</span><span class="n">ConfigBuilder</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A :class:`ConfigBuilder` for a standard (mu/rho +, lambda)--ES.</span>
+<span class="sd">      </span>
+<span class="sd">      By default:</span>
+<span class="sd">      </span>
+<span class="sd">      * mu = 10</span>
+<span class="sd">      * lambda = 50</span>
+<span class="sd">      * rho = 1 (no crossover)</span>
+<span class="sd">      * &quot;Plus&quot; style selection is used.</span>
+<span class="sd">      * If rho &gt; 1, dominant crossover is used.</span>
+<span class="sd">      * Adaptive mutation is used.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">ESConfigurator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">EvolutionStrategy</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">crossover</span> <span class="o">=</span> <span class="s">&quot;dominant&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">selection</span> <span class="o">=</span> <span class="s">&quot;plus&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">mu</span> <span class="o">=</span> <span class="mi">10</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">lmbda</span> <span class="o">=</span> <span class="mi">50</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">rho</span> <span class="o">=</span> <span class="mi">1</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">space</span> <span class="o">=</span> <span class="s">&quot;real&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">mutation</span> <span class="o">=</span> <span class="s">&quot;es&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">cmaCumulation</span> <span class="o">=</span> <span class="o">.</span><span class="mo">025</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">cmaCorrelation</span> <span class="o">=</span> <span class="o">.</span><span class="mo">025</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">cmaDamping</span> <span class="o">=</span> <span class="o">.</span><span class="mo">00005</span>
+      </div>
+<div class="viewcode-block" id="EvolutionStrategy"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.es.EvolutionStrategy">[docs]</a><span class="k">class</span> <span class="nc">EvolutionStrategy</span><span class="p">(</span><span class="n">Convolution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Implements a configurable Evolution Strategy. </span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Evolution_strategy&gt; for details and references.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      </span>
+<span class="sd">      * mu -- The number of parents to create the next generation</span>
+<span class="sd">      * rho -- The number of parents for crossover</span>
+<span class="sd">      * selection -- The type of selection, either &quot;plus&quot; or &quot;comma&quot;</span>
+<span class="sd">      * crossover -- The type of crossover, either &quot;dominant&quot; or &quot;intermediate&quot;</span>
+<span class="sd">      * mutation -- Either &quot;cma&quot; or &quot;es&quot;; &quot;es&quot; is default.</span>
+<span class="sd">      * dim -- The dimension of the binary or real space being optimized</span>
+<span class="sd">      * space -- Either &quot;real&quot; or &quot;binary&quot;; the type of vector space being optimized</span>
+<span class="sd">      * bounded -- Whether the search domain is constrained.</span>
+<span class="sd">      * populationSize -- The size of the population for each generation.</span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      The parameter &quot;lambda&quot; is determined by the populationSize and mu, along with the choice of selection (plus or comma).</span>
+<span class="sd">      </span>
+<span class="sd">      In real space, initial distribution is either a :class:`FixedCube` if the search is constrained, or a :class:`Gaussian` if not. In binary space, the initial distribution is a random :class:`Bernoulli`. </span>
+<span class="sd">      </span>
+<span class="sd">      Standard mutation (&quot;es&quot;) adapts the mutation parameters for each</span>
+<span class="sd">      member of the population. If mutation is &quot;cma&quot;, then the algorithm of </span>
+<span class="sd">      Hansen and Ostermeier (1996) is used. Note that the 1996 algorithm </span>
+<span class="sd">      for CMA differs from the modern version (2001) and maintains</span>
+<span class="sd">      separate mutation parameters for each solution.</span>
+<span class="sd">      </span>
+<span class="sd">      Adaptive parameters are not implemented for binary spaces.</span>
+<span class="sd">      </span>
+<span class="sd">      Extra parameters for CMA:</span>
+<span class="sd">      </span>
+<span class="sd">      * cmaCumulation (.025)</span>
+<span class="sd">      * cmaCorrelation (.025)</span>
+<span class="sd">      * cmaDamping (.00005)</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   
+   <span class="n">unsorted</span> <span class="o">=</span> <span class="bp">False</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">         Config options:</span>
+<span class="sd">             mu - number of parents</span>
+<span class="sd">             rho - number of parents for crossover</span>
+<span class="sd">             selection - (plus, comma)</span>
+<span class="sd">             crossover - (dominant, intermediate)</span>
+
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">EvolutionStrategySelection</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">selector</span> <span class="o">=</span> <span class="n">Convolution</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">rho</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;dominant&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">DominantCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;intermediate&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">IntermediateCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;Unknown crossover method&quot;</span>
+         <span class="n">order</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">rho</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Crossover</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="p">,</span> <span class="n">crosser</span><span class="p">,</span> <span class="n">order</span><span class="p">))</span>
+      <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">space</span> <span class="o">==</span> <span class="s">&#39;real&#39;</span><span class="p">:</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;mutation&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">mutation</span> <span class="o">==</span> <span class="s">&#39;cma&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CorrelatedEndogeneousGaussian</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">bounded</span><span class="p">:</span>
+               <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleExtension</span><span class="p">(</span><span class="n">FixedCube</span><span class="p">(</span><span class="n">config</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">buildRotation</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+               <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleExtension</span><span class="p">(</span><span class="n">SimpleGaussian</span><span class="p">(</span><span class="n">config</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">buildRotation</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">EndogeneousGaussian</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">bounded</span><span class="p">:</span>
+               <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleExtension</span><span class="p">(</span><span class="n">FixedCube</span><span class="p">(</span><span class="n">config</span><span class="p">),</span> <span class="n">ones</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+               <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleExtension</span><span class="p">(</span><span class="n">SimpleGaussian</span><span class="p">(</span><span class="n">config</span><span class="p">),</span> <span class="n">ones</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+      <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">space</span> <span class="o">==</span> <span class="s">&#39;binary&#39;</span><span class="p">:</span>
+         <span class="n">bitFlip</span> <span class="o">=</span> <span class="mf">0.05</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;bitFlipProbs&#39;</span><span class="p">):</span>
+            <span class="n">bitFlip</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">bitFlipProbs</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">(</span><span class="n">bitFlip</span><span class="p">))</span>
+         <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleBernoulli</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;Unknown space&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mutator</span> <span class="o">=</span> <span class="n">Convolution</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="p">)</span>
+      
+      <span class="nb">super</span><span class="p">(</span><span class="n">EvolutionStrategy</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mutator</span><span class="p">],</span> <span class="n">initial</span><span class="p">)</span>
+      
+   <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">]</span>
+         
+   <span class="k">def</span> <span class="nf">buildRotation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="p">:</span>
+               <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">varInit</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">j</span> <span class="o">&gt;</span> <span class="n">i</span><span class="p">:</span>
+               <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="n">append</span><span class="p">(</span><span class="n">array</span><span class="p">(</span><span class="n">ret</span><span class="p">),</span> <span class="n">zeros</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="n">append</span><span class="p">(</span><span class="n">array</span><span class="p">(</span><span class="n">ret</span><span class="p">),</span> <span class="n">ones</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="n">append</span><span class="p">(</span><span class="n">array</span><span class="p">(</span><span class="n">ret</span><span class="p">),</span> <span class="n">zeros</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">ret</span>
+      
+   <span class="nd">@classmethod</span>
+   <span class="k">def</span> <span class="nf">configurator</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">ESConfigurator</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

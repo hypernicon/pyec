@@ -1,0 +1,487 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.boltzmann.rbm &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.boltzmann.rbm</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">Distribution</span>
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+<span class="kn">from</span> <span class="nn">time</span> <span class="kn">import</span> <span class="n">time</span>
+<span class="kn">from</span> <span class="nn">sample</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy.linalg</span>
+<span class="kn">import</span> <span class="nn">gc</span>
+
+<div class="viewcode-block" id="rbm"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm">[docs]</a><span class="k">class</span> <span class="nc">rbm</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot; a binary rbm &quot;&quot;&quot;</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mf">0.5</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">0.5</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">mo</span><span class="o">=</span><span class="mf">0.9</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">=</span> <span class="n">vsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span> <span class="o">=</span> <span class="n">hsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">vsize</span> <span class="o">+</span> <span class="n">hsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">rate</span> <span class="o">=</span> <span class="n">lr</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span> <span class="o">=</span> <span class="n">mo</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">standard_cauchy</span><span class="p">((</span><span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">))</span> <span class="o">/</span> <span class="n">vsize</span> <span class="o">/</span> <span class="n">hsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bv</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">standard_cauchy</span><span class="p">(</span><span class="n">vsize</span><span class="p">)</span> <span class="o">/</span> <span class="n">vsize</span> <span class="o">/</span> <span class="n">hsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bh</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">standard_cauchy</span><span class="p">(</span><span class="n">hsize</span><span class="p">)</span> <span class="o">/</span> <span class="n">hsize</span> <span class="o">/</span> <span class="n">vsize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">wc</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">((</span><span class="n">vsize</span><span class="p">,</span><span class="n">hsize</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">wg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bvg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bhg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">wcg</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">((</span><span class="n">vsize</span><span class="p">,</span><span class="n">hsize</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bvcg</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bhcg</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span> <span class="o">=</span> <span class="n">RBMSimulatedTempering</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">samplerAlt</span> <span class="o">=</span> <span class="n">RBMGibbsSampler</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">epoch</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">batchSize</span> <span class="o">=</span> <span class="mi">100</span>
+      
+      
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">energy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>   
+      
+<div class="viewcode-block" id="rbm.energy"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm.energy">[docs]</a>   <span class="k">def</span> <span class="nf">energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">useAlternate</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; compute the energy function &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="n">useAlternate</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">energy2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="n">v</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="n">h</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="p">)</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="p">))</span>
+      <span class="k">return</span> <span class="n">ret</span>
+   </div>
+<div class="viewcode-block" id="rbm.energy2"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm.energy2">[docs]</a>   <span class="k">def</span> <span class="nf">energy2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; compute the energy function &quot;&quot;&quot;</span>
+      <span class="n">v</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="n">h</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">wg</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bvg</span><span class="p">)</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhg</span><span class="p">))</span>
+      <span class="k">return</span> <span class="n">ret</span>
+   </div>
+<div class="viewcode-block" id="rbm.partition"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm.partition">[docs]</a>   <span class="k">def</span> <span class="nf">partition</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; compute the partition function - only for small dimension !!! &quot;&quot;&quot;</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+      <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="n">vsize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span>
+      <span class="n">hsize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span>
+      <span class="nb">all</span> <span class="o">=</span> <span class="p">(</span><span class="il">1L</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">vsize</span><span class="o">+</span><span class="n">hsize</span><span class="p">))</span> <span class="o">-</span> <span class="il">1L</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">vsize</span><span class="o">+</span><span class="n">hsize</span><span class="p">)):</span>
+         <span class="n">total</span> <span class="o">+=</span> <span class="n">exp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="n">TernaryString</span><span class="p">(</span><span class="nb">long</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="nb">all</span><span class="p">)))</span>
+      <span class="k">return</span> <span class="n">total</span>
+   </div>
+   <span class="k">def</span> <span class="nf">scoreSample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">,</span> <span class="n">Z</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[(</span><span class="n">x</span><span class="p">,</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">__call_</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">/</span><span class="n">Z</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">sample</span><span class="p">]</span>
+   
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+      
+
+                           
+<div class="viewcode-block" id="rbm.bucket"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm.bucket">[docs]</a>   <span class="k">def</span> <span class="nf">bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">,</span> <span class="n">Z</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;build a dictionary containing a histogram&quot;&quot;&quot;</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="n">size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
+      <span class="n">incr</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">size</span>
+      <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">sample</span><span class="p">:</span>
+         <span class="n">y</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="n">y</span><span class="p">):</span>
+            <span class="n">d</span><span class="p">[</span><span class="n">y</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="n">incr</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">d</span><span class="p">[</span><span class="n">y</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">incr</span><span class="p">,</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">/</span><span class="n">Z</span><span class="p">]</span>
+      <span class="k">return</span> <span class="n">d</span>
+</div>
+   <span class="k">def</span> <span class="nf">complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+      <span class="n">completed</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+         <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+         <span class="n">h</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span>
+         <span class="k">if</span> <span class="n">sample</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">h</span><span class="p">)),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+            <span class="n">completed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TernaryString</span><span class="o">.</span><span class="n">fromArray</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:]</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">h</span><span class="p">))</span>
+            <span class="n">completed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">completed</span>
+   
+   <span class="k">def</span> <span class="nf">completeV</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+      <span class="n">completed</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="n">h2</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+         <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:]</span> <span class="o">=</span> <span class="n">h2</span>
+         <span class="n">v</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span> <span class="n">h2</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span>
+         <span class="k">if</span> <span class="n">sample</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">v</span><span class="p">)),</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+            <span class="n">completed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TernaryString</span><span class="o">.</span><span class="n">fromArray</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">v</span><span class="p">))</span>
+            <span class="n">completed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">completed</span>
+   
+   <span class="k">def</span> <span class="nf">complete2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+      <span class="n">completed</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+         <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+         <span class="n">h</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">wg</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhg</span>
+         <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:]</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">h</span><span class="p">))</span>
+         <span class="n">completed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TernaryString</span><span class="o">.</span><span class="n">fromArray</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+      <span class="k">return</span> <span class="n">completed</span>
+
+   <span class="k">def</span> <span class="nf">logistic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">x</span> <span class="o">=</span> <span class="n">minimum</span><span class="p">(</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.</span><span class="p">),</span> <span class="mf">10.</span><span class="p">)</span>
+      <span class="k">return</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>  
+         
+   <span class="k">def</span> <span class="nf">correlate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+      <span class="n">ws</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">))</span>
+      <span class="n">vs</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="n">hs</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+         <span class="n">v</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span>
+         <span class="n">h</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:]</span>
+         <span class="n">ws</span> <span class="o">+=</span> <span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">h</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+         <span class="n">vs</span> <span class="o">+=</span> <span class="n">v</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+         <span class="n">hs</span> <span class="o">+=</span> <span class="n">h</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">ws</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">hs</span>
+
+   <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.partitions</span> <span class="kn">import</span> <span class="n">ScoreTree</span><span class="p">,</span> <span class="n">Partition</span><span class="p">,</span> <span class="n">Point</span>
+      <span class="kn">from</span> <span class="nn">pyec.trainer</span> <span class="kn">import</span> <span class="n">RunStats</span>
+      <span class="n">stats</span> <span class="o">=</span> <span class="n">RunStats</span><span class="p">()</span>
+      <span class="n">stats</span><span class="o">.</span><span class="n">recording</span> <span class="o">=</span> <span class="bp">False</span>
+      <span class="n">numBatches</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">batchSize</span>
+      <span class="n">lr</span> <span class="o">=</span> <span class="mf">0.001</span> <span class="o">/</span> <span class="p">((</span><span class="n">n</span><span class="o">/</span><span class="n">numBatches</span><span class="o">+</span><span class="mf">1.</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+      <span class="n">current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">epoch</span> <span class="o">%</span> <span class="n">numBatches</span>
+      <span class="n">start</span> <span class="o">=</span> <span class="n">current</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">batchSize</span>
+      <span class="n">end</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">batchSize</span>
+      <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">]</span>
+      <span class="n">completed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">complete</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+      <span class="n">energy</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">energy</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">completed</span><span class="p">])</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">completed</span><span class="p">)</span>
+      <span class="k">print</span> <span class="s">&quot;Energy of data: &quot;</span><span class="p">,</span> <span class="n">energy</span><span class="c">#, &quot; v &quot;, energy2, &quot;\n\n&quot;</span>
+      <span class="n">sampled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">batchSize</span><span class="p">)</span>
+      <span class="n">energys</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">energy</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">sampled</span><span class="p">])</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">sampled</span><span class="p">)</span>
+      <span class="k">print</span> <span class="s">&quot;Energy of sample: &quot;</span><span class="p">,</span> <span class="n">energys</span>
+      <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">completed</span><span class="p">:</span>
+         <span class="n">gp</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="n">point</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">bayes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="n">point</span><span class="p">,</span> <span class="n">score</span><span class="o">=-</span><span class="bp">self</span><span class="o">.</span><span class="n">energy</span><span class="p">(</span><span class="n">point</span><span class="p">),</span> <span class="n">count</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">segment</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">selectors</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">segment</span><span class="p">)</span>
+         <span class="n">gp</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+         <span class="k">try</span><span class="p">:</span>
+            <span class="n">Partition</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">separate</span><span class="p">(</span><span class="n">gp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">stats</span><span class="p">)</span>
+            <span class="n">ScoreTree</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">gp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">stats</span><span class="p">)</span>
+         <span class="k">except</span><span class="p">:</span>
+            <span class="n">gp</span><span class="o">.</span><span class="n">alive</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="n">gp</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+      <span class="n">wcb</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+      <span class="n">dw</span><span class="p">,</span> <span class="n">dv</span><span class="p">,</span> <span class="n">dh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">correlate</span><span class="p">(</span><span class="n">completed</span><span class="p">)</span>
+      <span class="n">mw</span><span class="p">,</span> <span class="n">mv</span><span class="p">,</span> <span class="n">mh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">correlate</span><span class="p">(</span><span class="n">sampled</span><span class="p">)</span>
+      <span class="n">diffw</span> <span class="o">=</span> <span class="n">dw</span> <span class="o">-</span> <span class="n">mw</span>
+      <span class="n">diffv</span> <span class="o">=</span> <span class="n">dv</span> <span class="o">-</span> <span class="n">mv</span>
+      <span class="n">diffh</span> <span class="o">=</span> <span class="n">dh</span> <span class="o">-</span> <span class="n">mh</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">wc</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span><span class="p">)</span> <span class="o">*</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">diffw</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span><span class="p">)</span> <span class="o">*</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">diffv</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span><span class="p">)</span> <span class="o">*</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">diffh</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wc</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bv</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bh</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">wc</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span>
+    
+      
+      <span class="k">print</span> <span class="s">&quot;scale of deriv: &quot;</span><span class="p">,</span> <span class="n">average</span><span class="p">(</span><span class="n">diffw</span><span class="p">),</span> <span class="n">average</span><span class="p">(</span><span class="n">diffv</span><span class="p">),</span> <span class="n">average</span><span class="p">(</span><span class="n">diffh</span><span class="p">)</span>
+      
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      gw, gv, gh = self.correlate(g)</span>
+<span class="sd">      dw, dv, dh = self.correlate(c2)</span>
+<span class="sd">      self.wcg += (1 - self.momentum) * self.rate * (dw - gw)</span>
+<span class="sd">      self.bvcg += (1 - self.momentum) * self.rate * (dv - gv)</span>
+<span class="sd">      self.bhcg += (1 - self.momentum) * self.rate * (dh - gh)</span>
+<span class="sd">      self.wg += self.wc</span>
+<span class="sd">      self.bvg += self.bvc</span>
+<span class="sd">      self.bhg += self.bhc</span>
+<span class="sd">      self.wcg *= self.momentum</span>
+<span class="sd">      self.bhcg *= self.momentum</span>
+<span class="sd">      self.bvcg *= self.momentum</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">completeTraining</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+        
+   <span class="k">def</span> <span class="nf">meanFieldUp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">vs</span><span class="p">):</span>
+      <span class="n">wt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
+      <span class="n">hs</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">((</span><span class="n">n</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">25</span><span class="p">):</span>
+            <span class="n">hs</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logistic</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">wt</span><span class="p">,</span> <span class="n">vs</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="p">)</span>
+      <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+      <span class="k">return</span> <span class="n">hs</span>   
+   
+   <span class="k">def</span> <span class="nf">meanFieldDown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
+      <span class="n">vs</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">((</span><span class="n">n</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">25</span><span class="p">):</span>
+            <span class="n">vs</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logistic</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span> <span class="n">hs</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="p">)</span>
+      <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+      <span class="k">return</span> <span class="n">vs</span>  
+   
+   <span class="k">def</span> <span class="nf">updateChains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nchains</span><span class="p">,</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">):</span>
+      <span class="n">wt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">nchains</span><span class="p">):</span>
+      
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">nsteps</span><span class="p">):</span>
+            <span class="n">nvp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">nvp</span> <span class="o">+=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span><span class="n">hchains</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">nvp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logistic</span><span class="p">(</span><span class="n">nvp</span><span class="p">)</span>
+            <span class="n">vchains</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nvp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+            <span class="n">nhp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">nhp</span> <span class="o">+=</span> <span class="n">dot</span><span class="p">(</span><span class="n">wt</span><span class="p">,</span> <span class="n">vchains</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">nhp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logistic</span><span class="p">(</span><span class="n">nhp</span><span class="p">)</span>
+            <span class="n">hchains</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nhp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>  
+      <span class="k">return</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span>
+   
+   <span class="k">def</span> <span class="nf">postTrain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+<div class="viewcode-block" id="rbm.trainAutonomous"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.boltzmann.rbm.rbm.trainAutonomous">[docs]</a>   <span class="k">def</span> <span class="nf">trainAutonomous</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">nchains</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">nsteps</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         data is 3-d</span>
+<span class="sd">           d1 = batch num</span>
+<span class="sd">           d2 = example num</span>
+<span class="sd">           d3 = input index</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">hchains</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">((</span><span class="n">nchains</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">))</span><span class="o">.</span><span class="n">round</span><span class="p">()</span>
+      <span class="n">vchains</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">((</span><span class="n">nchains</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">))</span><span class="o">.</span><span class="n">round</span><span class="p">()</span>
+      <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">updateChains</span><span class="p">(</span><span class="n">nchains</span><span class="p">,</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span> 
+      <span class="n">mo</span> <span class="o">=</span> <span class="mf">0.5</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">epochs</span><span class="p">):</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">mo</span> <span class="o">=</span> <span class="mf">0.9</span>
+         <span class="n">lr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span> <span class="o">/</span> <span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mf">1.</span><span class="p">)</span>
+         <span class="n">err</span> <span class="o">=</span> <span class="mf">0.0</span>
+         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">vs</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="n">shape</span><span class="p">(</span><span class="n">vs</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            
+            <span class="n">hs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">meanFieldUp</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">vs</span><span class="p">)</span>
+            <span class="c">#gvs = self.meanFieldDown(n, hs)</span>
+            <span class="c">#err += sqrt((abs(vs - gvs) ** 2).sum(axis=1)).sum() / len(data)</span>
+            <span class="n">sn</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="n">vsn</span> <span class="o">=</span> <span class="n">vs</span> <span class="o">/</span> <span class="n">sn</span>
+            <span class="n">hsn</span> <span class="o">=</span> <span class="n">hs</span> <span class="o">/</span> <span class="n">sn</span>
+            
+            <span class="c"># compute correlation matrices</span>
+            <span class="n">ws</span> <span class="o">=</span> <span class="n">tensordot</span><span class="p">(</span><span class="n">vsn</span><span class="p">,</span> <span class="n">hsn</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+            <span class="n">bvs</span> <span class="o">=</span> <span class="n">vs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">n</span>
+            <span class="n">bhs</span> <span class="o">=</span> <span class="n">hs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">n</span>
+            
+            <span class="c"># update the gibbs chains</span>
+            <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">updateChains</span><span class="p">(</span><span class="n">nchains</span><span class="p">,</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">)</span> 
+                  
+     
+            <span class="c"># compute sample correlations</span>
+            <span class="n">snchains</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">nchains</span><span class="p">)</span>
+            <span class="n">vchainsn</span> <span class="o">=</span> <span class="n">vchains</span> <span class="o">/</span> <span class="n">snchains</span>
+            <span class="n">hchainsn</span> <span class="o">=</span> <span class="n">hchains</span> <span class="o">/</span> <span class="n">snchains</span>
+            <span class="n">ws2</span> <span class="o">=</span> <span class="n">tensordot</span><span class="p">(</span><span class="n">vchainsn</span><span class="p">,</span> <span class="n">hchainsn</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+            <span class="n">bvs2</span> <span class="o">=</span> <span class="n">vchains</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">nchains</span>
+            <span class="n">bhs2</span> <span class="o">=</span> <span class="n">hchains</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">nchains</span>
+            
+            <span class="c"># compute gradient</span>
+            <span class="n">dw</span> <span class="o">=</span> <span class="n">ws</span> <span class="o">-</span> <span class="n">ws2</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">wc</span> <span class="o">+=</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">dw</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span> <span class="o">+=</span> <span class="n">lr</span> <span class="o">*</span> <span class="p">(</span><span class="n">bvs</span> <span class="o">-</span>  <span class="n">bvs2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span> <span class="o">+=</span> <span class="n">lr</span> <span class="o">*</span> <span class="p">(</span><span class="n">bhs</span> <span class="o">-</span> <span class="n">bhs2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wc</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bv</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bvc</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bh</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhc</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">wc</span> <span class="o">*=</span> <span class="n">mo</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bv</span> <span class="o">*=</span> <span class="n">mo</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bh</span> <span class="o">*=</span> <span class="n">mo</span>
+            
+            <span class="n">err</span> <span class="o">+=</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dw</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsize</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">postTrain</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">hs</span><span class="p">)</span>
+            
+            <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+            <span class="k">print</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s">Batch: &quot;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="s">&quot;: &quot;</span><span class="p">,</span> <span class="n">err</span> <span class="o">/</span> <span class="p">(</span><span class="n">k</span><span class="o">+</span><span class="mf">1.</span><span class="p">)</span>
+         <span class="k">print</span> <span class="s">&quot;Epoch &quot;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="s">&quot;: &quot;</span><span class="p">,</span> <span class="n">err</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</div></div>
+<span class="k">class</span> <span class="nc">rbmGL</span><span class="p">(</span><span class="n">rbm</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">rbmGL</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">ones</span><span class="p">(</span><span class="n">vsize</span><span class="p">)</span>
+
+      
+   <span class="k">def</span> <span class="nf">energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">useAlternate</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; compute the energy function &quot;&quot;&quot;</span>
+      <span class="n">v</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span>
+      <span class="n">h</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">]</span><span class="o">.</span><span class="n">toArray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>
+      <span class="n">extra</span> <span class="o">=</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">*</span> <span class="n">v</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">extra</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="p">)</span> <span class="o">+</span> <span class="n">dot</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="p">))</span>
+      <span class="k">return</span> <span class="n">ret</span>
+      
+   <span class="k">def</span> <span class="nf">meanFieldDown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
+      <span class="n">vs</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">((</span><span class="n">n</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">25</span><span class="p">):</span>
+            <span class="n">vs</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span> <span class="n">hs</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span>
+            <span class="n">vs</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">vs</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span>
+      <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+      <span class="k">return</span> <span class="n">vs</span>  
+   
+   <span class="k">def</span> <span class="nf">updateChains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nchains</span><span class="p">,</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">):</span>
+      <span class="n">wt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">nchains</span><span class="p">):</span>
+      
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">nsteps</span><span class="p">):</span>
+            <span class="n">nvp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bv</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">nvp</span> <span class="o">+=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">,</span><span class="n">hchains</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">nvp</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="n">vchains</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">nvp</span> <span class="o">+</span> <span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vsize</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span>
+            <span class="n">nhp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bh</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">nhp</span> <span class="o">+=</span> <span class="n">dot</span><span class="p">(</span><span class="n">wt</span><span class="p">,</span> <span class="n">vchains</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">nhp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logistic</span><span class="p">(</span><span class="n">nhp</span><span class="p">)</span>
+            <span class="n">hchains</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nhp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hsize</span><span class="p">)</span>  
+      <span class="k">return</span> <span class="n">vchains</span><span class="p">,</span> <span class="n">hchains</span>
+
+   <span class="k">def</span> <span class="nf">postTrain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
+      <span class="c"># update variance</span>
+      <span class="n">gvs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">meanFieldDown</span><span class="p">(</span><span class="n">shape</span><span class="p">(</span><span class="n">vs</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">hs</span><span class="p">)</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(((</span><span class="n">vs</span> <span class="o">-</span> <span class="n">gvs</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">shape</span><span class="p">(</span><span class="n">vs</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">=</span> <span class="mf">0.95</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">vsig</span> <span class="o">+</span> <span class="mf">0.05</span> <span class="o">*</span> <span class="n">var</span>
+
+<span class="k">class</span> <span class="nc">DeepBeliefNet</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sizes</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sizes</span> <span class="o">=</span> <span class="n">sizes</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">stack</span> <span class="o">=</span> <span class="p">[]</span>
+      
+   <span class="k">def</span> <span class="nf">wrap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+      <span class="n">wrapped</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">vs</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">):</span>
+            <span class="n">nvs</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">meanFieldUp</span><span class="p">(</span><span class="n">shape</span><span class="p">(</span><span class="n">vs</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">vs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+               <span class="k">del</span> <span class="n">vs</span>
+            <span class="n">vs</span> <span class="o">=</span> <span class="n">nvs</span>
+         <span class="n">wrapped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">wrapped</span>
+
+   <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">nchains</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">nsteps</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+      <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">depth</span><span class="p">:</span>
+         <span class="k">print</span> <span class="s">&quot;Training at depth &quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span>
+         <span class="n">vsize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sizes</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)]</span>
+         <span class="n">hsize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sizes</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">lsize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sizes</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">rbm</span><span class="p">(</span><span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">)</span>
+            <span class="c"># need to invert (lsize,vsize) to (vsize,hsize)</span>
+            <span class="c"># either remove columns or pad with 0s</span>
+            <span class="n">r</span><span class="o">.</span><span class="n">bv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">bh</span>
+            <span class="k">if</span> <span class="n">lsize</span> <span class="o">&lt;</span> <span class="n">hsize</span><span class="p">:</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">((</span><span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">))</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">bh</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">hsize</span><span class="p">)</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">w</span><span class="p">[:,</span> <span class="p">:</span><span class="n">lsize</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">bh</span><span class="p">[:</span><span class="n">lsize</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">bv</span>
+            <span class="k">else</span><span class="p">:</span>
+               <span class="c">#take the middle</span>
+               <span class="n">low</span> <span class="o">=</span> <span class="p">(</span><span class="n">lsize</span> <span class="o">-</span> <span class="n">hsize</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+               <span class="n">high</span> <span class="o">=</span> <span class="n">low</span> <span class="o">+</span> <span class="n">hsize</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">transpose</span><span class="p">()[:,</span><span class="n">low</span><span class="p">:</span><span class="n">high</span><span class="p">]</span>
+               <span class="n">r</span><span class="o">.</span><span class="n">bh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">bv</span><span class="p">[</span><span class="n">low</span><span class="p">:</span><span class="n">high</span><span class="p">]</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">rbm</span><span class="p">(</span><span class="n">vsize</span><span class="p">,</span> <span class="n">hsize</span><span class="p">)</span> 
+         <span class="n">wrapped</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+         <span class="n">r</span><span class="o">.</span><span class="n">trainAutonomous</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">nchains</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">)</span>
+         <span class="k">del</span> <span class="n">wrapped</span>
+         <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+      <span class="k">print</span> <span class="s">&quot;Trained &quot;</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="s">&quot;levels&quot;</span>
+      
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
