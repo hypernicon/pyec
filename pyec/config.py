@@ -10,59 +10,51 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 from numpy import *
 import copy
-   
+from .history import SortedMarkovHistory   
 
 
 
 class Config(object):
    """
       A configuration object for an optimization algorithm. Each optimizer is created with a configuration object that is used to parameterize the optimizer instance. A configuration object may have arbitrary properties and methods. Default versions of methods used by several optimizers are provided.
+      
+      The initializer allows arbitrary keywords so that config objects
+      can be quickly created, e.g.
+      
+      from pyec.config import Config as _
+      opt = SomeOptimizer[_(p=.5,q=.2)]
    """
-   def __get__(self, key):
+   def __init__(self, **kwargs):
+      self.__dict__['__properties__'] = {}
+      for k,v in kwargs.iteritems():
+         setattr(self, k, v)
+   
+   def __getattr__(self, key):
       if not self.__dict__.has_key(key):
          return None
       return self.__dict__[key]
 
-   def __set__(self, key, val):
+   def __setattr__(self, key, val):
       self.__dict__[key] = val
-
-   def in_bounds(self, solution):
-      """
-         Check whether a solution falls inside the optimization constraints.
-         
-         Default implementation returns ``True``, implementing unconstrained optimization.
-         
-         :param solution: The python object being checked for constraints.
-         :type solution: varied
-         :returns: bool -- whether the solution is within the constraints.
-      """
-      return True
-
-   def encode(self, solution):
-      """
-         Given a solution object, encode it as a unicode string, e.g. for storage in a database.
-         
-         Default implementation simply calls ``unicode``.
+      self.__dict__['__properties__'][key] = val
       
-         :param solution: The name to use.
-         :type solution: varied
-         :returns:  unicode -- the encoded solution.
+   def merge(self, cfg):
       """
-      return unicode(solution)
-      
-   def convert(self, solution):
-      """
-         Given a string representation of a solution, convert it to a python object for computation.
+         Given a second config object, produce a new config object
+         that contains the properties of this config and the argument,
+         with the argument given precedence.
          
-         In the language of genetic algorithms, this method is used to decode a genome into a phenome.
+         The copy is shallow, so all objects will share any internal
+         state.
          
-         Default implementation simply parrots back the argument.
-      
-         :param solution: The name to use.
-         :type solution: ``unicode`` or ``str``.
-         :returns:  varied -- the converted solution.
+         :param cfg: A second configuration
+         :type cfg: :class:`Config`
+         :returns: A third :class:`Config` object with the desired properties
       """
-      return solution
+      ret = self.__class__(**self.__properties__)
+      for k,v in cfg.__properties__.iteritems():
+          setattr(ret, k, v)
+      return ret
 
       
 class ConfigBuilder(object):

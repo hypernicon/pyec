@@ -7,45 +7,168 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+import numpy as np
 
-from basic import PopulationDistribution
+from pyec.distribution.basic import PopulationDistribution
+from pyec.config import Config
+from pyec.history import CheckpointedHistory, CheckpointedMultipleHistory
 
 
 class Convolution(PopulationDistribution):
-   depth = 0
-
-   def __init__(self, subs, initial = None, passScores=False):
-      super(Convolution, self).__init__(subs[0].config)
+   """Build a convolved optimizer.
+   
+   :param subs: The optimizer instances to convolve
+   :type subs: A list of :class:`PopulationDistribution` objects
+   
+   """
+   config = Config()
+   
+   def __init__(self, subs, **kwargs):
+      if not len(subs):
+          raise ValueError("Convolution requires at least one optimizer")
+          
+      kwargs["history"] = self.makeHistory(subs)
+      super(Convolution, self).__init__(**kwargs)
       self.subs = subs
-      self.population = None
-      self.initial = initial
-      self.simple = []
-      self.generation = 1
-      self.passScores = passScores
-      self.scoreDict = {}
+      self.history = None
+      
+      # force any self-convolutions to self checkpoint
+      # since they are now inside of a convolution
+      for sub in subs:
+          if hasattr(sub, 'checkpoint') and not sub.checkpoint:
+              sub.checkpoint = True
+      
+   def makeHistory(self, subs):
+      def generator():
+          hs = [opt.config.history for opt in subs]
+          return CheckpointedMultupleHistory(*hs)
+      return generator
 
-   def score(self, population):
-      return [(x,self.scoreDict.get(str(x), None)) for x in population]
+   def compatible(self, history):
+      """A convolution is compatible with a CheckpointedHistory
+      only if it contains a history that is compatible for each
+      suboptimizer.
+      
+      """
+      return (isinstance(history, CheckpointedMultipleHistory) and
+          np.array([self.mapHistory(s) is not None for s in self.subs]).all()) 
 
    def batch(self, popSize):
-      if self.population is None and self.initial is not None:
-         return  self.initial.batch(popSize)
-      if self.population is None:
-         self.population = []
-      scoredPopulation = self.population
-      population = self.simple
-      for i, sub in enumerate(self.subs):
-         sub.update(self.generation, scoredPopulation)
-         population = sub.batch(popSize)
-         if self.passScores:
-            scoredPopulation = self.score(population)
-         else:
-            scoredPopulation = [(x,None) for x in population]
-      return population
-
-   def update(self, generation, population):
-      self.generation = generation
-      self.population = population
-      self.simple = [x for x,s in self.population]
-      if self.passScores:
-         self.scoreDict = dict([(str(x), s) for x,s in population])
+       pop = None
+       self.history.checkpoint()
+       for sub in self.subs:
+           if pop is not None:
+               fitness = sub.needsScores and self.fitness or None
+               self.history.update(scored, fitness, sub.config.space)
+           sub.update(self.mapHistory(sub), self.fitness)
+           pop = sub.batch(popSize)
+             
+       self.history.rollback()
+       return pop
+         
+       return self.fitness(self.config.space.convert(point))
+   
+   def update(self, history, fitness):
+      super(TrajectoryTruncation, self).update(history, fitness)
+      for sub in self.subs:
+          sub.update(self.mapHistory(sub), fitness)  
+      
+   def mapHistory(self, sub):
+      """Find a compatible subhistory for this suboptimizer.
+      
+      :param sub: One of the suboptimizers for this convolution
+      :type sub: :class:`PopulationDistribution`
+      :returns: A compatible :class:`History` for the suboptimizer
+      
+      """
+      for h in self.history.histories:
+         if sub.compatible(h):
+             return h
+      c = sub.__class__.__name__  
+      raise ValueError("No compatible history found for {0}".format(c ))
+      
+   def needsScores(self):
+      return self.subs[0].needsScores()
+      
+      
+class SelfConvolution(PopulationDistribution):
+    """The convolution of an optimizer with itself.
+    
+    :param opt: The optimizer to convolve
+    :type opt: :class:`PopulationDistribution`
+    :param times: The number of times to self-convolve
+    :type times: ``int``
+    
+    """
+    config = Config()
+    
+    def __init__(self, opt, times, **kwargs):
+        kwargs['history'] = self.makeHistory(opt)
+        super(SelfConvolution, self).__init__(**kwargs)
+        self.opt = opt
+        self.times = times
+        if times < 1:
+           err = "Self convolution needs a positive integer; got {0}"
+           err.format(times)
+           raise ValueError(err)
+        
+        self.checkpoint = False
+        
+        # force any sub-selfconvolutions to checkpoint
+        if hasattr(opt, 'checkpoint') and not opt.checkpoint:
+            opt.checkpoint = True
+    
+    def makeHistory(self, opt):
+      def generator():
+          return CheckpointedHistory(opt.config.history)
+      return generator    
+                
+    def compatible(self, history):
+        """SelfConvolution is compatible with :class:`CheckpointedHistory`
+        objects that are compatible with the 
+        optimizer being self-convolved.
+        
+        """
+        return (isinstance(history, CheckpointedHistory) and 
+                self.opt.compatible(history.history))
+        
+    def needsScores(self):
+        """SelfConvolution needs scores only if its optimizer does.
+        
+        """
+        return self.opt.needsScores()
+        
+    def update(self, history, fitness):
+        super(SelfConvolution, self).update(history, fitness)
+        self.opt.update(history.history, fitness)
+    
+    def __call__(self):
+        return self.batch(self.config.populationSize)    
+                
+    def batch(self, popSize):
+        if self.checkpoint:
+           self.history.checkpoint()
+        
+        times = self.times
+        pop = None
+        if self.history.empty():
+            if self.config.initial is None:
+                pop = [self.config.space.random() for i in xrange(popSize)]
+            elif hasattr(self.config.initial, 'batch'):
+                pop = self.config.initial.batch(popSize)
+            else:
+                pop = [self.config.initial() for i in xrange(popSize)]
+            times -= 1
+        
+        fitness = self.opt.needsScores and self.fitness or None
+        for i in xrange(times):
+            if pop is not None:
+                self.history.update(pop, fitness, self.opt.config.space)
+            self.opt.update(self.history.history, self.fitness)
+            pop = self.opt.batch(popSize)
+           
+        if self.checkpoint:
+            self.history.rollback()
+        
+        return pop
+        

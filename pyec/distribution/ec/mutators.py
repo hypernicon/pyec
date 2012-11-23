@@ -187,9 +187,12 @@ class Mutation(PopulationDistribution):
                z = self.mutate(x)
          pop.append(z)
       return pop
+
+   def compatible(self, historyClass):
+      return hasattr(historyClass, 'lastPopulation')
    
-   def update(self, generation, population):
-      self.population = population
+   def update(self, history):
+      self.population = history.lastPopulation()
 
 class Crossover(Mutation):
    """

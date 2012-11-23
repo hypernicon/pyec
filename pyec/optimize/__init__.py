@@ -275,49 +275,5 @@ def evolutionary_annealing(func, **kwargs):
 """
 evoanneal = evolutionary_annealing
 
-class Constraint(object):
-   """
-      A constraint region for optimization. The ``__call__`` method of the object should return whether an object satisfies the constrains, and the ``extent`` method should specify parameters for a hypercube completely containing the constraint region.
-   """
-   def __init__(self):
-      pass
-      
-   def __call__(self, y):
-      """
-         Check whether a potential solution satisfies a constraint.
-         
-         :param y: The object to check.
-         :type y: varied, usually :class:`numpy.ndarray`
-         :returns: Whether the point is inside of the region.
-      """
-      return True
-      
-   def extent(self):
-      """
-         Return parameters for a hypercube containing the constraint region.
-         
-         If the return values are (center, scale), then the hypercube has a center at *center* and a side length of 2 times *scale*.
-         
-         :returns: The (center, scale) parameters for a hypercube.
-      """
-      return 0, 10.
 
-class Hyperrectangle(Constraint):
-   """
-      A Hyperrectangle constraint region.
-      
-      :param center: The center point for the hyperrectangle.
-      :type center: :class:`numpy.ndarray`
-      :param scale: The distance to the sides for the hyperrectangle.
-      :type scale: :class:`numpy.ndarray`
-   """
-   def __init__(self, center, scale):
-      self.center = center
-      self.scale = scale
-
-   def __call__(self, y):
-      return (np.abs(np.array(y) - self.center) <= self.scale).all()
-      
-   def extent(self):
-      return self.center, self.scale
    

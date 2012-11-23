@@ -9,9 +9,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 from numpy import *
+import binascii
 import copy
+import struct
+
 
 def binary(x, digits=10):
+   """Convert a number to its binary representation.
+   
+   :param x: The number to convert
+   :type x: ``int`` or ``long``
+   :param digits: The number of binary digits to convert, from right to left
+   :type digits: ``int``
+   :returns: A string of zeros and ones with the least significant bits at the
+             left.
+   """
    ret = ""
    num = x
    mask = 1L
@@ -19,22 +31,35 @@ def binary(x, digits=10):
       ret += str(num & mask)
       num >>= 1
    return ret
+   
 
 class TernaryString(object):
-   """A ternary string with three values: True, False, and Unknown"""
-   def __init__(self, base, known):
+   """A ternary string with three values: True, False, and Unknown
+   
+   :params base: An object whose bits are treated as a bit string
+   :type base: typically ``int`` or ``long``
+   :params known: An object whose bits determine whether the value at that
+                  bit is known in ``base``
+   :type known: typically ``int`` or ``long``
+   :params length: The maximum number of bits allowed
+   :type length: ``int``
+   
+   """
+   def __init__(self, base, known, length=10000):
       """
          base is an (integer) object whose bytes are treated as a bit string
          known is a mask to determine which values are indefinite
+         length is the maximum number of bits
       """
       self.base = base
       self.known = known
+      self.length = length
    
    def __str__(self):
-      return str(self.known & self.base)
+      return binary(self.known & self.base, self.length)
       
    def __repr__(self):
-      return repr(self.known & self.base)
+      return binary(repr(self.known & self.base), self.length)
    
    def __eq__(self, x):
       if isinstance(x, TernaryString):
@@ -92,6 +117,17 @@ class TernaryString(object):
       return ((self.base & (1L << i)) & self.known) != 0L
       
    def __setitem__(self, i, val):
+      if isinstance(i, slice):
+         mask = -1L
+         if i.stop:
+            mask = ((1L) << (i.stop + 1)) - 1L
+         if i.start:
+            mask &= ~(((1L) << (i.start + 1)) - 1L)
+            
+         self.known |= mask
+         self.base = (self.base & ~mask) | ((val << (i.start or 0)) & mask)
+         return
+   
       mask = 1L << i
       val = bool(val)
       if val:
@@ -100,6 +136,25 @@ class TernaryString(object):
       else:
          self.known |= mask
          self.base &= ~mask
+         
+   def __delitem__(self, i):
+      """Mark the item as unknown"""
+      if isinstance(i, slice):
+         mask = -1L
+         if i.stop:
+            mask = ((1L) << (i.stop + 1)) - 1L
+         if i.start:
+            mask &= ~(((1L) << (i.start + 1)) - 1L)
+            
+         self.known &= ~mask
+         return
+         
+      mask = 1L << i
+      self.known &= ~mask
+
+   def __len__(self):
+      return self.length
+
       
    def distance(self, x, upTo):
       """hamming distance"""
@@ -125,7 +180,19 @@ class TernaryString(object):
          ret[i] = arr[i] > 0.0
       return ret
 
-   """
-      TODO: __len__, __getitem__, __setitem__, __str__
-   """
-      
+   @classmethod
+   def random(cls, p, length):
+      numBytes = int(ceil(length / 8.0))
+      numFull  = length / 8
+      initial = ''
+      if numBytes != numFull:
+         extra = length % 8
+         initMask = 0
+         for i in xrange(extra):
+            initMask <<= 1
+            initMask |= 1
+         initial = struct.pack('B',initMask)
+            
+      base = long(binascii.hexlify(random.bytes(numBytes)), 16)
+      known = long(binascii.hexlify(initial + '\xff'*numFull), 16)
+      return TernaryString(base, known, length)   
