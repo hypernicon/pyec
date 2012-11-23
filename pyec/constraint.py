@@ -139,3 +139,4 @@ class BinaryRectangle(Constraint):
        test.base = base
        return test 
        
+       
