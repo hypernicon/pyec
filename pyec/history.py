@@ -34,6 +34,25 @@ class History(object):
         self.updates = 0
         self.printEvery = 1000000000000L #how often to print generation report
     
+    def __getstate__(self):
+        return {
+           "evals": self.evals,
+           "minSolution": self.minSolution,
+           "minScore": self.minScore,
+           "maxSolution": self.maxSolution,
+           "maxScore": self.maxScore,
+           "_empty": self._empty,
+           "cache": self.cache,
+           "updates": self.updates,
+           "printEvery": self.printEvery,
+           "sorted": self.sorted,
+           "useCache": self.useCache,
+        }
+        
+    def __setstate__(self, state):
+        for k,v in state.iteritems():
+            setattr(self, k, v)
+    
     def empty(self):
         return self._empty
     
@@ -206,6 +225,11 @@ class MarkovHistory(History):
          
      def lastPopulation(self):
          return self.population
+         
+     def __getstate__(self):
+         start = super(MarkovHistory, self).__getstate__()
+         start.update({"population":self.population})
+         return start
         
         
 class SortedMarkovHistory(History):
@@ -233,6 +257,11 @@ class SortedMarkovHistory(History):
         super(SortedMarkovHistory, self).internalUpdate(population)
          
         self.population = sorted(self.population, key=self.sorter)
+        
+    def __getstate__(self):
+        start = super(SortedMarkovHistory, self).__getstate__()
+        start.update({"sorter":self.sorter})
+        return start
 
 class LocalMinimumHistory(History):
      """A :class:`History` that stores the best members of the
@@ -280,6 +309,11 @@ class LocalMinimumHistory(History):
          
          """
          return x < y
+         
+     def __getstate__(self):
+         start = super(LocalMinimumHistory, self).__getstate__()
+         start.update({"localBestPop":self.localBestPop})
+         return start
 
 class LocalMaximumHistory(LocalMinimumHistory):
      """A :class:`History` that stores the maximal members of the
@@ -312,12 +346,21 @@ class CheckpointedHistory(History):
     def __init__(self, historyClass):
         super(CheckpointedHistory, self).__init__()
         self.history = historyClass() 
+        self.cache = self.history.cache
+        self.useCache = self.history.useCache
         self.states = []
         
         
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
-        self.history.internalUpdate(population)
+        pass
+        
+    def update(self, population, fitness, space):
+        if population is None:
+            return self
+        super(CheckpointedHistory, self).update(population, fitness, space)
+        self.history.update(population, fitness, space)
+        return self
     
     def checkpoint(self):
         self.states.append = self.history.__getstate__()
@@ -327,8 +370,20 @@ class CheckpointedHistory(History):
             raise ValueError("Cannot rollback initial state!")
         state = self.states[-1]
         self.history.__setstate__(state)
+        self.evals = self.history.evals
+        self._empty = self.history._empty
+        self.updates = self.history.updates
         self.states = self.states[:-1]
 
+    def __getstate__(self):
+        start = super(CheckpointedHistory, self).__getstate__()
+        start.update({"states":self.states, "history":history.__getstate__()})
+        return start
+        
+    def __setstate__(self, state):
+        self.history.__setstate__(state["history"])
+        del state["history"]
+        super(CheckpointedHistory, self).__setstate__(state)
 
 class MultipleHistory(History):
     """A :class:`History` suitable for use in a convex optimizer.
@@ -345,12 +400,37 @@ class MultipleHistory(History):
             err = "MultipleHistory needs at least 1 history"
             raise ValueError(err)
         self.histories = [h() for h in set(historyClasses)]
+        useCache = False
+        for h in self.histories: 
+            h.printEvery = 1000000000L
+            h.cache = self.cache
+            useCache = useCache or h.useCache
+        self.useCache = useCache
     
-    def internalUpdate(self, population):
+    def update(self, population, fitness, space):
         """Overrides ``internalUpdate`` in :class:`History`"""
+        if population is None:
+            return self
+        super(MultipleHistory, self).update(population, fitness, space)
         for h in self.histories:
-            h.internalUpdate(population)
+            h.update(population, fitness, space)
+        return self
 
+    def internalUpdate(self, population):
+        pass
+
+    def __getstate__(self):
+        start = super(MultipleHistory, self).__getstate__()
+        histories = [h.__getstate__() for h in self.histories]
+        start.update({"histories":histories})
+        return start
+        
+    def __setstate__(self, state):
+        for st,h in zip(state["histories"], self.histories):
+            h.__setstate__(st)
+        del state["histories"]
+        super(MultipleHistory, self).__setstate__(state)
+    
 
 class CheckpointedMultipleHistory(MultipleHistory):
     """A :class:`History` suitable for use in a convolution.
@@ -368,7 +448,7 @@ class CheckpointedMultipleHistory(MultipleHistory):
         self.states = []
     
     def checkpoint(self):
-        self.states.append = [h.__getstate__() for h in self.histories]
+        self.states.append([h.__getstate__() for h in self.histories])
         
     def rollback(self):
         if not len(self.states):
@@ -376,7 +456,15 @@ class CheckpointedMultipleHistory(MultipleHistory):
         states = self.states[-1]
         for h,st in zip(self.histories, states):
             h.__setstate__(st)
+        self.evals = self.histories[0].evals
+        self._empty = self.histories[0]._empty
+        self.updates = self.histories[0].updates
         self.states = self.states[:-1]
+        
+    def __getstate__(self):
+        start = super(CheckpointedMultipleHistory, self).__getstate__()
+        start.update({"states":self.states})
+        return start
         
         
 class DelayedHistory(History):
@@ -397,17 +485,44 @@ class DelayedHistory(History):
             err = "Delay must be a positive integer, not {0}".format(delay)
             raise ValueError(err)
         self.delay = delay
+        self.cache = self.history.cache
+        self.useCache = self.history.useCache
         self.queue = []
         
-    def update(self, population):
+    def update(self, population, fitness, space):
         """Stack up the new population, and push the delayed 
         populations to the subordinate history.
         
         """
+        if population is None:
+            return self
+            
         if len(self.queue) == self.delay:
-            self.history.update(self.queue[-1])
+            self.evals += len(self.queue[-1])
+            self.updates += 1
+            self._empty = False
+            self.history.update(self.queue[-1], fitness, space)
             self.queue = self.queue[:-1]
     
         self.queue.append(population)
+        return self
     
+    def internalUpdate(self, population):
+        pass
+        
+            
+    def __getstate__(self):
+        start = super(DelayedHistory, self).__getstate__()
+        start.update({
+           "delay":self.delay,
+           "history":self.history.__getstate__(),
+           "queue": [p for p in self.queue],
+        })
+        return start
+        
+    def __setstate__(self, state):
+        self.history.__setstate__(state["history"])
+        del state["history"]
+        super(DelayedHistory, self).__setstate__(state)
+
     

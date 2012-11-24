@@ -41,7 +41,7 @@ class Convolution(PopulationDistribution):
    def makeHistory(self, subs):
       def generator():
           hs = [opt.config.history for opt in subs]
-          return CheckpointedMultupleHistory(*hs)
+          return CheckpointedMultipleHistory(*hs)
       return generator
 
    def compatible(self, history):
@@ -51,7 +51,8 @@ class Convolution(PopulationDistribution):
       
       """
       return (isinstance(history, CheckpointedMultipleHistory) and
-          np.array([self.mapHistory(s) is not None for s in self.subs]).all()) 
+          np.array([self.mapHistory(s, history) is not None 
+                    for s in self.subs]).all()) 
 
    def batch(self, popSize):
        pop = None
@@ -59,7 +60,7 @@ class Convolution(PopulationDistribution):
        for sub in self.subs:
            if pop is not None:
                fitness = sub.needsScores and self.fitness or None
-               self.history.update(scored, fitness, sub.config.space)
+               self.history.update(pop, fitness, sub.config.space)
            sub.update(self.mapHistory(sub), self.fitness)
            pop = sub.batch(popSize)
              
@@ -69,11 +70,11 @@ class Convolution(PopulationDistribution):
        return self.fitness(self.config.space.convert(point))
    
    def update(self, history, fitness):
-      super(TrajectoryTruncation, self).update(history, fitness)
+      super(Convolution, self).update(history, fitness)
       for sub in self.subs:
           sub.update(self.mapHistory(sub), fitness)  
       
-   def mapHistory(self, sub):
+   def mapHistory(self, sub, history=None):
       """Find a compatible subhistory for this suboptimizer.
       
       :param sub: One of the suboptimizers for this convolution
@@ -81,7 +82,9 @@ class Convolution(PopulationDistribution):
       :returns: A compatible :class:`History` for the suboptimizer
       
       """
-      for h in self.history.histories:
+      if history is None:
+            history = self.history
+      for h in history.histories:
          if sub.compatible(h):
              return h
       c = sub.__class__.__name__  

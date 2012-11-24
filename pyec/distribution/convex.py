@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+import numpy as np
 
 from pyec.distribution.basic import PopulationDistribution
 from pyec.config import Config
@@ -31,7 +32,7 @@ class Convex(PopulationDistribution):
         super(Convex, self).__init__(**kwargs)
         self.subs = subs
         self.history = None
-        self.useScores = array([s.needsScores for all s in self.subs]).any()
+        self.useScores = np.array([s.needsScores for s in self.subs]).any()
         
         # force any self-convolutions to self checkpoint
         # since they are now inside of another optimizer
@@ -46,15 +47,16 @@ class Convex(PopulationDistribution):
       
         """
         return (isinstance(history, MultipleHistory) and
-          np.array([self.mapHistory(s) is not None for s in self.subs]).all()) 
+          np.array([self.mapHistory(s, history) is not None 
+                    for s in self.subs]).all()) 
 
     def makeHistory(self, subs):
         """Build a :class:`MultipleHistory` from the suboptimizers"""
         def generator():
-            return CheckpointedHistory(*[opt.config.history for opt in subs])
+            return MultipleHistory(*[opt.config.history for opt in subs])
         return generator
     
-    def mapHistory(self, sub):
+    def mapHistory(self, sub, history=None):
         """Find a compatible subhistory for this suboptimizer.
       
         :param sub: One of the suboptimizers for this convolution
@@ -62,7 +64,9 @@ class Convex(PopulationDistribution):
         :returns: A compatible :class:`History` for the suboptimizer
       
         """
-        for h in self.history.histories:
+        if history is None:
+            history = self.history
+        for h in history.histories:
             if sub.compatible(h):
                 return h
         c = sub.__class__.__name__  
@@ -76,7 +80,7 @@ class Convex(PopulationDistribution):
         return sub.batch(popSize)
             
     def update(self, history, fitness):
-        super(TrajectoryTruncation, self).update(history, fitness)
+        super(Convex, self).update(history, fitness)
         for sub in self.subs:
             sub.update(self.mapHistory(sub), fitness)
             

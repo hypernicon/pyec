@@ -46,7 +46,8 @@ class TrajectoryTruncation(PopulationDistribution):
         
     def update(self, history, fitness):
         super(TrajectoryTruncation, self).update(history, fitness)
-        self.opt.update(history.history, fitness)        
+        self.opt.update(history.history, fitness)
+        return self        
         
     def batch(self, popSize):
         return self.opt.batch(popSize)
@@ -55,6 +56,6 @@ class TrajectoryTruncation(PopulationDistribution):
         return self.opt.needsScores()
     
     def compatible(self, history):
-        return (isinstance(self, DelayedHistory) and
+        return (isinstance(history, DelayedHistory) and
                 self.opt.compatible(history.history))
                 

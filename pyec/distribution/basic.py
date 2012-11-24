@@ -165,6 +165,8 @@ class PopulationDistributionMeta(type):
           cls2 = PopulationDistributionMeta(name, bases, attrs)
       return cls2
    
+   __rmul__ = __mul__
+   
    def __add__(cls, other):
       """
          Create a population distribution by adding two optimizers.
@@ -190,7 +192,6 @@ class PopulationDistributionMeta(type):
               kwargs.update(first.config.__properties__)
               cvx.__init__(self, (first, second,), **kwargs)
           attrs = dict(((k,v) for k,v in cvx.__dict__.iteritems()))
-          attrs["weight"] = val * cls.weight
           attrs["__init__"] = init
           cls2 = PopulationDistributionMeta(name, bases, attrs)
       return cls2
@@ -221,7 +222,7 @@ class PopulationDistributionMeta(type):
                   kwargs.update(second.config.__properties__)
                   kwargs.update(first.config.__properties__)
                   conv.__init__(self, 
-                                (first, second,) 
+                                (first, second,), 
                                 **kwargs)
               attrs = dict(((k,v) for k,v in conv.__dict__.iteritems())) 
               attrs["__init__"] = init
@@ -451,6 +452,9 @@ class PopulationDistribution(Distribution):
       
       ret = self.__class__(**self.config.__properties__)
       ret.weight = self.weight * val
+      return ret
+
+   __rmul__ = __mul__
 
    def __imul__(self, other):
       """
@@ -482,7 +486,7 @@ class PopulationDistribution(Distribution):
     
       import pyec.distribution.convex
       cvx = pyec.distribution.convex.Convex
-      return cvx(self, other, **self.config.__properties__)
+      return cvx((self, other), **self.config.__properties__)
       
    __iadd__ = __add__
 
@@ -501,7 +505,7 @@ class PopulationDistribution(Distribution):
       conv = pyec.distribution.convolution.Convolution
       
       if isinstance(other, PopulationDistribution):
-          return conv(self, other, **self.config.__properties__)
+          return conv((self, other), **self.config.__properties__)
       
       try:
           val = int(other)
