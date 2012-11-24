@@ -62,12 +62,12 @@ def test_pso_dim1():
    assert abs(f) < 1e-5
    
 def test_evoanneal_dim1():
-   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=1)
+   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=1,generations=250,jogo2012=True)
    print "evoanneal dim 1: ", x, f
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5
    
-   x,f = pyec.optimize.evoanneal("sphere",dimension=1)
+   x,f = pyec.optimize.evoanneal("sphere",dimension=1,generations=250,jogo2012=True)
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5   
    
@@ -140,12 +140,12 @@ def test_pso_dim5():
    assert abs(f) < 1e-1
    
 def test_evoanneal_dim5():
-   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=5, learning_rate=1000., generations=100)
+   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=5, learning_rate=1000., generations=250)
    print "evoanneal dim 5: ", x, f
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5
    
-   x,f = pyec.optimize.evoanneal("sphere",dimension=5, learning_rate=1000., generations=100)
+   x,f = pyec.optimize.evoanneal("sphere",dimension=5, learning_rate=1000., generations=250)
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5   
 
@@ -207,11 +207,10 @@ def test_pso_dim10():
    assert abs(f) < 5e-1
 
 def test_evoanneal_dim10():
-   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=10, learning_rate=10000., generations=500)
-   print "evoanneal dim 10: ", x, f
+   x,f = pyec.optimize.evolutionary_annealing("sphere",dimension=10, learning_rate=10000., generations=500,jogo2012=True)
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5
    
-   x,f = pyec.optimize.evoanneal("sphere",dimension=10, learning_rate=10000., generations=500)
+   x,f = pyec.optimize.evoanneal("sphere",dimension=10, learning_rate=10000., generations=500,jogo2012=True)
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5     

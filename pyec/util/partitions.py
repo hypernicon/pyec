@@ -597,6 +597,8 @@ class Partition(object):
       upArea = float(node.area * (1.0 - proportion))
       downArea = float(node.area * proportion)
       
+      if upArea != upArea or downArea != downArea:
+         raise SeparationException, "NaN area!"
       
       upUpper = upper.copy()
       upLower = lower.copy()

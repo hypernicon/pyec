@@ -346,6 +346,7 @@ class AreaSensitiveGaussian(Mutation):
       else:
          area = x[1]
          sd = .5 * (area.bounds[1] - area.bounds[0])
+         sd = minimum(sd, scale)
          sd *= (1./log(self.gen)) ** (1./self.config.dim)
       
       self.sdavg = (self.sdavg * self.sdcnt + sd) / (self.sdcnt + 1.0)
