@@ -8,6 +8,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import copy
 import numpy as np
 from pyec.util.cache import LRUCache
 
@@ -35,6 +36,16 @@ class History(object):
         self.printEvery = 1000000000000L #how often to print generation report
     
     def __getstate__(self):
+        """Used by :class:`CheckpointedHistory`
+        and :class:`CheckpointedMultipleHistory` to checkpoint a history
+        so it can be rolled back after updates.
+        
+        Should return all objects in the history in a dictionary, sensitive
+        to the fact that object references may need to be copied.
+        
+        :returns: A dictionary with the state of the history
+        
+        """
         return {
            "evals": self.evals,
            "minSolution": self.minSolution,
@@ -50,6 +61,10 @@ class History(object):
         }
         
     def __setstate__(self, state):
+        """Restore the state of the history from the dictionary provided
+        by ``self.__getstate__()``
+        
+        """
         for k,v in state.iteritems():
             setattr(self, k, v)
     
@@ -126,16 +141,10 @@ class History(object):
         
         for x,s in scored:
             if s > self.maxScore:
-                 if (self.maxSolution is not None and 
-                     self.maxSolution is not self.minSolution):
-                     del self.maxSolution
                  self.maxScore = s
                  self.maxSolution = x
                
             if s < self.minScore:
-                 if (self.minSolution is not None and 
-                     self.minSolution is not self.maxSolution):
-                     del self.minSolution
                  self.minScore = s
                  self.minSolution = x
         
@@ -161,10 +170,7 @@ class History(object):
          :type population: list of (point, score) tuples
          
         """    
-        
-        for x,s in population:
-            if x is not self.minSolution and x is not self.maxSolution:
-                del x
+        pass
 
     def score(self, point, fitness, space):
         """Get the fitness score, caching where possible.
@@ -216,11 +222,6 @@ class MarkovHistory(History):
          
      def internalUpdate(self, population):
          """Overrides ``internalUpdate`` in :class:`History`"""
-         if self.population is not None:
-             for x,s in self.population:
-                 if x is not self.minSolution and x is not self.maxSolution:
-                     del x
-         
          self.population = population
          
      def lastPopulation(self):
@@ -285,14 +286,6 @@ class LocalMinimumHistory(History):
                  x,s = self.localBestPop[idx]
                  if s is None or self.better(s2, s):
                      self.localBestPop[idx] = y,s2
-                     if (x is not self.minSolution and 
-                         x is not self.maxSolution):
-                         del x
-                 else:
-                     
-                     if (y is not self.minSolution and 
-                         y is not self.maxSolution):
-                         del y
                  idx += 1     
          
      def localBest(self):
@@ -381,6 +374,7 @@ class CheckpointedHistory(History):
         return start
         
     def __setstate__(self, state):
+        state = copy.copy(state)
         self.history.__setstate__(state["history"])
         del state["history"]
         super(CheckpointedHistory, self).__setstate__(state)
@@ -426,6 +420,7 @@ class MultipleHistory(History):
         return start
         
     def __setstate__(self, state):
+        state = copy.copy(state)
         for st,h in zip(state["histories"], self.histories):
             h.__setstate__(st)
         del state["histories"]
@@ -521,6 +516,7 @@ class DelayedHistory(History):
         return start
         
     def __setstate__(self, state):
+        state = copy.copy(state)
         self.history.__setstate__(state["history"])
         del state["history"]
         super(DelayedHistory, self).__setstate__(state)
