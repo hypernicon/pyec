@@ -20,9 +20,8 @@ class CmaesHistory(History):
     """A history that stores the parameters for CMA-ES"""
     
     attrs = ["mu", "dim", "restart", "muw", "mueff", "cc", "cs", "c1", "cmu",
-             "damps", "chiN", "eigeneval", "sigma"]
-    npattrs = ["weights", "B", "D", 
-               "covar", "active", "ps", "pc", "mean"]
+             "damps", "chiN", "eigeneval", "sigma", "weights", "B", "D", 
+             "covar", "active", "ps", "pc", "mean"]
     
     def __init__(self, dim=1, populationSize=25, mu=None, scale=1.0, 
                  restart=False):
@@ -72,32 +71,26 @@ class CmaesHistory(History):
                              np.dot(np.diag(1./self.D),self.B.transpose()))
    
     def __getstate__(self):
-        state = super(CmaesHistory, self).__getstate__()
-        
-        for attr in self.attrs:
-            state[attr] = getattr(self, attr)
-        
-        for attr in self.npattrs:
-            val = getattr(self, attr)
-            if val is None:
-                state[attr] = None
-            elif isinstance(val, np.ndarray):
-                state[attr] = val.copy()
-            else:
-                state[attr] = val
-        
-        return state
-    
-    def __setstate__(self, state):
-        state = copy.copy(state)
-        
-        for attr in self.npattrs:
-            val = state.pop(attr)
-            if isinstance(val, np.ndarray):
-               val = val.copy()
-            setattr(self, attr, val)
-            
-        super(CmaesHistory, self).__setstate__(state)
+      state = super(CmaesHistory, self).__getstate__()
+      
+      for attr in self.attrs:
+         val = getattr(self, attr)
+         if isinstance(val, np.ndarray):
+            val = val.copy()
+         state[attr] = val
+         
+      return state
+
+    def __setstate_(self, state):
+      state = copy.copy(state)
+      
+      for attr in self.attrs:
+         val = state.pop(attr)
+         if isintance(val, np.ndarray):
+            val = val.copy()
+         setattr(self, attr, val)
+      
+      super(CmaesHistory, self).__setstate__(state)
    
     def internalUpdate(self, population):
         base = np.array([x for x, s in population[:self.mu]])

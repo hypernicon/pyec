@@ -14,113 +14,111 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
    
     Primarily implemented to enable MADS (Audet and Dennis, 2006)
 """
+import copy
+import numpy as np
 
-
-from numpy import *
-from pyec.distribution.basic import PopulationDistribution, FixedCube, Gaussian
-from pyec.config import Config, ConfigBuilder
-
+from pyec.distribution.basic import Distribution, PopulationDistribution
+from pyec.config import Config
+from pyec.history import History
+from pyec.space import Euclidean
 
 GSS_INIT = 3
 GSS_SEARCH = 1
 GSS_POLL = 2
 
-class GSSConfigurator(ConfigBuilder):
+class GeneratingSetSearchHistory(History):
    
-   def __init__(self, *args):
-      super(GSSConfigurator, self).__init__(GeneratingSetSearch)
-      self.cfg.tolerance = 1e-50
-      self.cfg.expandStep = 1.1
-      self.cfg.contractStep = .95
-      self.cfg.stepInit = .5
-      self.cfg.initialDistribution = FixedCube(self.cfg)
-
-
-class GeneratingSetSearch(PopulationDistribution):
-   def __init__(self, config):
-      super(GeneratingSetSearch, self).__init__(config)
-      self.step = self.config.stepInit * self.config.scale
-      if hasattr(self.config, 'penalty'):
-         self.penalty = self.config.penalty
-      else:
-         self.penalty = lambda x: 0
-      self.generators = append(identity(self.config.dim), 
-       -ones((1,self.config.dim))/sqrt(self.config.dim), axis=0)
-      self.directions = zeros((0,self.config.dim))
+   attrs = ["state", "generators", "directions", "step", "center", "_score",
+            "expand", "contract", "tolerance", "dim"]
+   
+   def __init__(self, dim, scale, step, expand, contract, tolerance):
+      super(GeneratingSetSearchHistory, self).__init__()
       self.state = GSS_INIT
+      self.generators = np.append(np.identity(dim), 
+                                  -np.ones((1,dim))
+                                  /np.sqrt(dim), axis=0)
+      self.directions = np.zeros((0,dim))
+      self.step = step * scale
       self.center = None
-      self.score = None
+      self._score = None
+      self.expand = expand
+      self.contract = contract
+      self.tolerance = tolerance
+      self.dim = dim
+
+   def __getstate__(self):
+      state = super(GeneratingSetSearchHistory, self).__getstate__()
       
-   @classmethod
-   def configurator(cls):
-      return GSSConfigurator(cls)
+      for attr in self.attrs:
+         val = getattr(self, attr)
+         if isinstance(val, np.ndarray):
+            val = val.copy()
+         state[attr] = val
+         
+      return state
+
+   def __setstate_(self, state):
+      state = copy.copy(state)
       
+      for attr in self.attrs:
+         val = state.pop(attr)
+         if isintance(val, np.ndarray):
+            val = val.copy()
+         setattr(self, attr, val)
+      
+      super(GeneratingSetSearchHistory, self).__setstate__(state)
+
+   def better(self, x, y):
+      """Determine one score is better than another. The comparison
+      depends on whether minimizing or maximizing. Default is minimization
+      
+      """
+      return x < y
+      
+
    def accept(self, x, score):
       if self.center is None:
          self.center = x
-         self.score = score
+         self._score = score
          return True
-      if score - self.penalty(self.step) > self.score:
+      
+      if self.better(score + self.penalty(self.step), self._score):
          self.center = x
-         self.score = score 
+         self._score = score 
          return True
+      
       return False
 
-   @property
-   def var(self):
-      return self.step
+   def penalty(self, step):
+      """A penalty to apply during acceptance testing, used to accept
+      non-optimal points (or to reject new points that do not provide
+      enough improvement). By default, non-optimal points are not
+      accepted.
+      
+      :param step: The current step size
+      :type step: ``float``
+      
+      """
+      return 0.0
 
    def expandStep(self):
-      self.step *= self.config.expandStep
-      
+      self.step *= self.expand
+
    def contractStep(self):
-      self.step *= self.config.contractStep
+      self.step *= self.contract
 
-   def poll(self):
-      raw = self.center + self.step * self.generators
-      """
-      for i, row in enumerate(raw):
-         while (abs(row - self.config.center) > self.config.scale).any():
-            row -= self.center
-            row *= .5
-            row += self.center
-      """
-      return raw
-
-
-   def search(self):
-      if len(self.directions) == 0:
-         return []
-      raw = self.center + self.step * self.directions
-      """
-      for i, row in enumerate(raw):
-         while (abs(row - self.config.center) > self.config.scale).any():
-            row -= self.center
-            row *= .5
-            row += self.center
-      """
-      return raw
-
-   def batch(self, popSize=None):
-      if self.state == GSS_INIT:
-         return [self.config.initialDistribution()]
-      elif self.state == GSS_SEARCH:
-         pop = self.search()
-         if len(pop) > 0:
-            return pop
-      # GSS_POLL
-      self.state = GSS_POLL
-      return self.poll()
-      
    def updateGenerators(self, pop):   
       pass
 
    def updateDirections(self, pop):
       pass
       
-   def update(self, epoch, pop):
+   def internalUpdate(self, pop):
       if self.state == GSS_INIT:
-         self.state = GSS_SEARCH
+         if len(self.directions) > 0:
+            self.state = GSS_SEARCH
+         else:
+            self.state = GSS_POLL
          self.accept(*(pop[0]))
       elif self.state == GSS_SEARCH:
          accepted = False
@@ -137,24 +135,110 @@ class GeneratingSetSearch(PopulationDistribution):
          for x,s in pop:
             accepted = accepted or self.accept(x,s)
          if accepted:
-            self.state = GSS_SEARCH
+            if len(self.directions) > 0:
+               self.state = GSS_SEARCH
             self.expandStep()
             self.updateGenerators(pop)
             self.updateDirections(pop)
          else:
-            self.state = GSS_SEARCH
+            if len(self.directions) > 0:
+               self.state = GSS_SEARCH
+               
             self.contractStep()
-            if self.step < self.config.tolerance:
+            if self.step < self.tolerance:
                print "restarting"
-               self.__init__(self.config)
+               self.__init__(self.dim,
+                             self.scale,
+                             self.step,
+                             self.expand,
+                             self.contract,
+                             self.tolerance)
                return
             #   #self.step = self.config.stepInit * self.config.scale
             self.updateGenerators(pop)
             self.updateDirections(pop)
       else:
          raise Exception, "missing state " + str(self.state)
-         
 
+
+class GeneratingSetSearch(PopulationDistribution):
+   """
+   Based on Kolda, Lewis, and Torczon, Optimization by Direct Search: New Perspectives on Some Classical and Modern Methods (2003)
+   
+    Primarily implemented to enable MADS (Audet and Dennis, 2006)
+   
+   """
+   config = Config(tol=1e-50,              # tolerance before restart
+                   expand = 1.1,           # multiplier for expansion
+                   contract = .95,         # multiplier for contraction
+                   step = .5)              # initial step
+   
+   def __init__(self, **kwargs):
+      super(GeneratingSetSearch, self).__init__(**kwargs)
+      if not isinstance(self.config.space, Euclidean):
+         raise ValueError("Cannot use Nelder-Mead in non-Euclidean spaces.")
+      
+      self.config.populationSize = 1
+      
+      def history():
+         return GeneratingSetSearchHistory(self.config.space.dim,
+                                           self.config.space.scale,
+                                           self.config.step,
+                                           self.config.expand,
+                                           self.config.contract,
+                                           self.config.tol)
+      self.config.history = history
+      
+   def compatible(self,history):
+      return isinstance(history, GeneratingSetSearchHistory)
+      
+   @property
+   def var(self):
+      return self.history.step
+
+   def poll(self):
+      raw = self.history.center + self.history.step * self.history.generators
+      """
+      for i, row in enumerate(raw):
+         while (abs(row - self.config.center) > self.config.scale).any():
+            row -= self.center
+            row *= .5
+            row += self.center
+      """
+      return raw
+
+   def search(self):
+      if len(self.history.directions) == 0:
+         return []
+      raw = self.history.center + self.history.step * self.history.directions
+      """
+      for i, row in enumerate(raw):
+         while (abs(row - self.config.center) > self.config.scale).any():
+            row -= self.center
+            row *= .5
+            row += self.center
+      """
+      return raw
+
+   def batch(self, popSize=None):
+      state = self.history.state
+      if state == GSS_SEARCH:
+         pop = self.search()
+         if len(pop) > 0:
+            return pop
+      elif state == GSS_POLL: # GSS_POLL
+         state = GSS_POLL
+         return self.poll()
+      elif state == GSS_INIT: 
+         if isinstance(self.config.initial, Distribution):
+            return self.config.initial.sample()
+         elif self.config.initial is not None:
+            return self.config.initial
+         else:
+            return self.config.space.random()
+      raise Exception("Unknown state in GSS: {0}".format(state))
+
+"""
 class MADSConfigurator(ConfigBuilder):
    
    def __init__(self, *args):
@@ -239,3 +323,5 @@ class MeshAdaptiveDirectSearch(GeneratingSetSearch):
       self.generators = append(basis2, -extra, axis=0)
       self.step = self.config.dim * sqrt(self.searchStep)
       if self.step > 1.: self.step = 1.
+      
+"""

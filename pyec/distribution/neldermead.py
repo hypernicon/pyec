@@ -26,9 +26,8 @@ class NelderMeadHistory(History):
    
    """
    attrs = ["dim", "alpha", "beta", "gamma", "delta", "tolerance",
-            "state", "reflectScore", "shrinkIdx"]
-   
-   npattrs = ["scale", "current", "centroid"]
+            "state", "reflectScore", "shrinkIdx", "scale", "current",
+            "centroid"]
    
    def __init__(self, dim, scale, alpha, beta, gamma, delta, tolerance):
       super(NelderMeadHistory, self).__init__()
@@ -48,35 +47,25 @@ class NelderMeadHistory(History):
       
    def __getstate__(self):
       state = super(NelderMeadHistory, self).__getstate__()
-        
+      
       for attr in self.attrs:
-         state[attr] = getattr(self, attr)
-        
-      for attr in self.npattrs:
          val = getattr(self, attr)
-         if val is None:
-             state[attr] = None
-         elif isinstance(val, np.ndarray):
-             state[attr] = val.copy()
-         else:
-             state[attr] = val
-      
-      state["vertices"] = [(v[0].copy(), v[1]) for v in self.vertices]
-        
-      return state
-    
-   def __setstate__(self, state):
-      state = copy.copy(state)
-      
-      self.vertices = [(v[0].copy(), v[1]) for v in state.pop("vertices")]
-      
-      for attr in self.npattrs:
-         val = state.pop(attr)
          if isinstance(val, np.ndarray):
             val = val.copy()
-            setattr(self, attr, val)
-            
-      super(NelderMeadHistory, self).__setstate__(state)  
+         state[attr] = val
+         
+      return state
+
+   def __setstate_(self, state):
+      state = copy.copy(state)
+      
+      for attr in self.attrs:
+         val = state.pop(attr)
+         if isintance(val, np.ndarray):
+            val = val.copy()
+         setattr(self, attr, val)
+      
+      super(NelderMeadHistory, self).__setstate__(state)
       
    def refresh(self):
       self.vertices = sorted(self.vertices, key=lambda x:x[1], reverse=True)
