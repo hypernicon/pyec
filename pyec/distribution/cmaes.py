@@ -81,19 +81,22 @@ class CmaesHistory(History):
             val = getattr(self, attr)
             if val is None:
                 state[attr] = None
-            else:
+            elif isinstance(val, np.ndarray):
                 state[attr] = val.copy()
+            else:
+                state[attr] = val
         
         return state
     
     def __setstate__(self, state):
         state = copy.copy(state)
+        
         for attr in self.npattrs:
-            val = state[attr]
-            if val is not None:
-                val = val.copy()
+            val = state.pop(attr)
+            if isinstance(val, np.ndarray):
+               val = val.copy()
             setattr(self, attr, val)
-            del state[attr]
+            
         super(CmaesHistory, self).__setstate__(state)
    
     def internalUpdate(self, population):
