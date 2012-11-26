@@ -24,7 +24,7 @@ def run(opt):
     p = None
     f = lambda x: (x**2).sum()
     s = opt.config.space
-    t = opt.config.history()
+    t = opt.config.history(opt.config)
     
     for i in xrange(10):
         p = opt[t.update(p,f,s), f]()

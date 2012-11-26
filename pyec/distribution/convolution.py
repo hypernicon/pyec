@@ -39,9 +39,9 @@ class Convolution(PopulationDistribution):
               sub.checkpoint = True
       
    def makeHistory(self, subs):
-      def generator():
+      def generator(config):
           hs = [opt.config.history for opt in subs]
-          return CheckpointedMultipleHistory(*hs)
+          return CheckpointedMultipleHistory(config, *hs)
       return generator
 
    def compatible(self, history):
@@ -122,8 +122,8 @@ class SelfConvolution(PopulationDistribution):
             opt.checkpoint = True
     
     def makeHistory(self, opt):
-      def generator():
-          return CheckpointedHistory(opt.config.history)
+      def generator(config):
+          return CheckpointedHistory(config, opt.config.history)
       return generator    
                 
     def compatible(self, history):

@@ -52,8 +52,9 @@ class Convex(PopulationDistribution):
 
     def makeHistory(self, subs):
         """Build a :class:`MultipleHistory` from the suboptimizers"""
-        def generator():
-            return MultipleHistory(*[opt.config.history for opt in subs])
+        def generator(config):
+            return MultipleHistory(config,
+                                   *[opt.config.history for opt in subs])
         return generator
     
     def mapHistory(self, sub, history=None):

@@ -25,19 +25,18 @@ class NelderMeadHistory(History):
    """A history that saves the state for the Nelder-Mead algorithm
    
    """
-   attrs = ["dim", "alpha", "beta", "gamma", "delta", "tolerance",
-            "state", "reflectScore", "shrinkIdx", "scale", "current",
-            "centroid"]
    
-   def __init__(self, dim, scale, alpha, beta, gamma, delta, tolerance):
-      super(NelderMeadHistory, self).__init__()
-      self.dim = dim
-      self.scale = scale
-      self.alpha = alpha
-      self.beta = beta
-      self.gamma = gamma
-      self.delta = delta
-      self.tolerance = tolerance
+   def __init__(self, config):
+      super(NelderMeadHistory, self).__init__(config)
+      self.attrs |= set(["state", "reflectScore", "shrinkIdx", "scale",
+                         "current","centroid"])
+      self.dim = self.config.space.dim
+      self.scale = self.config.space.scale
+      self.alpha = self.config.alpha
+      self.beta = self.config.beta
+      self.gamma = self.config.gamma
+      self.delta = self.config.delta
+      self.tolerance = self.config.tol
       self.current = None
       self.vertices = []
       self.state = NM_REFLECT_INIT
@@ -45,30 +44,8 @@ class NelderMeadHistory(History):
       self.reflectScore = None
       self.shrinkIdx = None
       
-   def __getstate__(self):
-      state = super(NelderMeadHistory, self).__getstate__()
-      
-      for attr in self.attrs:
-         val = getattr(self, attr)
-         if isinstance(val, np.ndarray):
-            val = val.copy()
-         state[attr] = val
-         
-      return state
-
-   def __setstate_(self, state):
-      state = copy.copy(state)
-      
-      for attr in self.attrs:
-         val = state.pop(attr)
-         if isintance(val, np.ndarray):
-            val = val.copy()
-         setattr(self, attr, val)
-      
-      super(NelderMeadHistory, self).__setstate__(state)
-      
    def refresh(self):
-      self.vertices = sorted(self.vertices, key=lambda x:x[1], reverse=True)
+      self.vertices = sorted(self.vertices, key=lambda x:x[1])
       if len(self.vertices) > 1:
          self.centroid = np.sum(np.array([v[0] for v in self.vertices[:-1]]),
                                 axis=0) / (len(self.vertices) - 1)   
@@ -131,6 +108,8 @@ class NelderMeadHistory(History):
             """
          else:
             self.refresh()
+      else:
+         self.refresh()
       if self.current is None:
          # reflect
          if self.state == NM_REFLECT_INIT:
@@ -221,22 +200,14 @@ class NelderMead(PopulationDistribution):
                    beta = .5,
                    gamma = 2.,
                    delta = .5,
-                   tol = 1e-10) # tolerance for vertex spread before restart
+                   tol = 1e-10, # tolerance for vertex spread before restart
+                   history = NelderMeadHistory)
    
    def __init__(self, **kwargs):
       super(NelderMead, self).__init__(**kwargs)
       if not isinstance(self.config.space, Euclidean):
          raise ValueError("Cannot use Nelder-Mead in non-Euclidean spaces.")
       self.config.populationSize = 1
-      def history():
-         return NelderMeadHistory(self.config.space.dim,
-                                  self.config.space.scale,
-                                  self.config.alpha,
-                                  self.config.beta,
-                                  self.config.gamma,
-                                  self.config.delta,
-                                  self.config.tol)
-      self.config.history = history
     
    def compatible(self, history):
       return isinstance(history, NelderMeadHistory)
@@ -244,10 +215,10 @@ class NelderMead(PopulationDistribution):
    def batch(self, popSize):
       # regardless of requested size, we only return 1 item, the current
       # proposal for nelder mead
-      center = self.config.space.center
-      scale = self.config.space.center
       current = self.history.current
-      self.history.current = np.minimum(center+scale,
-                                        np.maximum(center-scale,current))
+      if not self.config.space.in_bounds(current):
+         center, scale = self.config.space.extent()
+         self.history.current = np.minimum(center+scale,
+                                           np.maximum(center-scale,current))
       return [self.history.current]
       

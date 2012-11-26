@@ -28,45 +28,23 @@ GSS_POLL = 2
 
 class GeneratingSetSearchHistory(History):
    
-   attrs = ["state", "generators", "directions", "step", "center", "_score",
-            "expand", "contract", "tolerance", "dim"]
-   
-   def __init__(self, dim, scale, step, expand, contract, tolerance):
-      super(GeneratingSetSearchHistory, self).__init__()
+   def __init__(self, cfg):
+      super(GeneratingSetSearchHistory, self).__init__(cfg)
+      self.attrs |= set(["dim","center","state", "_score", "step", "stepInit",
+                         "generators","directions"])
+      dim = self.config.space.dim
+      scale = self.config.space.scale
+      step = self.config.step
       self.state = GSS_INIT
       self.generators = np.append(np.identity(dim), 
                                   -np.ones((1,dim))
                                   /np.sqrt(dim), axis=0)
       self.directions = np.zeros((0,dim))
-      self.step = step * scale
+      self.stepInit = step * scale
+      self.step = self.stepInit
       self.center = None
       self._score = None
-      self.expand = expand
-      self.contract = contract
-      self.tolerance = tolerance
       self.dim = dim
-
-   def __getstate__(self):
-      state = super(GeneratingSetSearchHistory, self).__getstate__()
-      
-      for attr in self.attrs:
-         val = getattr(self, attr)
-         if isinstance(val, np.ndarray):
-            val = val.copy()
-         state[attr] = val
-         
-      return state
-
-   def __setstate_(self, state):
-      state = copy.copy(state)
-      
-      for attr in self.attrs:
-         val = state.pop(attr)
-         if isintance(val, np.ndarray):
-            val = val.copy()
-         setattr(self, attr, val)
-      
-      super(GeneratingSetSearchHistory, self).__setstate__(state)
 
    def better(self, x, y):
       """Determine one score is better than another. The comparison
@@ -102,10 +80,10 @@ class GeneratingSetSearchHistory(History):
       return 0.0
 
    def expandStep(self):
-      self.step *= self.expand
+      self.step *= self.config.expand
 
    def contractStep(self):
-      self.step *= self.contract
+      self.step *= self.config.contract
 
    def updateGenerators(self, pop):   
       pass
@@ -145,14 +123,8 @@ class GeneratingSetSearchHistory(History):
                self.state = GSS_SEARCH
                
             self.contractStep()
-            if self.step < self.tolerance:
-               print "restarting"
-               self.__init__(self.dim,
-                             self.scale,
-                             self.step,
-                             self.expand,
-                             self.contract,
-                             self.tolerance)
+            if self.step < self.config.tol:
+               self.__init__(self.config)
                return
             #   #self.step = self.config.stepInit * self.config.scale
             self.updateGenerators(pop)
@@ -171,7 +143,8 @@ class GeneratingSetSearch(PopulationDistribution):
    config = Config(tol=1e-50,              # tolerance before restart
                    expand = 1.1,           # multiplier for expansion
                    contract = .95,         # multiplier for contraction
-                   step = .5)              # initial step
+                   step = .5,              # initial step
+                   history = GeneratingSetSearchHistory)
    
    def __init__(self, **kwargs):
       super(GeneratingSetSearch, self).__init__(**kwargs)
@@ -179,15 +152,6 @@ class GeneratingSetSearch(PopulationDistribution):
          raise ValueError("Cannot use Nelder-Mead in non-Euclidean spaces.")
       
       self.config.populationSize = 1
-      
-      def history():
-         return GeneratingSetSearchHistory(self.config.space.dim,
-                                           self.config.space.scale,
-                                           self.config.step,
-                                           self.config.expand,
-                                           self.config.contract,
-                                           self.config.tol)
-      self.config.history = history
       
    def compatible(self,history):
       return isinstance(history, GeneratingSetSearchHistory)
@@ -238,31 +202,22 @@ class GeneratingSetSearch(PopulationDistribution):
             return self.config.space.random()
       raise Exception("Unknown state in GSS: {0}".format(state))
 
-"""
-class MADSConfigurator(ConfigBuilder):
-   
-   def __init__(self, *args):
-      super(MADSConfigurator, self).__init__(MeshAdaptiveDirectSearch)
-      self.cfg.tolerance = 1e-20
-      self.cfg.expandStep = 4.0
-      self.cfg.contractStep = .25
-      self.cfg.stepInit = .5
 
-class MeshAdaptiveDirectSearch(GeneratingSetSearch):
+
+"""
+class MADSHistory(GeneratingSetSearchHistory):
+   """"""
+   Based on Audet & Dennis 2006. May not be working yet; please verify/fix
+   if you need it.
+   """"""
    def __init__(self, config):
       super(MeshAdaptiveDirectSearch, self).__init__(config)
-      self.step = 1.0
-      self.stepInit = self.step
       self.searchStep = self.step
       self.root = {}
       self.rootIdx = {}
-   
-   @classmethod
-   def configurator(cls):
-      return MADSConfigurator(cls)
-   
+    
    def ell(self):
-      ell = int(-log(self.searchStep) * log(4))
+      ell = np.int(-np.log(self.searchStep) * np.log(4))
       if ell > 30: ell = 30
       return ell
    
@@ -270,10 +225,10 @@ class MeshAdaptiveDirectSearch(GeneratingSetSearch):
       ell = self.ell()
       if self.root.has_key(ell):
          return
-      i = random.randint(0, self.config.dim)
+      i = np.random.randint(0, self.config.dim)
       bnd = 2 ** ell
-      root = random.randint(-bnd+1, bnd, self.config.dim)
-      if random.random_sample() < .5:
+      root = np.random.randint(-bnd+1, bnd, self.config.dim)
+      if np.random.random_sample() < .5:
          root[i] = -bnd
       else:
          root[i] = bnd
@@ -281,12 +236,14 @@ class MeshAdaptiveDirectSearch(GeneratingSetSearch):
       self.rootIdx[ell] = i
       
    def expandStep(self):
-      self.searchStep *= self.config.expandStep
-      if self.searchStep > self.stepInit: self.searchStep = self.stepInit
+      self.searchStep *= self.config.expand
+      if self.searchStep > self.stepInit:
+         self.searchStep = self.stepInit
       
    def contractStep(self):
-      self.searchStep *= self.config.contractStep 
-      if self.searchStep > self.stepInit: self.searchStep = self.stepInit
+      self.searchStep *= self.config.contract 
+      if self.searchStep > self.stepInit:
+         self.searchStep = self.stepInit
       
    def updateGenerators(self, pop):
       ell = self.ell()
@@ -295,12 +252,12 @@ class MeshAdaptiveDirectSearch(GeneratingSetSearch):
       idx = self.rootIdx[ell]
       bnd = 2 ** ell
       dim1 = self.config.dim - 1
-      below = tri(dim1, k=-1) * random.randint(-bnd+1, bnd, (dim1,dim1))
-      diagonal = (random.binomial(1, .5, dim1) * 2. - 1.) * bnd
-      lower = below + bnd * diag(diagonal)
-      indexes = arange(dim1)
-      random.shuffle(indexes)
-      basis = zeros((self.config.dim, self.config.dim))
+      below = np.tri(dim1, k=-1) * np.random.randint(-bnd+1, bnd, (dim1,dim1))
+      diagonal = (np.random.binomial(1, .5, dim1) * 2. - 1.) * bnd
+      lower = below + bnd * np.diag(diagonal)
+      indexes = np.arange(dim1)
+      np.random.shuffle(indexes)
+      basis = np.zeros((self.config.dim, self.config.dim))
       for i in xrange(self.config.dim):
          for j in xrange(dim1):
             if i == idx:
@@ -315,13 +272,13 @@ class MeshAdaptiveDirectSearch(GeneratingSetSearch):
                basis[k,j] = lower[i2,j]
       basis[idx,:] = 0.0
       basis[:,dim1] = root
-      indexes2 = arange(self.config.dim + 1)
-      basis2 = zeros_like(basis)
+      indexes2 = np.arange(self.config.dim + 1)
+      basis2 = np.zeros_like(basis)
       for j in xrange(self.config.dim):
          basis2[:,indexes2[j]] = basis[:,j]
       extra = basis2.sum(axis=1).reshape((1,self.config.dim))
-      self.generators = append(basis2, -extra, axis=0)
-      self.step = self.config.dim * sqrt(self.searchStep)
+      self.generators = np.append(basis2, -extra, axis=0)
+      self.step = self.config.dim * np.sqrt(self.searchStep)
       if self.step > 1.: self.step = 1.
       
 """

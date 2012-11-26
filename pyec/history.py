@@ -22,18 +22,24 @@ class History(object):
     """
     sorted = False
     useCache = True
+    attrs = set()
     
-    def __init__(self):
+    def __init__(self, config):
         super(History, self).__init__()
+        self.config = config
         self.evals = 0
         self.minSolution = None
         self.minScore = 1e300
         self.maxSolution = None
         self.maxScore = -1e300 
         self._empty = True
-        self.cache = LRUCache() # 10,000 items by default
+        if not hasattr(self, 'cache'):
+            self.cache = LRUCache() # 10,000 items by default
         self.updates = 0
         self.printEvery = 1000000000000L #how often to print generation report
+        self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
+                          "minSolution", "maxSolution","_empty","cache",
+                          "update","printEvery", "sorted", "useCache"])
     
     def __getstate__(self):
         """Used by :class:`CheckpointedHistory`
@@ -46,27 +52,28 @@ class History(object):
         :returns: A dictionary with the state of the history
         
         """
-        return {
-           "evals": self.evals,
-           "minSolution": self.minSolution,
-           "minScore": self.minScore,
-           "maxSolution": self.maxSolution,
-           "maxScore": self.maxScore,
-           "_empty": self._empty,
-           "cache": self.cache,
-           "updates": self.updates,
-           "printEvery": self.printEvery,
-           "sorted": self.sorted,
-           "useCache": self.useCache,
-        }
-        
+        state = {}
+      
+        for attr in self.attrs:
+            val = getattr(self, attr)
+            if isinstance(val, np.ndarray):
+                val = val.copy()
+            state[attr] = val
+         
+        state['cfg'] = self.config.__properties__
+        return state
+
     def __setstate__(self, state):
-        """Restore the state of the history from the dictionary provided
-        by ``self.__getstate__()``
-        
-        """
-        for k,v in state.iteritems():
-            setattr(self, k, v)
+        state = copy.copy(state)
+      
+        for attr in self.attrs:
+            val = state.pop(attr)
+            if isinstance(val, np.ndarray):
+                val = val.copy()
+            setattr(self, attr, val)
+         
+        import pyec.config
+        self.config = pyec.config.Config(**state['cfg'])  
     
     def empty(self):
         return self._empty
@@ -216,9 +223,10 @@ class History(object):
 class MarkovHistory(History):
      """A :class:`History` that stores the last population only."""
      
-     def __init__(self):
-         super(MarkovHistory, self).__init__()
+     def __init__(self, config):
+         super(MarkovHistory, self).__init__(config)
          self.population = None
+         self.attrs |= set(["population"])
          
      def internalUpdate(self, population):
          """Overrides ``internalUpdate`` in :class:`History`"""
@@ -240,29 +248,28 @@ class SortedMarkovHistory(History):
        generator that provides a different sorter, e.g.
        
        ``config.history = lambda h: SortedMarkovHistory(lambda p: -p[1])``
-       
-       :params sorter: A comparator passed to the ``key`` argument of the 
-                       built-in function ``sorted``.
-       :type sorter: A callable object with one argument, passed a tuple
-                     of type ``(solution,score)``.
                      
     """
     sorted = True
     
-    def __init__(self, sorter=None):
-        super(SortedMarkovHistory, self).__init__()
-        self.sorter = lambda p: p[1]
+    def __init__(self, config):
+        super(SortedMarkovHistory, self).__init__(config)
         
+    def sorter(self, x):
+        """
+        Sorting routine for this history, passed as key to
+        python ``sorted`` built-in. Will be pass a ``(solution, score)``
+        tuple.
+        
+        """
+        return x[1]
+    
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
         super(SortedMarkovHistory, self).internalUpdate(population)
          
         self.population = sorted(self.population, key=self.sorter)
         
-    def __getstate__(self):
-        start = super(SortedMarkovHistory, self).__getstate__()
-        start.update({"sorter":self.sorter})
-        return start
 
 class LocalMinimumHistory(History):
      """A :class:`History` that stores the best members of the
@@ -272,9 +279,10 @@ class LocalMinimumHistory(History):
      
      """
      
-     def __init__(self):
-         super(LocalMinimumHistory, self).__init__()
+     def __init__(self, config):
+         super(LocalMinimumHistory, self).__init__(config)
          self.localBestPop = None
+         self.attrs |= set(["localBestPop"])
          
      def internalUpdate(self, population):
          """Overrides ``internalUpdate`` in :class:`History`"""
@@ -303,10 +311,7 @@ class LocalMinimumHistory(History):
          """
          return x < y
          
-     def __getstate__(self):
-         start = super(LocalMinimumHistory, self).__getstate__()
-         start.update({"localBestPop":self.localBestPop})
-         return start
+
 
 class LocalMaximumHistory(LocalMinimumHistory):
      """A :class:`History` that stores the maximal members of the
@@ -336,12 +341,13 @@ class CheckpointedHistory(History):
        :type historyClass: :class:`History` constructor
         
     """
-    def __init__(self, historyClass):
-        super(CheckpointedHistory, self).__init__()
-        self.history = historyClass() 
+    def __init__(self, config, historyClass):
+        super(CheckpointedHistory, self).__init__(config)
+        self.history = historyClass(self.config) 
         self.cache = self.history.cache
         self.useCache = self.history.useCache
         self.states = []
+        self.attrs |= set(["states"])
         
         
     def internalUpdate(self, population):
@@ -367,6 +373,7 @@ class CheckpointedHistory(History):
         self._empty = self.history._empty
         self.updates = self.history.updates
         self.states = self.states[:-1]
+        self.attrs |= set(["states"])
 
     def __getstate__(self):
         start = super(CheckpointedHistory, self).__getstate__()
@@ -379,6 +386,7 @@ class CheckpointedHistory(History):
         del state["history"]
         super(CheckpointedHistory, self).__setstate__(state)
 
+
 class MultipleHistory(History):
     """A :class:`History` suitable for use in a convex optimizer.
     Keeps multiple histories and updates them all.
@@ -388,12 +396,12 @@ class MultipleHistory(History):
        :type historyClasses: list of :class:`History` constructors
         
     """
-    def __init__(self, *historyClasses):
-        super(MultipleHistory, self).__init__()
+    def __init__(self, config, *historyClasses):
+        super(MultipleHistory, self).__init__(config)
         if not len(historyClasses):
             err = "MultipleHistory needs at least 1 history"
             raise ValueError(err)
-        self.histories = [h() for h in set(historyClasses)]
+        self.histories = [h(self.config) for h in set(historyClasses)]
         useCache = False
         for h in self.histories: 
             h.printEvery = 1000000000L
@@ -421,9 +429,8 @@ class MultipleHistory(History):
         
     def __setstate__(self, state):
         state = copy.copy(state)
-        for st,h in zip(state["histories"], self.histories):
+        for st,h in zip(state.pop("histories"), self.histories):
             h.__setstate__(st)
-        del state["histories"]
         super(MultipleHistory, self).__setstate__(state)
     
 
@@ -433,14 +440,16 @@ class CheckpointedMultipleHistory(MultipleHistory):
     Keeps a stack of states for each subhistory; push with ``checkpoint``
     and roll back with ``pop`` 
     
-       :param historyClasses: A list of constructors for :class:`History`
+       :param history: A list of constructors for :class:`History`
                               objects
-       :type historyClasses: list of :class:`History` constructors
+       :type history: list of :class:`History` constructors
         
     """
-    def __init__(self, *historyClasses):
-        super(CheckpointedMultipleHistory, self).__init__(*historyClasses)
+    def __init__(self, config, *historyClasses):
+        super(CheckpointedMultipleHistory, self).__init__(config,
+                                                          *historyClasses)
         self.states = []
+        self.attrs |= set(["states"])
     
     def checkpoint(self):
         self.states.append([h.__getstate__() for h in self.histories])
@@ -473,8 +482,8 @@ class DelayedHistory(History):
     :type delay: ``int``
     
     """
-    def __init__(self, history, delay=1):
-        super(DelayedHistory, self).__init__()
+    def __init__(self, config, history, delay=1):
+        super(DelayedHistory, self).__init__(config)
         self.history = history
         if delay < 1:
             err = "Delay must be a positive integer, not {0}".format(delay)
@@ -517,8 +526,9 @@ class DelayedHistory(History):
         
     def __setstate__(self, state):
         state = copy.copy(state)
-        self.history.__setstate__(state["history"])
-        del state["history"]
+        self.history.__setstate__(state.pop("history"))
+        self.delay = state.pop("delay")
+        self.queue = state.pop("queue")
         super(DelayedHistory, self).__setstate__(state)
 
     

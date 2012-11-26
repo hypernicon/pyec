@@ -367,7 +367,7 @@ class PopulationDistribution(Distribution):
      
       # Set up history
       if history is None:
-         history = self.config.history()
+         history = self.config.history(self.config)
      
       if not self.compatible(history):
          name = history.__class__.__name__
@@ -408,7 +408,7 @@ class PopulationDistribution(Distribution):
      
       # Set up history
       if history is None:
-         history = self.config.history()
+         history = self.config.history(self.config)
       
       if not self.compatible(history):
           err = ("Got an incompatible history in __getitem__; "

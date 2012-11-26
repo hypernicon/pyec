@@ -19,17 +19,16 @@ from pyec.history import History
 class CmaesHistory(History):
     """A history that stores the parameters for CMA-ES"""
     
-    attrs = ["mu", "dim", "restart", "muw", "mueff", "cc", "cs", "c1", "cmu",
-             "damps", "chiN", "eigeneval", "sigma", "weights", "B", "D", 
-             "covar", "active", "ps", "pc", "mean"]
-    
-    def __init__(self, dim=1, populationSize=25, mu=None, scale=1.0, 
-                 restart=False):
-        super(CmaesHistory, self).__init__()
-        self.mu = mu or int(.5 * populationSize)
-        self.scale = scale
-        self.dim = dim
-        self.restart = restart
+    def __init__(self, config):
+        super(CmaesHistory, self).__init__(config)
+        self.attrs |= set(["mu", "dim", "restart", "muw", "mueff", "cc",
+                           "cs", "c1", "cmu","damps", "chiN", "eigeneval",
+                           "sigma", "weights", "B", "D", 
+                           "covar", "active", "ps", "pc", "mean"])
+        self.mu = self.config.mu or int(.5 * self.config.populationSize)
+        self.scale = self.config.space.scale
+        self.dim = self.config.space.dim
+        self.restart = self.config.restart
       
         self.mean = None
         self.sigma = self.scale * .5
@@ -69,29 +68,7 @@ class CmaesHistory(History):
                             np.dot(np.diag(self.D ** 2),self.B.transpose())) 
         self.active = np.dot(self.B, 
                              np.dot(np.diag(1./self.D),self.B.transpose()))
-   
-    def __getstate__(self):
-      state = super(CmaesHistory, self).__getstate__()
-      
-      for attr in self.attrs:
-         val = getattr(self, attr)
-         if isinstance(val, np.ndarray):
-            val = val.copy()
-         state[attr] = val
-         
-      return state
 
-    def __setstate_(self, state):
-      state = copy.copy(state)
-      
-      for attr in self.attrs:
-         val = state.pop(attr)
-         if isintance(val, np.ndarray):
-            val = val.copy()
-         setattr(self, attr, val)
-      
-      super(CmaesHistory, self).__setstate__(state)
-   
     def internalUpdate(self, population):
         base = np.array([x for x, s in population[:self.mu]])
         if self.mean is None: 
@@ -155,8 +132,7 @@ class CmaesHistory(History):
             self.sigma *= self.scale
     
         if self.restart and self.sigma * detcv < 1e-25:
-            self.__init__(self.dim, len(population), self.mu, self.scale, 
-                          self.restart)
+            self.__init__(self.config)
 
 
 class Cmaes(PopulationDistribution):
@@ -183,7 +159,8 @@ class Cmaes(PopulationDistribution):
    """
    config = Config(mu=None, # the number of parents, default half population
                    restart=True, # whether to restart when variance collapses
-                   populationSize=25)
+                   populationSize=25,
+                   history=CmaesHistory)
 
    def __init__(self, **kwargs):
       super(Cmaes, self).__init__(**kwargs)
@@ -206,15 +183,6 @@ class Cmaes(PopulationDistribution):
       
       if self.config.mu >= self.config.populationSize:
           raise ValueError("CMA-ES mu must be less than populationSize")
-      
-      def history():
-          return CmaesHistory(self.config.space.dim,
-                              self.config.populationSize,
-                              self.config.mu,
-                              self.config.space.scale,
-                              self.config.restart)
-      self.config.history = history
-      
 
    def compatible(self, history):
       return isinstance(history, CmaesHistory)

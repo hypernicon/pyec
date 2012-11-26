@@ -39,8 +39,10 @@ class TrajectoryTruncation(PopulationDistribution):
         :returns: A suitable :class:`DelayedHistory`object
         
         """
-        def generator():
-            return DelayedHistory(sub.config.history(), self.delay)
+        def generator(config):
+            return DelayedHistory(config,
+                                  sub.config.history(sub.config),
+                                  self.delay)
             
         return generator
         
