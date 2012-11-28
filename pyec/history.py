@@ -20,7 +20,6 @@ class History(object):
     algorthm to operate.
     
     """
-    sorted = False
     useCache = True
     attrs = set()
     
@@ -39,7 +38,7 @@ class History(object):
         self.printEvery = 1000000000000L #how often to print generation report
         self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
                           "minSolution", "maxSolution","_empty","cache",
-                          "update","printEvery", "sorted", "useCache"])
+                          "update","printEvery", "useCache"])
     
     def __getstate__(self):
         """Used by :class:`CheckpointedHistory`
@@ -250,7 +249,6 @@ class SortedMarkovHistory(History):
        ``config.history = lambda h: SortedMarkovHistory(lambda p: -p[1])``
                      
     """
-    sorted = True
     
     def __init__(self, config):
         super(SortedMarkovHistory, self).__init__(config)

@@ -215,7 +215,5 @@ class Cmaes(PopulationDistribution):
    def var(self):
       return self.history.sigma * det(self.history.covar)
 
-   def internalUpdate(self, population):
-      pass
 
 

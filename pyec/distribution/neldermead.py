@@ -110,6 +110,7 @@ class NelderMeadHistory(History):
             self.refresh()
       else:
          self.refresh()
+         
       if self.current is None:
          # reflect
          if self.state == NM_REFLECT_INIT:
