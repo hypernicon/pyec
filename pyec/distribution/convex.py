@@ -26,7 +26,7 @@ class Convex(PopulationDistribution):
 
     def __init__(self, subs, **kwargs):
         if not len(subs):
-             raise ValueError("Convolution requires at least one optimizer")
+             raise ValueError("Convex combination requires at least one optimizer")
           
         kwargs['history'] = self.makeHistory(subs)
         super(Convex, self).__init__(**kwargs)

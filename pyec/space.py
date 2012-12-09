@@ -9,9 +9,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 import numpy as np
+from pyec.config import Config
 from pyec.util.TernaryString import TernaryString
+from scipy.special import erf
 
-class Space(object):
+class Region(object):
+    """Abstraction for a subset of a search domain."""
+    pass
+
+
+class Space(Region):
     """Abstraction for a search domain.
     
     The space object is used to contain all information about a specific 
@@ -24,24 +31,20 @@ class Space(object):
     
     :param cls: A class for objects in the space. type will be checked
     :type cls: Any type that can be passed to ``isinstance``
-    :param constraint: A :class:`Constraint` object for this space. Otherwise, 
-                       the space is assumed to be unconstrained.
-    :type constraint: :class:`Constraint`
     
     """
-    def __init__(self, cls, constraint=None):
-        if constraint is not None:
-            if not constraint.compatible(self):
-                cname = "{0}[{1}]"
-                cname = cname.format(self.__class__.__name__, cls.__name__)
-                err = "Incompatible constraint for space {0}".format(cname)
-                raise ValueError(err)
-
-            self.bounded = False
-        else:
-            self.bounded = True
-        self.constraint = constraint
+    def __init__(self, cls):
         self.type = cls
+        self.parent = None # An immediate supercontainer, if needed
+        self.owner = None # The space this subspace/region is in, if any
+        
+    def area(self, **kwargs):
+        """Return the area of the space.
+        
+        :returns: ``float``, the area/volume/measure of the space
+        
+        """
+        return 1.0
         
     def convert(self, x):
         """Given a point in the space, convert it to a point that can
@@ -54,10 +57,18 @@ class Space(object):
         :returns: The converted point, ready to be passed to the fitness
         
         """
-        if not isinstance(x, self.type):
+        if not self.in_bounds(x):
             cname = self.__class__.__name__
             raise ValueError("Type mismatch in {0}.convert".format(cname))
         return x
+   
+    def extent(self):
+        """Return a lower and upper vector the extent of the space.
+        
+        :returns: A tuple with (lower, upper) bounds for the space
+        
+        """
+        raise NotImplementedError("Not all spaces have well-defined extent")
    
     def in_bounds(self, x):
         """Check whether a point is inside of the constraint region.
@@ -68,14 +79,8 @@ class Space(object):
         :type x: Should be an instance of `class`
         
         """
-        if not isinstance(x, self.type):
-            return False
-        
-        if self.constraint is None:
-            return True
-        else:
-            return self.constraint(x)
-            
+        return isinstance(x, self.type)
+
     def random(self):
         """Return a random point in the space"""
         raise NotImplementedException
@@ -100,12 +105,14 @@ class Euclidean(Space):
     :type dim: ``int``
     :param scale: The scale for the space, integer or array
     :type scale: ``int`` for spherical space, or ``numpy.ndarray``
-    :param constraint: The constraint region for the space
-    :type constraint: :class:`Constraint`
     
     """
-    def __init__(self, dim=1, center=0.0, scale=1.0, constraint=None):
-        super(Euclidean, self).__init__(np.ndarray, constraint)
+    def __init__(self, dim=1, center=0.0, scale=1.0):
+        super(Euclidean, self).__init__(np.ndarray)
+        try:
+            bottom = center - scale
+        except Exception:
+            raise ValueError("Mismatched center or scale in Euclidean")
         self.center = center
         self.scale = scale
         self.dim = dim
@@ -117,51 +124,101 @@ class Euclidean(Space):
         if isinstance(scale, np.ndarray):
             if shape(scale) != dim:
                 raise ValueError("Dimension of scale array doesn't match dim")
+    
+    def gaussInt(self, z):
+        # x is std normal from zero to abs(z)
+        x = erf(np.abs(z)) / 2 / np.sqrt(2)
+        return .5 + np.sign(z) * x
+    
+    def proportion(self, smaller, larger, index):
+        """Assume ``smaller`` is a hyperrectangle, and ``larger`` is either
+        a euclidean space or a hyperrectangle containing ``smaller``.
         
-        if constraint is not None:
-            if hasattr(constraint, 'center'):
-                if isinstance(self.center, np.ndarray):
-                    fail = (self.center != constraint.center).any()
-                else:
-                    fail = self.center != constraint.center
-                if fail:
-                    err = "Constraint center doesn't match space center"
-                    raise ValueError(err)
-                    
-            if hasattr(constraint, 'scale'):
-                if isinstance(self.scale, np.ndarray):
-                    fail = (self.scale != constraint.scale).any()
-                else:
-                    fail = self.scale != constraint.scale
-                if fail:
-                    err = "Constraint scale doesn't match space scale"
-                    raise ValueError(err)
-                    
-            if hasattr(constraint, 'dim') and self.dim != constraint.dim:
-                raise ValueError("Constraint dimension doesn't match space")
-            
+        To handle something more general, we would need to integrate somehow,
+        either monte carlo or decomposing into hyperrectangles.
         
+        :param smaller: A Hyperrectangle in this space
+        :type smaller: :class:`Hyperrectangle`
+        :param larger: A Hyperrectangle or this space, either way containing
+                       ``smaller``
+        :type larger: :class:`Hyperrectangle` or :class:`Euclidean`
+        :returns: The ratio of ``smaller``'s volume over ``larger``'s.
+        """
+        try:
+            center = self.center[index]
+            scale = self.scale[index]
+        except:
+            center = self.center
+            scale = self.scale
+        slower = smaller.center[index] - smaller.scale[index]
+        supper = smaller.center[index] + smaller.scale[index]
+        if isinstance(larger, Euclidean):
+            llower = -np.inf
+            lupper = np.inf
+        else: # Hyperrectangle 
+            llower = larger.center[index] - larger.scale[index]
+            lupper = larger.center[index] + larger.scale[index]
+        slow = self.gaussInt((slower - center) / scale) 
+        shigh = self.gaussInt((supper - center) / scale)
+        llow = self.gaussInt((llower - center) / scale) 
+        lhigh = self.gaussInt((lupper - center) / scale)
+        return (shigh - slow) / (lhigh - llow)
+      
+    def extent(self):
+        upper = zeros(self.dim)
+        lower = zeros(self.dim)
+        upper.fill(np.inf)
+        lower.fill(-np.inf)
+        return lower, upper
+      
     def random(self):
         """Get a random point in Euclidean space. Use the constraint to 
         generate a random point in the space if possible, otherwise
         use a zero-centered elliptical gaussian scaled by ``self.scale``.
         
         """
-        if hasattr(self.constraint, 'random'):
-            return self.constraint.random()
-        else:
-            test = self.scale * np.random.randn(self.dim)
-            if self.constraint is not None:
-                while not self.constraint.in_bounds(test):
-                    test = self.scale * np.random.randn(self.dim)
-                return test
-            else:
-                return test
+        test = self.scale * np.random.randn(self.dim)
+        return test
                 
     def hash(self, point):
         parts = [((point+i)**2).sum() for i in np.arange(10)]
         return ",".join([str(pt) for pt in parts])
+
+
+class Hyperrectangle(Euclidean):
+    """A Hyperrectangle constraint region within Euclidean space."""
+    _area = None
+    
+    def in_bounds(self, y):
+        return (np.abs(np.array(y) - self.center) <= self.scale).all()
+   
+    def extent(self):
+        return self.center - self.scale, self.center + self.scale
+
+    def proportion(self, smaller, larger, index):
+        return smaller.scale[index] / larger.scale[index]
+
+    def area(self, **kwargs):
+        if self._area is not None:
+            return self._area
         
+        if ("index" in kwargs and
+            self.parent is not None and
+            self.owner is not None):
+            self._area = (self.parent.area() *
+                          self.owner.proportion(self,
+                                                self.parent,
+                                                kwargs["index"]))
+        else:
+            # Lebesgue
+            self._area = (2*self.scale).prod()
+            
+        return self._area
+   
+    def random(self):
+       base = np.random.random_sample(np.shape(self.center))
+       return self.center - self.scale + 2 * self.scale * base
+
 
 class Binary(Space):
     """A binary space of fixed finite dimension.
@@ -170,17 +227,19 @@ class Binary(Space):
     
     :param dim: The dimension of the space
     :type dim: ``int``
-    :param constraint: The constraint region for the space
-    :type constraint: :class:`Constraint`
     
     """
+    _area = None
     
-    def __init__(self, dim=1, constraint=None):
-        super(Binary, self).__init__(TernaryString, constraint)
+    def __init__(self, dim=1):
+        super(Binary, self).__init__(TernaryString)
         self.dim = dim
-        self.constraint = constraint
-        if hasattr(constraint, 'dim') and constraint.dim != dim:
-            raise ValueError("Constraint has mismatched dimension")
+        
+    def area(self):
+        return 2.0 ** self.dim
+            
+    def extent(self):
+        return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
             
     def random(self):
         """Get a random point in binary space. Use the constraint to 
@@ -188,16 +247,8 @@ class Binary(Space):
         use a random byte string.
         
         """
-        if hasattr(self.constraint, 'random'):
-            return self.constraint.random()
-        else:
-            test = TernaryString.random(.5, self.dim)
-            if self.constraint is not None:
-                while not self.constraint.in_bounds(test):
-                    test = TernaryString.random(.5, self.dim)
-                return test
-            else:
-                return test
+        return TernaryString.random(.5, self.dim)
+
 
 class BinaryReal(Binary):
     """A binary genotype with a Euclidean phenotype.
@@ -219,7 +270,7 @@ class BinaryReal(Binary):
     """
     
     def __init__(self, realDim=1, bitDepth=16, center=0.0, 
-                 scale=1.0, constraint=None):
+                 scale=1.0):
         self.bitLength = realDim * bitDepth
         super(BinaryReal, self).__init__(self.bitLength)
         self.realDim = realDim
@@ -260,3 +311,101 @@ class BinaryReal(Binary):
             ret[i] = val
             
         return self.adj + self.scale2 * ret
+
+
+class BinaryRectangle(Binary):
+    """A binary constraint generated by a :class:`TernaryString` whose
+    ``known`` value specifies the constrained bits and whose ``base``
+    contains the constraints at those bits.
+   
+    :param spec: A :class:`TernaryString` whose
+                 ``known`` value specifies the constrained bits and 
+                 whose ``base`` contains the constraints at those bits
+    :type spec: :class:`TernaryString`
+         
+    """
+    def __init__(self, spec):
+        if not isinstance(spec, TernaryString):
+           raise ValueError("BinaryRectangle expects a TernaryString")
+           
+        self.spec = spec
+        dim = spec.length
+        super(BinaryRectangle, self).__init__(dim)
+       
+    def in_bounds(self, x):
+        """Test containment; x must "know" more than spec, and be equal at 
+        the known bits.
+       
+        :param x: The point to test
+        :type x: :class:TernaryString
+        :returns: A ``bool``, ``True if ``x`` is in the space, ``False``
+                  otherwise
+       
+        """
+        return self.spec < x
+    
+    def extent(self):
+        lower = 0L | (self.spec.known & self.spec.base)
+        upper = -1L & (self.spec.known & self.spec.base)
+        return (TernaryString(lower, -1L, self.spec.length),
+                TernaryString(upper, -1L, self.spec.length))
+    
+    def area(self, **kwargs):
+        """Count the number of known bits"""
+        if self._area is not None:
+            return self._area
+        
+        if self.parent is not None:
+            self._area = .5 * self.parent.area()
+        else:
+            # Lebesgue
+            mask = 1L
+            total = 0.0
+            for i in xrange(self.spec.length):
+                total += (mask & self.spec.known) > 0
+            self._area = total
+            
+        return self._area
+       
+    def random(self):
+        """Return a random TernaryString conforming to the constraint.
+       
+        :returns: A :class:`TernaryString`
+        
+        """
+        test = super(BinaryRectangle, self).random()
+        base = (~self.spec.known & test.base) 
+        base |= (self.spec.known & self.spec.base)
+        test.base = base
+        return test 
+
+
+class BayesianNetworks(Space):
+    """Space for Bayesian network structure search.
+    
+    """
+    def __init__(self,
+                 numVariables,
+                 variableGenerator,
+                 structureGenerator,
+                 randomizer,
+                 sampler):
+        from pyec.distribution.bayes.net import BayesNet
+        from pyec.distribution.bayes.structure.proposal import StructureProposal
+        super(BayesianNetworks, self).__init__(BayesNet)
+        self.config = Config(numVariables=numVariables,
+                             variableGenerator=variableGenerator,
+                             structureGenerator = structureGenerator,
+                             randomizer=randomizer,
+                             sampler=sampler)
+        self.proposal = StructureProposal(self.config)
+        
+    def area(self, **kwargs):
+        return 2.0 ** (self.config.numVariables ** 2)
+    
+    def random(self):
+        return self.proposal()
+    
+    def extent(self):
+        return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
+    

@@ -16,7 +16,7 @@ from basic import Distribution, PopulationDistribution
 from pyec.config import Config
 from pyec.history import History
 
-class CmaesHistory(History):
+class CmaesHistory(SortedMarkovHistory):
     """A history that stores the parameters for CMA-ES"""
     
     def __init__(self, config):
@@ -70,9 +70,10 @@ class CmaesHistory(History):
                              np.dot(np.diag(1./self.D),self.B.transpose()))
 
     def internalUpdate(self, population):
-        base = np.array([x for x, s in population[:self.mu]])
+        super(CmaesHistory,self).internalUpdate(population)
+        base = np.array([x for x, s in self.population[:self.mu]])
         if self.mean is None: 
-           oldMean = np.average([x for x,s in population])
+           oldMean = np.average([x for x,s in self.population])
         else:
            oldMean = self.mean
         self.mean = (np.outer(self.weights, np.ones(self.dim)) 
@@ -91,7 +92,7 @@ class CmaesHistory(History):
         isonorm = np.sqrt((self.ps ** 2).sum())
         hsig = (isonorm / 
                 np.sqrt(1 - (1 - cs) ** 
-                            (2. * self.updates / len(population))) / 
+                            (2. * self.updates / len(self.population))) / 
                 self.chiN)
         self.pc *= (1 - cc)
         if hsig < 1.4 + 2/(self.dim + 1):
@@ -113,7 +114,7 @@ class CmaesHistory(History):
         self.sigma *= np.exp((cs / self.damps) * (isonorm / chiN - 1.))
       
         if (self.updates - self.eigeneval > 
-            len(population) / (self.c1 + self.cmu) / self.dim / 10.):
+            len(self.population) / (self.c1 + self.cmu) / self.dim / 10.):
             try:
                self.eigeneval = self.updates
                self.covar = (np.triu(self.covar) + 

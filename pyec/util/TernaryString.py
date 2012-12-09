@@ -79,6 +79,79 @@ class TernaryString(object):
       return ((self.known & x.known) == self.known) \
          and ((self.base & self.known) == (x.base & self.known))
 
+   def __irshift(self, x):
+      self.base >>= x
+      self.known >>= x
+
+   def __rshift__(self, x):
+      return TernaryString(self.base >> x, self.known >> x)
+   
+   __rrshift__ = __rshift__
+   
+   def __ilshift__(self, x):
+      self.base <<= x
+      self.known <<= x
+   
+   def __lshift__(self, x):
+      return TernaryString(self.base << x, self.known << x)
+   
+   __rlshift__ = __lshift__
+   
+   def __ixor__(self, x):
+      if isinstance(x, TernaryString):
+         #where are they KNOWN to be different
+         self.base ^= x.base
+         self.known &= x.known
+         self.base = (common & xor) | (~common & self.base)
+      else:
+         self.base ^= x
+   
+   def __xor__(self, x):
+      if isinstance(x, TernaryString):
+         return TernaryString(self.base ^ x.base,
+                              self.known & x.known,
+                              self.length)
+      else:
+         return TernaryString(self.base ^ x, self.known, self.length)
+   
+   __rxor__ = __xor__
+   
+   def __iand__(self, x):
+      if isinstance(x, TernaryString):
+         self.base &= x.base
+         self.known &= x.known
+      else:
+         self.base &= x
+   
+   def __and__(self, x):
+      if isinstance(x, TernaryString):
+         return TernaryString(self.base & x.base,
+                              self.known & x.known,
+                              self.length)
+      else:
+         return TernaryString(self.base & x, self.known, self.length)
+   
+   __rand__ = __and__
+
+   def __ior__(self, x):
+      if isinstance(x, TernaryString):
+         self.base = self.base & self.known | x.base & x.known
+         self.known |= x.known
+      else:
+         self.base |= x
+   
+   def __or__(self, x):
+      if isinstance(x, TernaryString):
+         return TernaryString(self.base & self.known | x.base & x.known,
+                              self.known | x.known,
+                              self.length)
+      else:
+         return TernaryString(self.base | x, self.known, self.length)
+   
+   __ror__ = __or__
+   
+   def __invert__(self):
+      self.base = ~self.base
    
    def __gt__(self, x):
       return self.__ge__(x) and self.__ne__(x)
@@ -167,7 +240,9 @@ class TernaryString(object):
          mask <<= 1
       return total
          
-   def toArray(self, numBits):
+   def toArray(self, numBits=None):
+      if numBits is None:
+         numBits = self.length
       x = []
       for i in xrange(numBits):
          x.append(self[i] and 1.0 or 0.0)

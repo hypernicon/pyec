@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 from numpy import *
 from pyec.distribution.basic import PopulationDistribution
 from pyec.config import Config
-from pyec.history import LocalMinimumHistory
+from pyec.history import LocalBestHistory
 from pyec.space import Euclidean
 
    
@@ -44,7 +44,7 @@ class DifferentialEvolution(PopulationDistribution):
    """
    config = Config(CR=.2,
                    F=.5,
-                   history= LocalMinimumHistory,
+                   history= LocalBestHistory,
                    populationSize=100,
                    space=Euclidean(),
                    initial=None)

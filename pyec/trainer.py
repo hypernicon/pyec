@@ -230,7 +230,8 @@ class BadAlgorithm(Exception):
    
 class RunStats(object):
    """
-      A simple stats recording tool that can be used to aggregate teh amount of time spent in various methods of an optimizer. Keeps track of variables by key names and outputs the time spent between `start` and `stop` for each key. For a recorded key, the average time spent between `start` and `stop` can be retrieved by [], like so::
+      A simple stats recording tool that can be used to aggregate the
+      amount of time spent in various methods of an optimizer. Keeps track of variables by key names and outputs the time spent between `start` and `stop` for each key. For a recorded key, the average time spent between `start` and `stop` can be retrieved by [], like so::
       
          def checkStats():     
             stats = RunStats()

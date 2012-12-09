@@ -305,6 +305,36 @@ class PopulationDistributionMeta(type):
           
           return cls2
 
+   def __or__(cls, other):
+      """Given two optimizers create a new optimizer that splits the
+      population between the two of them, apportioning according to
+      the ``weight`` property of the optimizers being combined
+      
+      """
+      if (not inspect.isclass(other) and
+          not issubclass(other, PopulationDistribution)):
+         raise ValueError("Expected pipe argument "
+                          "to be a PopulationDistribution subclass")
+
+      name = "{0}_pipe_{1}".format(cls.__name__, other.__name__)
+      cls2 = cls._checkName(name)
+      if cls2 is None:
+         import pyec.distribution.split
+         split = pyec.distribution.split.Splitter
+         bases = (split,)
+         def init(self, **kwargs):
+            first = cls(**kwargs)
+            second = other(**kwargs)
+            kwargs.update(second.config.__properties__)
+            kwargs.update(first.config.__properties__)
+            subs = (first, second)
+            split.__init__(self, subs, **kwargs)
+         attrs = dict(((k,v) for k,v in split.__dict__.iteritems())) 
+         attrs["__init__"] = init
+         cls2 = PopulationDistributionMeta(name, bases, attrs)
+         
+      return cls2
+
 
 class PopulationDistribution(Distribution):
    """
@@ -330,11 +360,12 @@ class PopulationDistribution(Distribution):
    config = Config(populationSize=1, # The size of each population
                    history=SortedMarkovHistory, # The class for the history
                    space=None, # The search space
+                   minimize=True
                   )
    
    def run(self, fitness=None, history=None, extraArgs=None, **kwargs):
       """
-        Create a :class:`Trainer` object and run this :class:`PopulationDistribution` instance to maximize a fitness function.
+        Run this :class:`PopulationDistribution` instance to maximize a fitness function.
         
         After running this method, the property ``PopulationDistribution.trainer`` will contain the :class:`Trainer` object used to optimize the function. 
         
@@ -550,6 +581,22 @@ class PopulationDistribution(Distribution):
           return tt(self, other, **self.config.__properties__)
 
    __irshift__ = __rshift__
+
+   def __or__(self, other):
+      """Given two optimizers create a new optimizer that splits the
+      population between the two of them, apportioning according to
+      the ``weight`` property of the optimizers being combined
+      
+      """
+      if not isinstance(other, PopulationDistribution):
+         raise ValueError("Expected pipe argument "
+                          "to be a PopulationDistribution")
+      
+      import pyec.distribution.split
+      split = pyec.distribution.split.Splitter
+      return split((self,other), **self.config.__properties__)
+   
+   __ior__ = __or__
 
    def update(self, history, fitness):
       """

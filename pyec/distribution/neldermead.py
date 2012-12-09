@@ -119,16 +119,16 @@ class NelderMeadHistory(History):
          # check reflect
          elif self.state == NM_REFLECT:
             self.reflectScore = pop[0][1]
-            if (self.reflectScore > self.vertices[-2][1] and
-                self.reflectScore <= self.vertices[0][1]):
+            if (self.better(self.reflectScore, self.vertices[-2][1]) and
+                not self.better(self.reflectScore, self.vertices[0][1])):
                self.state = NM_REFLECT
                self.vertices[-1] = pop[0]
                self.refresh()
                self.reflect()
-            elif self.reflectScore > self.vertices[0][1]:
+            elif self.better(self.reflectScore, self.vertices[0][1]):
                self.expand()
                self.state = NM_EXPAND
-            elif self.reflectScore <= self.vertices[-2][1]:
+            elif not self.better(self.reflectScore, self.vertices[-2][1]):
                self.contract()
                self.state = NM_CONTRACT
             else:
@@ -136,7 +136,7 @@ class NelderMeadHistory(History):
                self.state = NM_SHRINK
          # expand
          elif self.state == NM_EXPAND:
-            if pop[0][1] > self.reflectScore:
+            if self.better(pop[0][1], self.reflectScore):
                self.state = NM_REFLECT
                self.vertices[-1] = pop[0]
                self.refresh()
@@ -149,8 +149,8 @@ class NelderMeadHistory(History):
                self.reflect()
          # contract
          elif self.state == NM_CONTRACT:
-            if self.reflectScore > self.vertices[-1][1]:
-               if pop[0][1] >= self.reflectScore:
+            if self.better(self.reflectScore > self.vertices[-1][1]):
+               if not self.better(self.reflectScore, pop[0][1]):
                   self.state = NM_REFLECT
                   self.vertices[-1] = pop[0]
                   self.refresh()
@@ -159,7 +159,7 @@ class NelderMeadHistory(History):
                   self.shrink()
                   self.state = NM_SHRINK
             else:
-               if pop[0][1] > self.vertices[-1][1]:
+               if self.better(pop[0][1], self.vertices[-1][1]):
                   self.state = NM_REFLECT
                   self.vertices[-1] = pop[0]
                   self.refresh()

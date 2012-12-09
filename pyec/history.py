@@ -75,7 +75,31 @@ class History(object):
         self.config = pyec.config.Config(**state['cfg'])  
     
     def empty(self):
+        """Whether the history has been used or not."""
         return self._empty
+    
+    def better(self, score1, score2):
+        """Return whether one score is better than another.
+        
+        Uses ``config.minimize`` to decide whether lesser or greater
+        numbers are better.
+        
+        :param score1: the score in question (floating point number)
+        :type score1: ``float``
+        :param score2: the score being compared
+        :type score2: ``float``
+        :returns: whether ``score1`` is better than ``score2``
+        """
+        if self.config.minimize:
+            return score1 < score2
+        else:
+            return score1 > score2
+    
+    def best(self):
+        if self.config.minimize:
+            return self.minimal()
+        else:
+            return self.maximal()
     
     def minimal(self):
         """Get the minimal solution and its score.
@@ -233,14 +257,43 @@ class MarkovHistory(History):
          
      def lastPopulation(self):
          return self.population
+     
+class DoubleMarkovHistory(MarkovHistory):
+     """Like :class:`MarkovHistory`, but stores the last two populations.
+     
+     """
+     def __init__(self, config):
+         super(DoubleMarkovHistory, self).__init__(config)
+         self.penultimate = None
+         self.attrs |= set(["penultimate"])
          
-     def __getstate__(self):
-         start = super(MarkovHistory, self).__getstate__()
-         start.update({"population":self.population})
-         return start
+     def internalUpdate(self, population):
+         self.penultimate = self.population
+         super(DoubleMarkovHistory, self).internalUpdate(population)
+         
+     def penultimate(self):
+         return self.penultimate
+     
         
+class MultiStepMarkovHistory(History):
+    """A :class:`History` that stores a small fixed number of prior populations.
+    
+    """
+    def __init__(self, config):
+        super(MultiStepMarkovHistory, self).__init__(config)
+        self.populations = None
+        self.attrs |= self(["populations"])
         
-class SortedMarkovHistory(History):
+    def internalUpdate(self, population):
+        self.populations.append(population)
+        if len(self.populations) > self.config.order:
+            self.populations = self.populations[-self.config.order:]
+    
+    def order(self):
+        return self.config.order
+     
+        
+class SortedMarkovHistory(MarkovHistory):
     """A :class:`History` that stores the last population only, sorted.
        Default sorting is by score from least to greatest, for minimization.
        To sort differently, set the ``history`` in :class:`Config` to a 
@@ -259,8 +312,14 @@ class SortedMarkovHistory(History):
         python ``sorted`` built-in. Will be pass a ``(solution, score)``
         tuple.
         
+        Uses ``config.minimize`` to determine whether to sort low to high
+        or high to low
+        
         """
-        return x[1]
+        if self.config.minimize:
+            return x[1]
+        else:
+            return -x[1]
     
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
@@ -269,16 +328,15 @@ class SortedMarkovHistory(History):
         self.population = sorted(self.population, key=self.sorter)
         
 
-class LocalMinimumHistory(History):
+class LocalBestHistory(History):
      """A :class:`History` that stores the best members of the
-     population at each index. Best is assumed to mean fitness-minimal.
-     
-     See :class:`LocalMaximumHistory` for maximization
+     population at each index. Best is interpreted according to the
+     value of ``config.minimize``.
      
      """
      
      def __init__(self, config):
-         super(LocalMinimumHistory, self).__init__(config)
+         super(LocalBestHistory, self).__init__(config)
          self.localBestPop = None
          self.attrs |= set(["localBestPop"])
          
@@ -296,37 +354,6 @@ class LocalMinimumHistory(History):
          
      def localBest(self):
          return self.localBestPop
-
-     def better(self, x, y):
-         """Determine which of two scores is better. Default is less than.
-         
-         :param x: The first score
-         :type x: ``float``
-         :param y: The second score
-         :type y: ``float``
-         :returns: ``bool`` -- ``True`` if ``x < y``, ``False`` otherwise
-         
-         """
-         return x < y
-         
-
-
-class LocalMaximumHistory(LocalMinimumHistory):
-     """A :class:`History` that stores the maximal members of the
-     population at each index."""
-     
-     def better(self, x, y):
-         """Determine which of two scores is better. For this history,
-         higher is better.
-         
-         :param x: The first score
-         :type x: ``float``
-         :param y: The second score
-         :type y: ``float``
-         :returns: ``bool`` -- ``True`` if ``x > y``, ``False`` otherwise
-         
-         """
-         return x > y
 
 
 class CheckpointedHistory(History):

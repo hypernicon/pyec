@@ -10,41 +10,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 from numpy import *
 from scipy.special import erf
+from pyec.space import Hyperrectangle
+from pyec.util.TernaryString import TernaryString
 
 import traceback
 
 import logging
 logg = logging.getLogger(__file__)
 
+
 class SeparationException(Exception):
    pass
+
 
 class AreaException(Exception):
    pass
 
-class ClassProperty(property):
-   def __get__(self, cls, owner):
-      return self.fget.__get__(None, owner)()
 
 class Segment(object):
    segment = None
-   
-   @classmethod
-   def _objects(cls):
-      return cls.segment   
 
-   @classmethod
-   def _blank(cls):
-      pass
-
-   objects = ClassProperty(_objects,_blank) 
-
-   @classmethod
-   def get(cls,**kwargs):
-      return cls.segment
-
-   def __init__(self, name, config):
-      self.name = name
+   def __init__(self, config):
       self.config = config
       
       Point.segment = self
@@ -55,7 +41,6 @@ class Segment(object):
       self.points = []
       self.partitionTree = Partition(self,config)
       self.scoreTree = ScoreTree(self,config)
-      Point.segment = self
       
    def clearSegment(self):
       del self.points
@@ -64,27 +49,15 @@ class Segment(object):
       self.points = []
       self.partitionTree = Partition(self,config)
       self.scoreTree = ScoreTree(self,config)
-      
-      
+
+
 class Point(object):
    segment = None
-
-   @classmethod
-   def _objects(cls):
-      return cls 
-
-   @classmethod
-   def _blank(cls):
-      pass
-
-   objects = ClassProperty(_objects,_blank)
-
-   def __init__(self, segment, point=None, bayes=None, binary=None, other=None,statistics = None, score=0.0, alive=True,count=1):
+   
+   def __init__(self, segment, point=None, statistics = None,
+                score=0.0, alive=True, count=1):
       self.segment = segment
       self.point = point
-      self.bayes = bayes
-      self.binary = binary
-      self.other = other
       self.statistics = statistics
       self.score = score
       self.alive = alive
@@ -136,7 +109,8 @@ class Point(object):
       for gp in points:
          try:
             stats.start("separate")
-            cls.segment.partitionTree.separate(gp, cls.segment.config, stats)
+            sep = cls.segment.config.separator(cls.segment.config)
+            sep.separate(cls.segment.partitionTree, gp)
             stats.stop("separate")
             stats.start("insert")
             cls.segment.scoreTree.insert(gp, cls.segment.config, stats)
@@ -181,12 +155,13 @@ class Point(object):
             else:
                p = 0.5
          
-         if random.random_sample() < p:
+         rnd = random.random_sample()
+         if (config.minimize and rnd > p or
+             not config.minimize and rnd < p):
             current = children[0]
          else:
             current = children[1]
          
-      config.selectedScores.append(current.point.score)
       return current.point, current.point.partition_node
 
    @classmethod
@@ -225,8 +200,6 @@ class Point(object):
          current = children[idx]
          children = sorted(current.children, key=lambda c: not c.left)
       
-      
-      config.selectedScores.append(current.point.score)
       return current.point, current
 
    @classmethod
@@ -296,10 +269,336 @@ class Point(object):
       # second, sample tournament downward
       return cls.samplePartition(segment, node, config)
 
+
+class SeparationAlgorithm(object):
+   """A algorithm that enables traversal and separation of the partition tree.
+   This class abstracts the space-dependent portions of the partitioning
+   logic.
+   
+   :param config: Configuration parameters
+   :type config: :class:`Config`
+   
+   """
+   def __init__(self, config):
+      if not self.compatible(config.space):
+         err = "{0} is not compatible with space {1}"
+         raise ValueError(err.format(self.__class__.__name__, config.space))
+      self.config = config
+      
+   def compatible(self, space):
+      """Check whether this partitioning method is compatible with a given space
+      
+      :param space: The space to check
+      :type space: class:`Space`
+      
+      """
+      return True
+   
+   def separate(self, tree, point):
+      """Insert the point into the partition tree,
+         separating the current partition that contains it.
+         
+         :param tree: The partition tree
+         :type tree: :class:`Partition`
+         :param point: The point to insert
+         :type point: ``config.space.type``
+         :param config: A :class:`Config` object
+         :type config: :class:`Config`
+         :param stats: - an :class:`RunStats` object
+         :type stats: :class:`RunStats`
+         
+      """
+      self.config.stats.start("separate.traverse")
+      lr = self.config.learningRate
+      node, region, path = tree.traverse(tree, point)
+      self.config.stats.stop("separate.traverse")
+      if node.point is None:
+         node.point = point
+         point.partition_node = node
+         tree.areaTree.insert(node)
+         return
+      
+      self.config.stats.start("separate.main")
+      self.config.stats.start("separate.prepare")
+      
+      n1, n2 = self.split(node)
+         
+      # update the best score
+      if path is not None:
+         if point.score > other.score:
+            if self.config.minimize:
+               for n in path:
+                  n.best_score = min([point.score,n.best_score])
+            else:
+               for n in path:
+                  n.best_score = max([point.score,n.best_score])
+      
+      self.config.stats.stop("separate.compute")
+      self.config.stats.stop("separate.main")
+      
+      self.config.stats.start("separate.areaTree")
+      
+      try:
+         tree.areaTree.insert(n1)
+         tree.areaTree.insert(n2)
+         tree.areaTree.remove(node)
+      except:
+         traceback.print_exc()
+         raise
+      
+      self.config.stats.stop("separate.areaTree")
+      self.config.stats.start("separate.propagate")
+      
+      # correct area in score tree
+      if point.score_node is not None:
+         sn = point.score_node
+         if other == downPoint:
+            diff = sn.area - downArea
+         else:
+            diff = sn.area - upArea
+         sn.segment.scoreTree.propagateAreaOnly(sn, self.config, diff)
+      
+      #print "end separate"
+      self.config.stats.stop("separate.propagate")
+      
+   def split(self, node):
+      """Do the actual work to partition a region.
+      
+      :param node: A node from the partition tree corresponding to a region
+                   of the space
+      :type node: :class:`PartitionTreeNode`
+      :throws: :class:`SeparationException` when separation of the node fails
+      
+      """
+      raise NotImplementedError("Abstract Separation Algorithm; use a subclass")
+
+class VectorSeparationAlgorithm(SeparationAlgorithm):
+   def compatible(self, space):
+      return space.type == ndarray
+   
+   def cast(self, point):
+      return point
+   
+   def rectify(self, pointrep, otherrep):
+      try:
+         if len(pointrep) == len(otherrep):
+            return pointrep, otherrep
+         
+         pointrep = list(pointrep)
+         otherrep = list(otherrep)
+      
+         while len(pointrep) < len(otherrep):
+            pointrep.append(0)
+         while len(pointrep) > len(otherrep):
+            otherrep.append(0)
+            
+      except:
+         pass
+      
+      return pointrep, otherrep
+   
+   def chooseIndex(self, pointrep, otherrep, lower, upper):
+      newDiff = 0
+      newIndex = 0
+      for i in xrange(len(pointrep)):
+         if lower[i] == upper[i]:
+            continue
+         diff = abs(pointrep[i] - otherrep[i])
+         if diff > newDiff:
+            newDiff = diff
+            newIndex = i
+      
+      return newIndex, newDiff
+   
+   def makeParts(self, point, pointrep, other, otherrep, newIndex, lower, upper):
+      if pointrep[newIndex] > otherrep[newIndex]:
+         upPoint = point
+         downPoint = other
+         midPoint = (otherrep[newIndex] 
+                     + (pointrep[newIndex] - otherrep[newIndex])/2.)
+      else:
+         upPoint = other
+         downPoint = point
+         midPoint = (pointrep[newIndex] 
+                     + (otherrep[newIndex] - pointrep[newIndex])/2.)
+      
+      downUpper = upper.copy()
+      downLower = lower.copy()
+      downUpper[newIndex] = midPoint
+      downCenter = .5 * (downUpper - downLower)
+      downScale = downUpper - downCenter
+      down = Hyperrectangle(node.bounds.dim, downCenter, downScale)
+      down.parent = other.partition_node.bounds
+      down.owner = self.config.space
+      
+      upUpper = upper.copy()
+      upLower = lower.copy()
+      upLower[newIndex] = midPoint
+      upCenter = .5 * (upUpper - upLower)
+      upScale = upUpper - upCenter
+      up = Hyperrectangle(node.bounds.dim, upCenter, upScale)
+      up.parent = other.partition_node.bounds
+      up.owner = self.config.space
+      
+      return down, up, downPoint, upPoint
+   
+   def split(self, node):
+      """A vector-based separation algorithm that generates
+      Hyperrectangular partitions parallel to the axes.
+      
+      """
+      other = node.point
+      node.point = None
+      
+      newIndex = 0
+      newDiff = 0
+      midPoint = 0
+      upPoint = other
+      downPoint = point
+      self.config.stats.stop("separate.prepare")
+      self.config.stats.start("separate.separable")
+      pointrep = self.cast(point)
+      otherrep = self.cast(other)
+      pointrep, otherrep = self.rectify(pointrep, otherrep)
+      lower, upper = node.bounds.extent()
+      newIndex, newDiff = self.chooseIndex(pointrep, otherrep, lower, upper)
+      self.config.stats.stop("separate.separable")
+      if newDiff == 0.0:
+        node.point = other
+        raise SeparationException("No difference in points")
+      
+      self.config.stats.start("separate.compute")
+      down, up, downPoint, upPoint = self.makeParts(point, pointrep,
+                                                    other, otherrep,
+                                                    newIndex,
+                                                    lower, upper)
+      
+      downArea = float(down.area(index=newIndex))      
+      upArea = float(up.area(index=newIndex))
+      
+      if upArea != upArea or downArea != downArea:
+         raise SeparationException("NaN area!")
+      
+      n1 = PartitionTreeNode(
+         segment=node.segment,
+         point=upPoint,
+         area = upArea,
+         bounds = up,
+         index = newIndex,
+         best_score = upPoint.score,
+         score_sum = upPoint.score,
+         parent = node,
+         layer = 0,
+         layerrep = ''
+      )
+    
+      n2 = PartitionTreeNode(
+         segment=node.segment,
+         point=downPoint,
+         area = downArea,
+         bounds = down,
+         index = newIndex,
+         best_score = downPoint.score,
+         score_sum = downPoint.score,
+         parent = node,
+         layer = 0,
+         layerrep = ''
+      )
+
+      node.children = [n1,n2]
+      upPoint.partition_node = n1
+      downPoint.partition_node = n2
+      
+      return n1, n2
+ 
+
+class LongestSideVectorSeparationAlgorithm(VectorSeparationAlgorithm):
+   def chooseIndex(self, pointrep, otherrep, lower, upper):
+      for i in xrange(len(pointrep)):
+         diff = upper[i] - lower[i]
+         if diff > newDiff:
+            newDiff = diff
+            newIndex = i
+      return newIndex, newDiff
+
+
+class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
+   def compatible(self, space):
+      return space.type == TernaryString
+   
+   def rectify(self, pointrep, otherrep):
+      if pointrep.length < otherrep.length:
+         pointrep.known &= (1L << (pointrep.length)) - 1L
+         pointrep.length = otherrep.length
+      
+      if otherrep.length < pointrep.length:
+         otherrep.known &= (1L << (otherrep.length)) - 1L
+         otherrep.length = pointrep.length
+
+   def chooseIndex(self, pointrep, otherrep, lower, upper):
+      if (pointrep.known & pointrep.base) == (otherrep.known & otherrep.base):
+         raise SeparationException("No difference between points")
+      
+      diff = pointrep ^ otherrep
+      
+      # randomly wrap the bits, and then take the first difference
+      wrap = random.randomint(0,diff.length)
+      maskAll = (1L << diff.length) - 1L
+      maskLow = 1L << wrap
+      wrapHigh = (diff.base & maskAll) % maskLow
+      wrapKnownH = (diff.known & maskAll) % maskLow
+      maskLow -= 1L
+      wrapLow = diff.base & maskLow
+      wrapKnownL = diff.known & maskLow
+      rebuilt = TernaryString(wrapLow | (wrapHigh << wrap),
+                              wrapKnownL | (wrapKnownH << wrap),
+                              diff.length)
+      mask = 1L
+      for i in xrange(rebuilt.length):
+         if rebuilt[i]:
+            return ((i + wrap) % diff.length), 1.0
+      
+      raise SeparationException("No difference in points")
+   
+   def makeParts(self, point, pointrep, other, otherrep, newIndex, lower, upper):
+      if pointrep[newIndex]:
+         upPoint = point
+         downPoint = other
+      else:
+         upPoint = other
+         downPoint = point
+      
+      mask = 1L << newIndex
+      
+      downSpec = TernaryString((lower.base & lower.known) & ~mask,
+                               lower.known | mask,
+                               lower.length)
+      down = BinaryRectangle(downSpec)
+      down.parent = other.partition_node.bounds
+      
+      upSpec = TernaryString((upper.base & upper.known) | mask,
+                             upper.known | mask,
+                             upper.length)
+      up = BinaryRectangle(upSpec)
+      up.parent = other.partition_node.bounds
+      
+      return down, up, downPoint, upPoint
+
+
+class BayesSeparationAlgorithm(BinarySeparationAlgorithm):
+   """Separation algorithm for Bayesian networks based on structure."""
+   def compatible(self, space):
+      from pyec.distribution.bayes.net import BayesNet
+      return space.type == BayesNet
+   
+   def cast(self, point):
+      return point.edgeBinary()
+
+
 class PartitionTreeNode(object):
    idgen = 1
    
-   def __init__(self, segment, index, parent, upper, lower, area, bounds, point=None, layer=None, layerrep=None, score_sum=0.0, best_score=0.0):
+   def __init__(self, segment, index, parent, upper, lower, area, bounds, point=None, layer=None, layerrep=None, score_sum=0.0, best_score=None):
       self.segment = segment,
       self.index = index
       self.parent = parent
@@ -318,123 +617,48 @@ class PartitionTreeNode(object):
       self.id = self.__class__.idgen
       self.__class__.idgen += 1
 
+
 class Partition(object):
    segment = None
    areaTree = None
    
-   @classmethod
-   def _objects(cls):
-      return cls.segment.partitionTree 
-
-   @classmethod
-   def _blank(cls):
-      pass
-
-   objects = ClassProperty(_objects,_blank)   
-
    def __init__(self, segment, config):
       self.config = config
       self.segment = segment
-      self.center = config.center
-      self.scale = config.scale
-      if config.bounded and hasattr(config.in_bounds,'extent'):
-         self.center,self.scale = config.in_bounds.extent()
-      if not config.bounded:
-         self.scale = inf
-      
-      lower = ones(config.dim) * (self.center-self.scale)
-      upper = ones(config.dim) * (self.center+self.scale)   
                
       self.root = PartitionTreeNode(
          segment = self.segment,
          index = 0,
          parent = None,
-         upper = self.center + self.scale,
-         lower = self.center - self.scale,
-         area = 1.0,
-         bounds = (lower, upper),
+         upper = None,
+         lower = None,
+         area = config.space.area(),
+         bounds = config.space,
          point = None
       )
       
-      self.traverseCache = []
-      self.traverseCacheSize = 5
-      
       self.areaTree = AreaTree()
-      
       
    def save(self):
       pass
-      
-   def gaussInt(self, z):
-      # x is std normal from zero to abs(z)
-      x = erf(abs(z)) / 2 / sqrt(2)
-      return .5 + sign(z) * x
-   
-   def considerCaching(self, node, lower, upper, path):
-      if len(self.traverseCache) < self.traverseCacheSize or \
-         node.traversals >= self.traverseCache[-1][0].traversals:
-         while len(self.traverseCache) >= self.traverseCacheSize:
-            self.traverseCache = self.traverseCache[:-1]
-            
-         self.traverseCache.append((node, lower, upper, path))
-         self.traverseCache = sorted(self.traverseCache, key=lambda x:-x[0].traversals)
-    
-   def checkTraverseCache(self, pointrep):
-      n,l,u,p = None,None,None,None
-      for node, lower, upper, path in sorted(self.traverseCache, key=lambda x:-len(x[3])):
-         low = iter(lower)
-         up = iter(upper)
-         match = True
-         for v in pointrep:
-            if low.next() > v or up.next() < v:
-               match = False
-               break
-         if match:
-            return node, lower, upper, path
-      return n,l,u,p
-      
-            
-   def traverse(self, point, config):
+
+   def traverse(self, tree, point):
       """
          Traverse the partition tree to find the partition within which "point" is located.
          
-         point - the point for searching.
-         config - an evo.config.Config object with "dim", "center", and "scale" attributes.
-         
-         
-         Returns (partition, upper, lower)
-         
-         partition - the matching partition
-         upper - the upper boundaries of the current partition
-         lower - the lower boundaries of the current partition
+         :param tree: The partition tree
+         :type tree: :class:`Partition`
+         :param point: The point for searching.
+         :type point: ``config.space.type``
+         :returns: A tuple with (partitionNode, path); with the
+                   :class:`PartitionTreeNode` for the matching partition, and
+                   the list of tree nodes traversed
+
       """
-      pointrep = point.separable(config)
-      return self.traversePoint(point.segment, pointrep, config)
-    
-   def traversePoint(self, segment, pointrep, config):
-      #print "traversing"
-      if (pointrep < pointrep).any():
-         raise Exception, "NaN sent to traverse!"
-      
-      """
-      current,lower,upper,path = self.checkTraverseCache(pointrep)
-      if current is not None:
-         # cache hit
-         lower = lower.copy()
-         upper = upper.copy()
-         path = [p for p in path]
-      
-      else:
-      """
-      # cache miss
       # get the top parent
-      lower = ones(config.dim) * (self.center-self.scale)
-      upper = ones(config.dim) * (self.center+self.scale)
-      
-      current = self.root
+      current = tree.root
+      region = tree.root.bounds
       path = [current]
-      
-      # end else
       
       last = None
       children = current.children
@@ -445,237 +669,19 @@ class Partition(object):
             #   print lower
             #   print upper
             #   print pointrep
-            raise Exception, "Loop in partition.traverse!"
+            raise Exception("Loop in partition.traverse!")
          last = current
-         #current.traversals += 1
-         #self.considerCaching(current,lower,upper,path)
+         
          for child in children:
-            enter = False
-            if child.index < 0:
-               enter = len(pointrep) <= child.upper
-            
-            if len(pointrep) <= child.index:
-               try:
-                  pointrep = list(pointrep)
-                  while len(pointrep) <= child.index:
-                     pointrep.append(0.0)
-               except:
-                  pass
-            
-            if enter or \
-               (pointrep[child.index] <= child.upper) and \
-               (pointrep[child.index] >= child.lower):
+            if child.bounds.in_bounds(point):
                current = child
                path.append(current)
                children = current.children
-               if current.index >= 0:
-                  lower[current.index] = current.lower
-                  upper[current.index] = current.upper
                break
+            
       node = current
       
-      #self.traverseCache = sorted(self.traverseCache, key=lambda x:-x[0].traversals)
-      
-      #print "returning from traverse", len(path)
-      #print lower
-      #print upper
-      return node, lower, upper, path
-   
-   def separate(self, point, config, stats):
-      """
-         Insert the point into the partition tree, separating the current partition that contains it.
-         
-         point - the point to insert
-         config - a config object with properties "shiftToDb", "dim", "center", "scale"
-         stats - an evo.trainer.RunStats object
-         
-         If shiftToDb is true, this will attempt to call traverseInDb()
-      """
-      #print "in separate"
-      if config.layered:
-         return self.separateLayered(point, config, stats)
-      
-      
-      stats.start("separate.traverse")
-      lr = config.learningRate
-      node, lower, upper, path = self.traverse(point, config)
-      stats.stop("separate.traverse")
-      if node.point is None:
-         node.point = point
-         point.partition_node = node
-         self.areaTree.insert(node)
-         return
-      
-      #print "traversed"   
-               
-      stats.start("separate.main")
-      stats.start("separate.prepare")
-      
-      other = node.point
-      node.point = None
-      
-      newIndex = 0
-      newDiff = 0
-      midPoint = 0
-      upPoint = other
-      downPoint = point
-      stats.stop("separate.prepare")
-      stats.start("separate.separable")
-      pointrep = point.separable(config)
-      otherrep = other.separable(config)
-      try:
-         pointrep = list(pointrep)
-         otherrep = list(otherrep)
-      
-         while len(pointrep) < len(otherrep):
-            pointrep.append(0)
-         while len(pointrep) > len(otherrep):
-            otherrep.append(0)
-      except:
-         pass
-      #print "separating: "
-      #print pointrep
-      #print otherrep
-      longest = getattr(config, 'partitionLongest', True)
-      if longest:
-         for i in xrange(len(pointrep)):
-            diff = upper[i] - lower[i]
-            if diff > newDiff:
-               newDiff = diff
-               newIndex = i
-               if pointrep[i] > otherrep[i]:
-                  upPoint = point
-                  downPoint = other
-                  midPoint = otherrep[i] \
-                   + (pointrep[i] - otherrep[i])/2.
-               else:
-                  upPoint = other
-                  downPoint = point
-                  midPoint = pointrep[i] \
-                   + (otherrep[i] - pointrep[i])/2.
-               if pointrep.__class__.__name__ == 'BayesNet':
-                  break
-      else:
-         for i in xrange(len(pointrep)):
-            if lower[i] == upper[i]:
-               continue
-            diff = abs(pointrep[i] - otherrep[i])
-            if diff > newDiff:
-               newDiff = diff
-               newIndex = i
-               if pointrep[i] > otherrep[i]:
-                  upPoint = point
-                  downPoint = other
-                  midPoint = otherrep[i] \
-                   + (pointrep[i] - otherrep[i])/2.
-               else:
-                  upPoint = other
-                  downPoint = point
-                  midPoint = pointrep[i] \
-                   + (otherrep[i] - pointrep[i])/2.
-               if pointrep.__class__.__name__ == 'BayesNet':
-                  break
-      
-      stats.stop("separate.separable")
-      stats.start("separate.compute")
-      
-      #print "got diff"
-      
-      if newDiff == 0.0:
-        node.point = other
-        raise SeparationException, "No difference in points"
-      
-      if config.bounded:
-         proportion = (midPoint - lower[newIndex]) \
-          / (upper[newIndex] - lower[newIndex])
-      else:
-         low = self.gaussInt(lower[newIndex]/config.spaceScale) 
-         num = self.gaussInt(midPoint/config.spaceScale) - low
-         denom = self.gaussInt(upper[newIndex]/config.spaceScale) - low
-         proportion = num / denom
-      
-      upArea = float(node.area * (1.0 - proportion))
-      downArea = float(node.area * proportion)
-      
-      if upArea != upArea or downArea != downArea:
-         raise SeparationException, "NaN area!"
-      
-      upUpper = upper.copy()
-      upLower = lower.copy()
-      upLower[newIndex] = midPoint
-      
-      downUpper = upper.copy()
-      downLower = lower.copy()
-      downUpper[newIndex] = midPoint
-      
-      n1 = PartitionTreeNode(
-         upper=float(upper[newIndex]), 
-         lower=float(midPoint),
-         segment=node.segment,
-         point=upPoint,
-         area = upArea,
-         bounds = (upLower, upUpper),
-         index = newIndex,
-         best_score = upPoint.score,
-         score_sum = upPoint.score,
-         parent = node,
-         layer = 0,
-         layerrep = ''
-      )
-    
-      n2 = PartitionTreeNode(
-         upper=float(midPoint), 
-         lower=float(lower[newIndex]),
-         segment=node.segment,
-         point=downPoint,
-         area = downArea,
-         bounds = (downLower, downUpper),
-         index = newIndex,
-         best_score = downPoint.score,
-         score_sum = downPoint.score,
-         parent = node,
-         layer = 0,
-         layerrep = ''
-      )
-
-      node.children = [n1,n2]
-      upPoint.partition_node = n1
-      downPoint.partition_node = n2
-         
-      # update the best score
-      if path is not None:
-         if point.score > other.score:
-            for n in path:
-               n.best_score = max([point.score,n.best_score])
-      
-      stats.stop("separate.compute")
-      stats.stop("separate.main")
-      
-      stats.start("separate.areaTree")
-      
-      try:
-         self.areaTree.insert(n1)
-         self.areaTree.insert(n2)
-         self.areaTree.remove(node)
-      except:
-         traceback.print_exc()
-         raise
-      
-      stats.stop("separate.areaTree")
-      stats.start("separate.propagate")
-      
-      # correct area in score tree
-      if point.score_node is not None:
-         sn = point.score_node
-         if other == downPoint:
-            diff = sn.area - downArea
-         else:
-            diff = sn.area - upArea
-         sn.segment.scoreTree.propagateAreaOnly(sn, config, diff)
-      
-      #print "end separate"
-      stats.stop("separate.propagate")
-      
+      return node, path
 
    def propagateScoreSum(self, node, config):
       """
@@ -690,7 +696,6 @@ class Partition(object):
          current.score_sum = sum([child.score_sum for child in current.children])
          current = current.parent
       
-      
    def computeDepth(self, point):
       """
          compute the depth of the leaf that points to the db_point with id pointId
@@ -704,7 +709,6 @@ class Partition(object):
             depth += 1
       
       return depth
-      
 
    def traverseLayered(self, pointrep, segment, config, stats):
       """
@@ -714,7 +718,7 @@ class Partition(object):
          When boundary is identified, then check whether to proceed
          into next layer; if not, break at the boundary
       """
-      
+      raise NotImplementedError("Need to abstract this to a LayeredSpace")
       current = self.root
       children = current.children
       currentrep = current.layerrep
@@ -775,6 +779,7 @@ class Partition(object):
          If two points reach the boundary in the tree between 
          criteria, then the node at the boundary is split.
       """
+      raise NotImplementedError("Need to abstract this to LayeredSeparationAlgorithm")
       pointrep = config.layerize(getattr(point, config.activeField))
       #print [unicode(layer) for layer in pointrep]
       stats.start("separate.traverse")
@@ -1438,7 +1443,7 @@ class ScoreTree(object):
          node.area = point.partition_node.area
          node.min_score = point.score
          node.max_score = point.score
-         score = point.score * lr 
+         score = (config.minimize and -1 or 1) * point.score * lr 
          taylor = nan_to_num(score ** ns) / fs
          taylor *= node.area
          taylor *= nan_to_num(exp(score) ** center) 
@@ -1465,8 +1470,8 @@ class ScoreTree(object):
       upArea = upPoint.partition_node.area
       downArea = downPoint.partition_node.area
       
-      score1 = upPoint.score * lr    
-      score2 = downPoint.score * lr    
+      score1 = (config.minimize and -1 or 1) * upPoint.score * lr    
+      score2 = (config.minimize and -1 or 1) * downPoint.score * lr    
       taylor1 = (score1 ** ns) / fs
       taylor1 *= upArea
       taylor1 *= (exp(score1) ** center) 
@@ -1539,8 +1544,8 @@ class ScoreTree(object):
             fs[i+1] *= fs[i]
       ns = array(ns)
       fs = array(fs)
-      center = config.taylorCenter 
       lr = config.learningRate
+      center = temp
       
       next = []
       for point in segment.points:
@@ -1553,7 +1558,7 @@ class ScoreTree(object):
          nodes = set(heights[height])
          for node in nodes:
             if node.point is not None:
-               score = node.point.score
+               score = config.minimize and -node.point.score or node.point.score
                score = score * lr
                taylor = nan_to_num(score ** ns) / fs
                taylor *= node.area

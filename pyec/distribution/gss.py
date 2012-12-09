@@ -46,13 +46,6 @@ class GeneratingSetSearchHistory(History):
       self._score = None
       self.dim = dim
 
-   def better(self, x, y):
-      """Determine one score is better than another. The comparison
-      depends on whether minimizing or maximizing. Default is minimization
-      
-      """
-      return x < y
-      
 
    def accept(self, x, score):
       if self.center is None:
