@@ -16,8 +16,8 @@ class TestSpace(unittest.TestCase):
     def test_euclidean(self):
         dim5 = Euclidean(dim=5, center=10.0, scale=2.0)
         self.assertEqual(dim5.dim, 5)
-        self.assertEqual(dim5.center, 10.0)
-        self.assertEqual(dim5.scale, 2.0)
+        self.assertTrue((dim5.center - 10.0 < 1e-2).all())
+        self.assertTrue((dim5.scale - 2.0 < 1e-2).all())
         
         # check in_bounds
         x = dim5.random()
@@ -66,3 +66,103 @@ class TestSpace(unittest.TestCase):
         # check hash
         for w in ws:
             self.assertNotEqual(dim5.hash(x), dim5.hash(w))
+
+    def test_hyperrectangle(self):
+        rect = Hyperrectangle(5, np.arange(5), np.arange(5) + 1.0)
+        self.assertEqual(rect.dim, 5)
+        self.assertTrue((rect.center == np.arange(5)).all())
+        self.assertTrue((rect.scale == 1.0 + np.arange(5)).all())
+        self.assertTrue(rect.in_bounds(np.arange(5)))
+        self.assertTrue(rect.in_bounds(1.0 + 2*np.arange(5)))
+        
+        # test extent
+        lower, upper = rect.extent()
+        self.assertTrue((lower == -1.0).all())
+        self.assertTrue((upper == 1.0 + 2*np.arange(5)).all())
+        
+        # test area and proportion
+        rect2 = Hyperrectangle(5, 0.0, 1.0)
+        center = np.zeros(5)
+        center[2] = -0.5
+        scale = np.ones(5)
+        scale[2] = 0.5
+        rect3 = Hyperrectangle(5, center, scale)
+        dim5 = Euclidean(5, 0.0, 1.0)
+        self.assertTrue(np.abs(rect.area() - 3840.0) < 1e-2)
+        self.assertTrue(np.abs(rect2.area() - 32.0) < 1e-2)
+        rect3.owner = rect2
+        rect3.parent = rect2
+        self.assertTrue(np.abs(rect3.area(index=2) - 16.0) < 1e-2)
+        rect3._area = None
+        self.assertTrue(np.abs(rect3.area() - 16.0) < 1e-2)
+        rect3._area = None
+        rect3.owner = dim5
+        rect2._area = .6826 ** 5
+        rect2.owner = dim5
+        rect2.parent = dim5
+        self.assertTrue(np.abs(rect3.area(index=2) - .3413 * (.6826 ** 4)) < 1e-2)
+        self.assertTrue(np.abs(dim5.proportion(rect3,rect2,2) - .5) < 1e-2)
+        self.assertTrue(np.abs(rect.proportion(rect3,rect2, 2) - .5) < 1e-2)
+        
+        # test random
+        x = rect.random()
+        self.assertTrue(rect.in_bounds(x))
+        ws = np.array([rect.random() for i in xrange(2500)])
+        self.assertTrue(np.abs(np.average(ws, axis=0)-rect.center).max() < 1e-1)
+        self.assertTrue(np.abs(ws.max(axis=0) - upper).max() < 1e-1)
+        self.assertTrue(np.abs(ws.min(axis=0) - lower).min() < 1e-1)
+        onecenter = upper.copy()
+        onecenter[0] = rect.center[0]
+        above = (ws <= onecenter).all(axis=1).sum()
+        below = (ws > onecenter).any(axis=1).sum()
+        self.assertTrue(np.abs(above - below) < 100)
+        
+    def test_binary(self):
+        bin = Binary(10)
+        self.assertEqual(bin.dim, 10)
+        self.assertEqual(bin.area(), 1.0)
+        
+        # test extent
+        lower, upper = bin.extent()
+        self.assertEqual(lower.base, 0L)
+        self.assertEqual(lower.known, 0L)
+        self.assertEqual(upper.base, -1L)
+        self.assertEqual(upper.known, 0L)
+        
+        # test random
+        x = bin.random()
+        self.assertEqual(((1L << 10) - 1L), (x.known & ((1L << 10) - 1L)))
+        self.assertTrue(bin.in_bounds(x))
+        idx = np.random.randint(0,10)
+        above = 0
+        below = 0
+        for i in xrange(2500):
+            z = bin.random()
+            if z[idx]:
+                above += 1
+            else:
+                below += 1
+        self.assertTrue(np.abs(above-below) < 100)
+        
+    def test_binary_real(self):
+        bin = BinaryReal(2, 4, 10.0, 2.0)
+        self.assertEqual(bin.dim, 8)
+        self.assertEqual(bin.realDim, 2)
+        self.assertEqual(bin.bitDepth, 4)
+        self.assertTrue((bin.center == 10.0).all())
+        self.assertTrue((bin.scale == 2.0).all())
+        self.assertTrue((bin.adj == 8.0).all())
+        self.assertTrue((bin.scale2 == 4.0).all())
+        
+        # test convert
+        from pyec.util.TernaryString import TernaryString
+        point = TernaryString(0L,-1L,8)
+        self.assertTrue(np.abs(bin.convert(point) - np.array([8.0,8.0])).max()
+                        < 1e-2)
+        point = TernaryString(-1L,-1L, 8)
+        self.assertTrue(np.abs(bin.convert(point) - np.array([11.75,11.75])).max()
+                        < 1e-2)
+        point = TernaryString((1L << 4) | 1L, -1L, 8)
+        self.assertTrue(np.abs(bin.convert(point) - np.array([10.0,10.0])).max()
+                        < 1e-2)
+        

@@ -109,6 +109,10 @@ class Euclidean(Space):
     """
     def __init__(self, dim=1, center=0.0, scale=1.0):
         super(Euclidean, self).__init__(np.ndarray)
+        if not isinstance(center, np.ndarray):
+            center = center * np.ones(dim)
+        if not isinstance(scale, np.ndarray):
+            scale = scale * np.ones(dim)
         try:
             bottom = center - scale
         except Exception:
@@ -117,13 +121,11 @@ class Euclidean(Space):
         self.scale = scale
         self.dim = dim
         
-        if isinstance(center, np.ndarray):
-            if (dim,) != np.shape(center):
-                raise ValueError("Dimension of center doesn't match dim")
+        if (dim,) != np.shape(center):
+            raise ValueError("Dimension of center doesn't match dim")
         
-        if isinstance(scale, np.ndarray):
-            if (dim,) != np.shape(scale):
-                raise ValueError("Dimension of scale array doesn't match dim")
+        if (dim,) != np.shape(scale):
+            raise ValueError("Dimension of scale array doesn't match dim")
     
     def gaussInt(self, z):
         # x is std normal from zero to abs(z)
@@ -144,18 +146,14 @@ class Euclidean(Space):
         :type larger: :class:`Hyperrectangle` or :class:`Euclidean`
         :returns: The ratio of ``smaller``'s volume over ``larger``'s.
         """
-        try:
-            center = self.center[index]
-            scale = self.scale[index]
-        except:
-            center = self.center
-            scale = self.scale
+        center = self.center[index]
+        scale = self.scale[index]
         slower = smaller.center[index] - smaller.scale[index]
         supper = smaller.center[index] + smaller.scale[index]
         if isinstance(larger, Hyperrectangle):
             llower = larger.center[index] - larger.scale[index]
             lupper = larger.center[index] + larger.scale[index]
-        else: # Hyperrectangle 
+        else: # Euclidean
             llower = -np.inf
             lupper = np.inf
         slow = self.gaussInt((slower - center) / scale) 
@@ -239,7 +237,7 @@ class Binary(Space):
         self.dim = dim
         
     def area(self):
-        return 2.0 ** self.dim
+        return 1.0
             
     def extent(self):
         return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
@@ -278,18 +276,20 @@ class BinaryReal(Binary):
         super(BinaryReal, self).__init__(self.bitLength)
         self.realDim = realDim
         self.bitDepth = bitDepth
+        if not isinstance(center, np.ndarray):
+            center = center * np.ones(realDim)
         self.center = center
+        if not isinstance(scale, np.ndarray):
+            scale = scale * np.ones(realDim)
         self.scale = scale
         self.adj = center - scale
         self.scale2 = 2 * scale
         
-        if isinstance(center, np.ndarray):
-            if shape(center) != realDim:
-                raise ValueError("Dimension of center doesn't match dim")
+        if np.shape(center) != (realDim,):
+            raise ValueError("Dimension of center doesn't match dim")
         
-        if isinstance(scale, np.ndarray):
-            if shape(scale) != realDim:
-                raise ValueError("Dimension of scale array doesn't match dim")
+        if np.shape(scale) != (realDim,):
+            raise ValueError("Dimension of scale array doesn't match dim")
         
     def convert(self, x):
         if not isinstance(x, self.type):
@@ -363,9 +363,9 @@ class BinaryRectangle(Binary):
         else:
             # Lebesgue
             mask = 1L
-            total = 0.0
+            total = 1.0
             for i in xrange(self.spec.length):
-                total += (mask & self.spec.known) > 0
+                total *= 2.0 ** (-((mask & self.spec.known) > 0))
             self._area = total
             
         return self._area
