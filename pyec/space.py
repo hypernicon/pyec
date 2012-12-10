@@ -118,16 +118,16 @@ class Euclidean(Space):
         self.dim = dim
         
         if isinstance(center, np.ndarray):
-            if shape(center) != dim:
+            if (dim,) != np.shape(center):
                 raise ValueError("Dimension of center doesn't match dim")
         
         if isinstance(scale, np.ndarray):
-            if shape(scale) != dim:
+            if (dim,) != np.shape(scale):
                 raise ValueError("Dimension of scale array doesn't match dim")
     
     def gaussInt(self, z):
         # x is std normal from zero to abs(z)
-        x = erf(np.abs(z)) / 2 / np.sqrt(2)
+        x = .5 * erf(np.abs(z)/np.sqrt(2))
         return .5 + np.sign(z) * x
     
     def proportion(self, smaller, larger, index):
@@ -152,12 +152,12 @@ class Euclidean(Space):
             scale = self.scale
         slower = smaller.center[index] - smaller.scale[index]
         supper = smaller.center[index] + smaller.scale[index]
-        if isinstance(larger, Euclidean):
-            llower = -np.inf
-            lupper = np.inf
-        else: # Hyperrectangle 
+        if isinstance(larger, Hyperrectangle):
             llower = larger.center[index] - larger.scale[index]
             lupper = larger.center[index] + larger.scale[index]
+        else: # Hyperrectangle 
+            llower = -np.inf
+            lupper = np.inf
         slow = self.gaussInt((slower - center) / scale) 
         shigh = self.gaussInt((supper - center) / scale)
         llow = self.gaussInt((llower - center) / scale) 
@@ -165,8 +165,8 @@ class Euclidean(Space):
         return (shigh - slow) / (lhigh - llow)
       
     def extent(self):
-        upper = zeros(self.dim)
-        lower = zeros(self.dim)
+        upper = np.zeros(self.dim)
+        lower = np.zeros(self.dim)
         upper.fill(np.inf)
         lower.fill(-np.inf)
         return lower, upper
@@ -177,12 +177,15 @@ class Euclidean(Space):
         use a zero-centered elliptical gaussian scaled by ``self.scale``.
         
         """
-        test = self.scale * np.random.randn(self.dim)
+        test = self.center + self.scale * np.random.randn(self.dim)
         return test
                 
     def hash(self, point):
         parts = [((point+i)**2).sum() for i in np.arange(10)]
         return ",".join([str(pt) for pt in parts])
+    
+    def in_bounds(self, point):
+        return isinstance(point, self.type) and np.shape(point) == (self.dim,)
 
 
 class Hyperrectangle(Euclidean):
