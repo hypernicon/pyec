@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 from numpy import *
 from scipy.special import erf
-from pyec.space import Hyperrectangle
+from pyec.space import Hyperrectangle, BinaryRectangle
 from pyec.util.TernaryString import TernaryString
 
 import traceback
@@ -33,11 +33,6 @@ class Segment(object):
    def __init__(self, config):
       self.config = config
       
-      Point.segment = self
-      Partition.segment = self
-      ScoreTree.segment = self
-      Segment.segment = self
-      
       self.points = []
       self.partitionTree = Partition(self,config)
       self.scoreTree = ScoreTree(self,config)
@@ -47,12 +42,11 @@ class Segment(object):
       del self.partitionTree
       del self.scoreTree
       self.points = []
-      self.partitionTree = Partition(self,config)
-      self.scoreTree = ScoreTree(self,config)
+      self.partitionTree = Partition(self,self.config)
+      self.scoreTree = ScoreTree(self,self.config)
 
 
 class Point(object):
-   segment = None
    
    def __init__(self, segment, point=None, statistics = None,
                 score=0.0, alive=True, count=1):
@@ -77,6 +71,8 @@ class Point(object):
          Get a representation of the point suitable for insertion in the Partition tree.
          
          Called by PartitionTree.separate()
+         
+         DEPRECATED, will be removed.
       """
       if self.point is not None: 
          return self.point
@@ -103,21 +99,22 @@ class Point(object):
          return None
 
    @classmethod
-   def bulkSave(cls, points, stats):
-      cls.segment.points.extend(points)
+   def bulkSave(cls, segment, points, stats):
+      segment.points.extend(points)
       
       for gp in points:
          try:
             stats.start("separate")
-            sep = cls.segment.config.separator(cls.segment.config)
-            sep.separate(cls.segment.partitionTree, gp)
+            sep = segment.config.separator(segment.config)
+            sep.separate(segment.partitionTree, gp)
             stats.stop("separate")
             stats.start("insert")
-            cls.segment.scoreTree.insert(gp, cls.segment.config, stats)
+            segment.scoreTree.insert(gp, segment.config, stats)
             stats.stop("insert")
          except:
             logg.debug("Exception when separating or inserting points")
             gp.alive = False
+            raise
 
    @classmethod
    def sampleTournament(cls, segment, temp, config):
@@ -142,7 +139,7 @@ class Point(object):
             if children[0].max_score == children[1].min_score:
                p = .5
             else:
-               p = 1. / (1. + ((1. - config.pressure) ** (config.learningRate * temp * (2 ** children[0].height))))
+               p = 1. / (1. + ((1. - config.pressure) ** (config.learningRate / temp * (2 ** children[0].height))))
          except:
             p = 1.0
          
@@ -185,7 +182,7 @@ class Point(object):
       
       children = sorted(current.children, key=lambda c: not c.left)
       ns = array([i+0. for i in xrange(depth)])
-      diffs = (temp - center) ** ns
+      diffs = (1./temp - 1./center) ** ns
       while len(children) > 0:
          # build choice
          p1 = (children[0].taylor[offset:offset+depth] * diffs).sum()
@@ -200,27 +197,6 @@ class Point(object):
          current = children[idx]
          children = sorted(current.children, key=lambda c: not c.left)
       
-      return current.point, current
-
-   @classmethod
-   def samplePartition(cls, segment, startNode, config):
-      
-      current = startNode
-      currentArea = startNode.area
-      children = current.children
-      while len(children) > 0:
-         try:
-            p = children[0].score_sum / (children[0].score_sum + children[1].score_sum)   
-         except:
-            p = .5
-         if random.random_sample() < p:
-            current = children[0]
-            currentArea = children[0].area
-         else:
-            current = children[1]
-            currentArea = children[1].area
-         children = current.children
-         
       return current.point, current
 
    @classmethod
@@ -253,21 +229,8 @@ class Point(object):
             current = children[1]
             currentArea = children[1].area
          children = current.children
-
       
       return current.point, current 
-
-   @classmethod
-   def sampleTournamentSecondary(cls, segment, start, temp, config):
-      node = start
-      last = start
-      while node.parent is not None and node.layer == config.layerspec.maxLayer:
-         #print "at ", node.id, " with layer ", node.layer
-         last = node
-         node = node.parent 
-      
-      # second, sample tournament downward
-      return cls.samplePartition(segment, node, config)
 
 
 class SeparationAlgorithm(object):
@@ -310,7 +273,7 @@ class SeparationAlgorithm(object):
       """
       self.config.stats.start("separate.traverse")
       lr = self.config.learningRate
-      node, region, path = tree.traverse(tree, point)
+      node, path = tree.traverse(tree, point)
       self.config.stats.stop("separate.traverse")
       if node.point is None:
          node.point = point
@@ -321,17 +284,17 @@ class SeparationAlgorithm(object):
       self.config.stats.start("separate.main")
       self.config.stats.start("separate.prepare")
       
-      n1, n2 = self.split(node)
+      other = node.point
+      n1, n2 = self.split(point, node)
          
       # update the best score
       if path is not None:
-         if point.score > other.score:
-            if self.config.minimize:
-               for n in path:
-                  n.best_score = min([point.score,n.best_score])
-            else:
-               for n in path:
-                  n.best_score = max([point.score,n.best_score])
+         if self.config.minimize and point.score < other.score:
+            for n in path:
+               n.best_score = min([point.score,n.best_score])
+         elif point.score > other.score:
+            for n in path:
+               n.best_score = max([point.score,n.best_score])
       
       self.config.stats.stop("separate.compute")
       self.config.stats.stop("separate.main")
@@ -350,20 +313,19 @@ class SeparationAlgorithm(object):
       self.config.stats.start("separate.propagate")
       
       # correct area in score tree
-      if point.score_node is not None:
-         sn = point.score_node
-         if other == downPoint:
-            diff = sn.area - downArea
-         else:
-            diff = sn.area - upArea
+      if other.score_node is not None:
+         sn = other.score_node
+         diff = sn.area - other.partition_node.area
          sn.segment.scoreTree.propagateAreaOnly(sn, self.config, diff)
       
       #print "end separate"
       self.config.stats.stop("separate.propagate")
       
-   def split(self, node):
+   def split(self, point, node):
       """Do the actual work to partition a region.
       
+      :param point: The point that resulted in the split
+      :type point: ``config.space.type``
       :param node: A node from the partition tree corresponding to a region
                    of the space
       :type node: :class:`PartitionTreeNode`
@@ -377,7 +339,7 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
       return space.type == ndarray
    
    def cast(self, point):
-      return point
+      return point.point
    
    def rectify(self, pointrep, otherrep):
       try:
@@ -425,24 +387,20 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
       downUpper = upper.copy()
       downLower = lower.copy()
       downUpper[newIndex] = midPoint
-      downCenter = .5 * (downUpper - downLower)
-      downScale = downUpper - downCenter
-      down = Hyperrectangle(node.bounds.dim, downCenter, downScale)
+      down = Hyperrectangle(downLower, downUpper)
       down.parent = other.partition_node.bounds
       down.owner = self.config.space
       
       upUpper = upper.copy()
       upLower = lower.copy()
       upLower[newIndex] = midPoint
-      upCenter = .5 * (upUpper - upLower)
-      upScale = upUpper - upCenter
-      up = Hyperrectangle(node.bounds.dim, upCenter, upScale)
+      up = Hyperrectangle(upLower, upUpper)
       up.parent = other.partition_node.bounds
       up.owner = self.config.space
       
       return down, up, downPoint, upPoint
    
-   def split(self, node):
+   def split(self, point, node):
       """A vector-based separation algorithm that generates
       Hyperrectangular partitions parallel to the axes.
       
@@ -464,8 +422,8 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
       newIndex, newDiff = self.chooseIndex(pointrep, otherrep, lower, upper)
       self.config.stats.stop("separate.separable")
       if newDiff == 0.0:
-        node.point = other
-        raise SeparationException("No difference in points")
+         node.point = other
+         raise SeparationException("No difference in points")
       
       self.config.stats.start("separate.compute")
       down, up, downPoint, upPoint = self.makeParts(point, pointrep,
@@ -485,6 +443,8 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
          area = upArea,
          bounds = up,
          index = newIndex,
+         upper=None,
+         lower=None,
          best_score = upPoint.score,
          score_sum = upPoint.score,
          parent = node,
@@ -498,6 +458,8 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
          area = downArea,
          bounds = down,
          index = newIndex,
+         upper=None,
+         lower=None,
          best_score = downPoint.score,
          score_sum = downPoint.score,
          parent = node,
@@ -513,12 +475,45 @@ class VectorSeparationAlgorithm(SeparationAlgorithm):
  
 
 class LongestSideVectorSeparationAlgorithm(VectorSeparationAlgorithm):
+   """Like :class:`VectorSeparationAlgorithm`, except that it always
+   partitions the longest side. This can be helpful to guarantee that the
+   longest side length of any partition hyperrectangle is reduced
+   evenly.
+   
+   """
    def chooseIndex(self, pointrep, otherrep, lower, upper):
+      newDiff = 0.0
+      infinity = False
       for i in xrange(len(pointrep)):
-         diff = upper[i] - lower[i]
-         if diff > newDiff:
-            newDiff = diff
-            newIndex = i
+         if upper[i] == inf and lower[i] == -inf:
+            return i, inf
+         elif upper[i] == inf:
+            if infinity:
+               if -lower[i] > newDiff:
+                  newDiff = -lower[i]
+                  newIndex = i
+            else:
+               infinity = True
+               newDiff = -lower[i]
+               newIndex = i
+         elif lower[i] == -inf:
+            if infinity:
+               if upper[i] > newDiff:
+                  newDiff = upper[i]
+                  newIndex = i
+            else:
+               infinity = True
+               newDiff = upper[i]
+               newIndex = i
+         elif not infinity:
+            diff = upper[i] - lower[i]
+            if diff > newDiff:
+               newDiff = diff
+               newIndex = i
+            
+      if infinity:
+         return newIndex, inf
+      
       return newIndex, newDiff
 
 
@@ -534,6 +529,8 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       if otherrep.length < pointrep.length:
          otherrep.known &= (1L << (otherrep.length)) - 1L
          otherrep.length = pointrep.length
+         
+      return pointrep, otherrep
 
    def chooseIndex(self, pointrep, otherrep, lower, upper):
       if (pointrep.known & pointrep.base) == (otherrep.known & otherrep.base):
@@ -542,21 +539,21 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       diff = pointrep ^ otherrep
       
       # randomly wrap the bits, and then take the first difference
-      wrap = random.randomint(0,diff.length)
+      wrap = random.randint(0,diff.length)
       maskAll = (1L << diff.length) - 1L
       maskLow = 1L << wrap
-      wrapHigh = (diff.base & maskAll) % maskLow
-      wrapKnownH = (diff.known & maskAll) % maskLow
+      wrapHigh = (diff.base & maskAll) // maskLow
+      wrapKnownH = (diff.known & maskAll) // maskLow
       maskLow -= 1L
       wrapLow = diff.base & maskLow
       wrapKnownL = diff.known & maskLow
-      rebuilt = TernaryString(wrapLow | (wrapHigh << wrap),
-                              wrapKnownL | (wrapKnownH << wrap),
+      rebuilt = TernaryString(wrapHigh | (wrapLow << wrap),
+                              wrapKnownH | (wrapKnownL << wrap),
                               diff.length)
       mask = 1L
       for i in xrange(rebuilt.length):
          if rebuilt[i]:
-            return ((i + wrap) % diff.length), 1.0
+            return ((i + (diff.length - wrap)) % diff.length), 1.0
       
       raise SeparationException("No difference in points")
    
@@ -582,6 +579,8 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       up = BinaryRectangle(upSpec)
       up.parent = other.partition_node.bounds
       
+      print downSpec.base, downSpec.known, downSpec.length
+      print upSpec.base, upSpec.known, upSpec.length
       return down, up, downPoint, upPoint
 
 
@@ -592,13 +591,15 @@ class BayesSeparationAlgorithm(BinarySeparationAlgorithm):
       return space.type == BayesNet
    
    def cast(self, point):
-      return point.edgeBinary()
+      return point.point.edgeBinary()
 
 
 class PartitionTreeNode(object):
    idgen = 1
    
-   def __init__(self, segment, index, parent, upper, lower, area, bounds, point=None, layer=None, layerrep=None, score_sum=0.0, best_score=None):
+   def __init__(self, segment, index, parent, upper, lower, area,
+                bounds, point=None, layer=None, layerrep=None,
+                score_sum=0.0, best_score=None):
       self.segment = segment,
       self.index = index
       self.parent = parent
@@ -619,7 +620,6 @@ class PartitionTreeNode(object):
 
 
 class Partition(object):
-   segment = None
    areaTree = None
    
    def __init__(self, segment, config):
@@ -673,7 +673,7 @@ class Partition(object):
          last = current
          
          for child in children:
-            if child.bounds.in_bounds(point):
+            if child.bounds.in_bounds(point.point):
                current = child
                path.append(current)
                children = current.children
@@ -1026,8 +1026,8 @@ class Partition(object):
       
    def printTree(self, segment, node=None, indent=""):
       if node is None:
-         node = self.scoreTree
-      print indent, self.id, ": ", node.layer, node.index, node.lower, node.upper, node.area
+         node = self.root
+      print indent, node.id, ": ", node.layer, node.index, node.lower, node.upper, node.area
       children = node.children
       for child in children:
          self.printTree(segment, child, indent + "\t")      
@@ -1042,7 +1042,7 @@ class Partition(object):
 class ScoreTreeNode(object):
    idgen = 1
 
-   def __init__(self, segment, parent=None, point=None, area=1.0, min_score=-1e300, max_score=1e300, child_count=0, taylor=None, height=0, balance=0, left=False):
+   def __init__(self, segment, parent=None, point=None, area=1.0, min_score=-1e300, max_score=1e300, child_count=1, taylor=None, height=0, balance=0, left=False):
       self.segment = segment
       self.parent = parent
       self.point = point
@@ -1059,18 +1059,7 @@ class ScoreTreeNode(object):
       self.__class__.idgen += 1
       
 class ScoreTree(object):
-   segment = None
    
-   @classmethod
-   def _objects(cls):
-      return cls.segment.scoreTree   
-
-   @classmethod
-   def _blank(cls):
-      pass
-
-   objects = ClassProperty(_objects,_blank)
-
    def __init__(self, segment, config):
       self.config = config
       self.segment = segment
@@ -1094,7 +1083,8 @@ class ScoreTree(object):
       if node is None: 
          node = self.root
       
-      print indent, node.id, ',', node.balance, ",", node.min_score, " - ", node.max_score
+      print indent, node.id, ',', node.balance, ",", node.area, ",", node.height,
+      print ",", node.child_count, ",", node.min_score, " - ", node.max_score
       
       children = node.children
       if len(children) > 0:
@@ -1446,7 +1436,7 @@ class ScoreTree(object):
          score = (config.minimize and -1 or 1) * point.score * lr 
          taylor = nan_to_num(score ** ns) / fs
          taylor *= node.area
-         taylor *= nan_to_num(exp(score) ** center) 
+         taylor *= nan_to_num(exp(score) ** (1./center)) 
          node.taylor = nan_to_num(taylor)
          return
       
@@ -1474,12 +1464,12 @@ class ScoreTree(object):
       score2 = (config.minimize and -1 or 1) * downPoint.score * lr    
       taylor1 = (score1 ** ns) / fs
       taylor1 *= upArea
-      taylor1 *= (exp(score1) ** center) 
+      taylor1 *= (exp(score1) ** (1./center)) 
       taylor2 = (score2 ** ns) / fs
       taylor2 *= downArea
-      taylor2 *= (exp(score2) ** center)
+      taylor2 *= (exp(score2) ** (1./center))
       
-      if config.selection == "proportional":
+      if config.taylorDepth > 0:
          if (abs(taylor1) < 1e-300).all() and (abs(taylor2) < 1e-300).all():
             node.point = other
             node.height = 0
@@ -1524,9 +1514,11 @@ class ScoreTree(object):
       """
          Recompute the taylor coefficients on the Score tree.
          
-         This should be done whenever temp gets more than 0.5 away from the taylor center for accuracy.
+         This should be done whenever 1/temp gets more than 0.5 away
+         from the inverse of the taylor center for accuracy.
          
-         Requires a loop through all points, but only needs to be done at a logarithmically often.
+         Requires a loop through all points, but only needs to be done
+         at a logarithmically often pace.
          
          segment - the segment to recompute
          temp - the new temperature center
@@ -1534,7 +1526,7 @@ class ScoreTree(object):
          
          This method sets config.taylorCenter to temp when complete.
       """
-      log.info("resetTaylor: segment %s, new center %s, old center %s" % (segment.id, temp, config.taylorCenter))
+      logg.info("resetTaylor: segment %s, new center %s, old center %s" % (segment, temp, config.taylorCenter))
       
       ns = [i+0. for i in xrange(config.taylorDepth)]
       fs = ns * 1
@@ -1562,7 +1554,7 @@ class ScoreTree(object):
                score = score * lr
                taylor = nan_to_num(score ** ns) / fs
                taylor *= node.area
-               taylor *= nan_to_num(exp(score) ** center) 
+               taylor *= nan_to_num(exp(score/center)) 
                node.taylor = nan_to_num(taylor)
             else:
                node.taylor = zeros(config.taylorDepth)
@@ -1593,18 +1585,7 @@ class AreaTreeNode(object):
         
 
 class AreaTree(object):
-    segment=None
     
-    @classmethod
-    def _objects(cls):
-        return cls.segment   
-
-    @classmethod
-    def _blank(cls):
-        pass
-
-    objects = ClassProperty(_objects,_blank) 
-
     @classmethod
     def get(cls,**kwargs):
         return cls.segment
@@ -1633,12 +1614,12 @@ class AreaTree(object):
         if self.root is None:
             self.root = AreaTreeNode()
             self.root.val = partitionNode
-            assert self.root.val is not Nones
+            assert self.root.val is not None
             return
             
         parent = self.traverse(partitionNode.area)
         
-        mid = max([parent.val.area, partitionNode.area])
+        mid = partitionNode.area
         
         left = AreaTreeNode()
         left.left = True
@@ -1725,7 +1706,8 @@ class AreaTree(object):
     def printTree(self, node=None, indent=""):
         if node is None:
             node = self.root
-        print indent, node.id, node.low, node.high, node.val is None and "None" or node.val.id
+        print indent, node.id, node.low, node.high,
+        print node.val is None and "None" or node.val.area
         children = node.children
         for child in children:
             self.printTree(child, indent + "\t") 

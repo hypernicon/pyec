@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+import numpy as np
 
 from pyec.config import Config
 from pyec.distribution.convolution import Convolution
@@ -63,11 +64,12 @@ class PartitionHistory(History):
       elif self.config.schedule == "linear":
          return 1. / (n * self.learningRate)
       elif self.config.schedule == "log":
-         return 1. / (log(n) * self.learningRate)
+         return 1. / (np.log(n) * self.learningRate)
       elif self.config.schedule == "discount":
          return 1. / (self.config.temp0 * (self.config.discount ** n))
       elif self.config.schedule == "log_area":
-         return 1./-log(self.history.segment.partitionTree.largestArea())
+         return 1./-(np.log(self.history.segment.partitionTree.largestArea())
+                     * self.learningRate)
       else:
          return 1.0
       
@@ -88,9 +90,6 @@ class PartitionHistory(History):
 class TaylorPartitionHistory(PartitionHistory):
    def __init__(self, config):
       super(TaylorPartitionHistory, self).__init__(config)
-      self.taylorCenter = self.config.taylorCenter
-      self.taylorDepth = self.config.taylorDepth
-      self.attrs |= set(["taylorCenter", "taylorDepth"])
 
    def internalUpdate(self, population):
       if population[0][1] is None:
@@ -98,10 +97,10 @@ class TaylorPartitionHistory(PartitionHistory):
          return
       
       super(TaylorPartitionHistory, self).internalUpdate(population)
-      bottom = .5 * floor(2*self.temperature()*self.config.learningRate)
-      if  bottom > self.taylorCenter:
-         ScoreTree.resetTaylor(self.segment, bottom, self.config)
-         self.taylorCenter = bottom
+      bottom = .5 * floor(2*(1./self.temperature())*self.config.learningRate)
+      if  bottom > 1./self.taylorCenter:
+         ScoreTree.resetTaylor(self.segment, 1./bottom, self.config)
+         self.config.taylorCenter = 1./bottom
 
 
 class Annealing(Selection):
@@ -193,6 +192,8 @@ class TournamentAnnealing(Annealing):
       See :class:`Annealing` for more details.
       
    """
+   config = Config(pressure=0.025)
+   
    def sample(self):
       return Point.sampleTournament(self.history.segment,
                                     self.history.temperature(),

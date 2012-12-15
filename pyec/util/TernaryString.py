@@ -63,7 +63,9 @@ class TernaryString(object):
    
    def __eq__(self, x):
       if isinstance(x, TernaryString):
-         return (self.known == x.known) and ((self.base & self.known) == (x.base & x.known))
+         return ((self.known == x.known) and
+                 ((self.base & self.known) == (x.base & x.known)) and
+                 self.length == x.length)
       else:
          return (self.known & self.base) == (self.known & x)
    

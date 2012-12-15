@@ -56,8 +56,8 @@ class TestSpace(unittest.TestCase):
         rectC2[1] = 9.5
         rectS2 = rectS.copy()
         rectS2[1] = .5
-        rect1 = Hyperrectangle(5, rectC,rectS)
-        rect2 = Hyperrectangle(5, rectC2,rectS2)
+        rect1 = Hyperrectangle(rectC - rectS, rectC + rectS)
+        rect2 = Hyperrectangle(rectC2 - rectS2, rectC2 + rectS2)
         self.assertTrue(np.abs(dim5.proportion(rect1, dim5, 1) - 0.3413)
                         < 1e-2)
         self.assertTrue(np.abs(dim5.proportion(rect2, rect1, 1) - .1915 / .3413)
@@ -68,12 +68,16 @@ class TestSpace(unittest.TestCase):
             self.assertNotEqual(dim5.hash(x), dim5.hash(w))
 
     def test_hyperrectangle(self):
-        rect = Hyperrectangle(5, np.arange(5), np.arange(5) + 1.0)
+        center = np.arange(5)
+        scale = np.arange(5) + 1.0
+        rect = Hyperrectangle(center - scale, center + scale)
         self.assertEqual(rect.dim, 5)
         self.assertTrue((rect.center == np.arange(5)).all())
         self.assertTrue((rect.scale == 1.0 + np.arange(5)).all())
         self.assertTrue(rect.in_bounds(np.arange(5)))
         self.assertTrue(rect.in_bounds(1.0 + 2*np.arange(5)))
+        self.assertFalse(rect.in_bounds(np.array([-2.,100.,-3,200.,-1000.])))
+        self.assertFalse(rect.in_bounds(np.array([0.,1.,5.1,3.,4.0])))
         
         # test extent
         lower, upper = rect.extent()
@@ -81,12 +85,12 @@ class TestSpace(unittest.TestCase):
         self.assertTrue((upper == 1.0 + 2*np.arange(5)).all())
         
         # test area and proportion
-        rect2 = Hyperrectangle(5, 0.0, 1.0)
+        rect2 = Hyperrectangle(-1.0*np.ones(5), 1.0*np.ones(5))
         center = np.zeros(5)
         center[2] = -0.5
         scale = np.ones(5)
         scale[2] = 0.5
-        rect3 = Hyperrectangle(5, center, scale)
+        rect3 = Hyperrectangle(center-scale, center+scale)
         dim5 = Euclidean(5, 0.0, 1.0)
         self.assertTrue(np.abs(rect.area() - 3840.0) < 1e-2)
         self.assertTrue(np.abs(rect2.area() - 32.0) < 1e-2)
@@ -142,7 +146,7 @@ class TestSpace(unittest.TestCase):
                 above += 1
             else:
                 below += 1
-        self.assertTrue(np.abs(above-below) < 100)
+        self.assertTrue(np.abs(above-below) < 250)
         
     def test_binary_real(self):
         bin = BinaryReal(2, 4, 10.0, 2.0)
@@ -165,4 +169,39 @@ class TestSpace(unittest.TestCase):
         point = TernaryString((1L << 4) | 1L, -1L, 8)
         self.assertTrue(np.abs(bin.convert(point) - np.array([10.0,10.0])).max()
                         < 1e-2)
+        
+    def test_binary_rectangle(self):
+        from pyec.util.TernaryString import TernaryString
+        rect = BinaryRectangle(TernaryString(8L,10L,4))
+        
+        # test in_bounds
+        point = TernaryString(15L, 15L, 4)
+        self.assertFalse(rect.in_bounds(point))
+        point = TernaryString(13L, 15L, 4)
+        self.assertTrue(rect.in_bounds(point))
+        
+        # test extent
+        lower, upper = rect.extent()
+        self.assertEqual((lower.base & 15L), 8L)
+        self.assertEqual((lower.known & 15L), 15L)
+        self.assertEqual((upper.base & 15L), 13L)
+        self.assertEqual((upper.known & 15L), 15L)
+        
+        # test area
+        self.assertTrue(np.abs(rect.area() - .25) < 1e-2)
+        rect._area = None
+        rect.parent = BinaryRectangle(TernaryString(8L,8L,4))
+        print rect.area()
+        self.assertTrue(np.abs(rect.area() - .25) < 1e-2)
+        
+        # test random
+        options = [8L,9L,12L,13L]
+        counts = [0,0,0,0]
+        for i in xrange(2500):
+            x = rect.random()
+            self.assertTrue(rect.in_bounds(x))
+            self.assertTrue((x.base & 15L) in options)
+            counts[options.index(x.base & 15L)] += 1
+        for cnt in counts:
+            self.assertTrue(np.abs(cnt - 625) < 50)
         

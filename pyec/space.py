@@ -148,11 +148,11 @@ class Euclidean(Space):
         """
         center = self.center[index]
         scale = self.scale[index]
-        slower = smaller.center[index] - smaller.scale[index]
-        supper = smaller.center[index] + smaller.scale[index]
+        slower = smaller.lower[index]
+        supper = smaller.upper[index]
         if isinstance(larger, Hyperrectangle):
-            llower = larger.center[index] - larger.scale[index]
-            lupper = larger.center[index] + larger.scale[index]
+            llower = larger.lower[index]
+            lupper = larger.upper[index]
         else: # Euclidean
             llower = -np.inf
             lupper = np.inf
@@ -187,14 +187,33 @@ class Euclidean(Space):
 
 
 class Hyperrectangle(Euclidean):
-    """A Hyperrectangle constraint region within Euclidean space."""
+    """A Hyperrectangle constraint region within Euclidean space.
+    
+    :param lower: A ``numpy.ndarray`` for the lower boundary of the
+                  hyperrectangle
+    :type lower: ``numpy.ndarray``
+    :param upper: A ``numpy.ndarray`` for the upper boundary of the
+                  hyperrectangle
+    :type upper: ``numpy.ndarray``
+    
+    """
     _area = None
     
+    def __init__(self, lower, upper):
+        dim = len(lower)
+        if (upper < lower).any():
+            raise ValueError("Upper boundary cannot be below lower boundary.")
+        scale = .5 * (upper - lower)
+        center = lower + scale 
+        super(Hyperrectangle, self).__init__(dim, center, scale)
+        self.lower = lower
+        self.upper = upper
+    
     def in_bounds(self, y):
-        return (np.abs(np.array(y) - self.center) <= self.scale).all()
+        return (self.lower <= y).all() and (y <= self.upper).all()
    
     def extent(self):
-        return self.center - self.scale, self.center + self.scale
+        return self.lower, self.upper
 
     def proportion(self, smaller, larger, index):
         return smaller.scale[index] / larger.scale[index]
@@ -218,7 +237,7 @@ class Hyperrectangle(Euclidean):
    
     def random(self):
        base = np.random.random_sample(np.shape(self.center))
-       return self.center - self.scale + 2 * self.scale * base
+       return self.lower + 2 * self.scale * base
 
 
 class Binary(Space):
@@ -349,9 +368,9 @@ class BinaryRectangle(Binary):
     
     def extent(self):
         lower = 0L | (self.spec.known & self.spec.base)
-        upper = -1L & (self.spec.known & self.spec.base)
-        return (TernaryString(lower, -1L, self.spec.length),
-                TernaryString(upper, -1L, self.spec.length))
+        upper = -1L & (self.spec.known & self.spec.base | ~self.spec.known)
+        return (TernaryString(lower, self.spec.known, self.spec.length),
+                TernaryString(upper, self.spec.known, self.spec.length))
     
     def area(self, **kwargs):
         """Count the number of known bits"""
@@ -366,6 +385,7 @@ class BinaryRectangle(Binary):
             total = 1.0
             for i in xrange(self.spec.length):
                 total *= 2.0 ** (-((mask & self.spec.known) > 0))
+                mask <<= 1
             self._area = total
             
         return self._area
