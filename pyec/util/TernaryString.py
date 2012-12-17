@@ -23,6 +23,7 @@ def binary(x, digits=10):
    :type digits: ``int``
    :returns: A string of zeros and ones with the least significant bits at the
              left.
+             
    """
    ret = ""
    num = x
@@ -59,7 +60,7 @@ class TernaryString(object):
       return binary(self.known & self.base, self.length)
       
    def __repr__(self):
-      return binary(repr(self.known & self.base), self.length)
+      return binary(self.known & self.base, self.length)
    
    def __eq__(self, x):
       if isinstance(x, TernaryString):
@@ -67,10 +68,10 @@ class TernaryString(object):
                  ((self.base & self.known) == (x.base & x.known)) and
                  self.length == x.length)
       else:
-         return (self.known & self.base) == (self.known & x)
+         return ((self.known & self.base) == (self.known & x))
    
    def __ne__(self, x):
-      return (self.known != x.known) or ((self.base & self.known) != (x.base & x.known))
+      return not self.__eq__(x)
    
    def __lt__(self, x):
       """Test whether the known portions are known and equal in the other"""
@@ -78,24 +79,26 @@ class TernaryString(object):
    
    def __le__(self, x):
       """Test whether the known portions are known and equal in the other"""
-      return ((self.known & x.known) == self.known) \
-         and ((self.base & self.known) == (x.base & self.known))
+      return (((self.known & x.known) == self.known) 
+              and ((self.base & self.known) == (x.base & self.known)))
 
    def __irshift(self, x):
       self.base >>= x
       self.known >>= x
+      return self
 
    def __rshift__(self, x):
-      return TernaryString(self.base >> x, self.known >> x)
+      return TernaryString(self.base >> x, self.known >> x, self.length)
    
    __rrshift__ = __rshift__
    
    def __ilshift__(self, x):
       self.base <<= x
       self.known <<= x
+      return self
    
    def __lshift__(self, x):
-      return TernaryString(self.base << x, self.known << x)
+      return TernaryString(self.base << x, self.known << x, self.length)
    
    __rlshift__ = __lshift__
    
@@ -104,9 +107,9 @@ class TernaryString(object):
          #where are they KNOWN to be different
          self.base ^= x.base
          self.known &= x.known
-         self.base = (common & xor) | (~common & self.base)
       else:
          self.base ^= x
+      return self
    
    def __xor__(self, x):
       if isinstance(x, TernaryString):
@@ -124,6 +127,7 @@ class TernaryString(object):
          self.known &= x.known
       else:
          self.base &= x
+      return self
    
    def __and__(self, x):
       if isinstance(x, TernaryString):
@@ -141,6 +145,7 @@ class TernaryString(object):
          self.known |= x.known
       else:
          self.base |= x
+      return self
    
    def __or__(self, x):
       if isinstance(x, TernaryString):
@@ -153,54 +158,60 @@ class TernaryString(object):
    __ror__ = __or__
    
    def __invert__(self):
-      self.base = ~self.base
+      return TernaryString(~self.base, self.known, self.length)
    
    def __gt__(self, x):
       return self.__ge__(x) and self.__ne__(x)
    
    def __ge__(self, x):
       """Test whether the known portions are known and equal in the other"""
-      return ((self.known & x.known) == x.known) \
-         and ((self.base & x.known) == (x.base & x.known)) 
+      return (((self.known & x.known) == x.known) 
+              and ((self.base & x.known) == (x.base & x.known))) 
    
    def __add__(self, x):
-      return TernaryString(self.base | x.base, self.known | x.known)
+      return self.__or__(x)
    
-   def __mult__(self, x):
-      if isinstance(x, TernaryString):
-         return TernaryString(self.base & x.base, self.known & x.known)
-      elif isinstance(x, ndarray):
+   def __mul__(self, x):
+      if isinstance(x, ndarray):
          y = zeros(len(x))
          for i in xrange(len(y)):
             if self[i]:
                y[i] = x[i]
          return y
-      return None
+      return self.__and__(x)
             
    def __getitem__(self, i):
       """True if index i is known and equal to 1, else False"""
       if isinstance(i, slice):
          base = copy.copy(self.base)
          known = copy.copy(self.known)
+         length = self.length
          if i.stop:
-            mask = ((1L) << (i.stop + 1)) - 1L
+            mask = ((1L) << (i.stop)) - 1L
             known &= mask
+            length = i.stop
          if i.start:
             base >>= i.start
             known >>= i.start
-         return TernaryString(base, known)
+            length -= i.start
+         return TernaryString(base, known, length)
       return ((self.base & (1L << i)) & self.known) != 0L
       
    def __setitem__(self, i, val):
       if isinstance(i, slice):
          mask = -1L
          if i.stop:
-            mask = ((1L) << (i.stop + 1)) - 1L
+            mask = ((1L) << (i.stop)) - 1L
          if i.start:
-            mask &= ~(((1L) << (i.start + 1)) - 1L)
+            mask &= ~(((1L) << (i.start)) - 1L)
             
-         self.known |= mask
-         self.base = (self.base & ~mask) | ((val << (i.start or 0)) & mask)
+         if isinstance(val, TernaryString):
+            self.known = ((self.known & ~mask) |
+                          ((val.known << (i.start or 0)) & mask))
+            self.base = (self.base & ~mask) | ((val.base << (i.start or 0)) & mask)
+         else:
+            self.known |= mask
+            self.base = (self.base & ~mask) | ((val << (i.start or 0)) & mask)
          return
    
       mask = 1L << i
@@ -229,14 +240,24 @@ class TernaryString(object):
 
    def __len__(self):
       return self.length
+   
+   def __iter__(self):
+      mask = 1L
+      for i in xrange(self.length):
+         if (mask & self.base & self.known) > 0L:
+            yield True
+         else:
+            yield False
+         mask <<= 1
+      raise StopIteration
 
       
-   def distance(self, x, upTo):
+   def distance(self, x):
       """hamming distance"""
       mask = 1L
-      z = (self.base & ~x.base) | (~self.base & x.base)
+      z = (self.base & self.known) ^ (x.base & x.known)
       total = 0
-      for i in xrange(upTo):
+      for i in xrange(self.length):
          if (mask & z) > 0:
             total += 1
          mask <<= 1
@@ -252,13 +273,13 @@ class TernaryString(object):
       
    @classmethod   
    def fromArray(cls, arr):
-      ret = TernaryString(0L, 0L)
+      ret = TernaryString(0L, 0L, len(arr))
       for i in xrange(len(arr)):
          ret[i] = arr[i] > 0.0
       return ret
 
    @classmethod
-   def random(cls, p, length):
+   def random(cls, length):
       numBytes = int(ceil(length / 8.0))
       numFull  = length / 8
       initial = ''
