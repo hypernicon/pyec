@@ -13,10 +13,10 @@ import numpy as np
 
 from basic import PopulationDistribution
 from pyec.config import Config
-from pyec.history import LocalMinimumHistory
+from pyec.history import LocalBestHistory
 from pyec.space import Euclidean
 
-class PSOHistory(LocalMinimumHistory):
+class PSOHistory(LocalBestHistory):
    """A :class:`History` for Particle Swarm Optimization.
    Rembers the local best and the velocities.
    
@@ -56,7 +56,7 @@ class PSOHistory(LocalMinimumHistory):
       
       #print shape(rp), shape(self.bestLocal), shape(self.bestGlobal), shape(self.positions), shape(self.velocities)
       bestLocal = np.array([x for x,s in self.localBestPop])
-      bestGlobal = self.minSolution
+      bestGlobal = self.best()[0]
       velocities = (self.config.omega * self._velocities 
                     + self.config.phip * rp * (bestLocal - self._positions) 
                     + self.config.phig * rg * (bestGlobal - self._positions))   
@@ -68,17 +68,17 @@ class PSOHistory(LocalMinimumHistory):
       
    def internalUpdate(self, population):
       super(PSOHistory, self).internalUpdate(population)
-      initialize = False
+      initialize = True
       if self._positions is not None:
          del self._positions
-         initialize = True
+         initialize = False
       
       self._positions = np.array([x for x,s in population])
       
-      if self.config.space.constraint is not None:
-         center, scale = self.config.space.constraint.extent()
-         self._positions = maximum(self._positions, center-scale)
-         self._positions = minimum(self._positions, center+scale)
+      if hasattr(self.config.space, 'extent'):
+         lower, upper = self.config.space.extent()
+         self._positions = np.maximum(self._positions, lower)
+         self._positions = np.minimum(self._positions, upper)
          
       if initialize:
          self.upperv = self._positions.max(axis=0)

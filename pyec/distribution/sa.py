@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 import numpy as np
 
-from .basic import PopulationDistribution
+from .basic import PopulationDistribution, GaussianProposal
 from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.ec.mutators import Gaussian, Bernoulli
 
@@ -51,49 +51,53 @@ class SimulatedAnnealingAcceptance(PopulationDistribution):
                    learningRate = 1.0,
                    temp0 = 1.0,
                    restart = 0.0,
-                   divisor = 1.0,
+                   divisor = 100.0,
                    discount = .99,
-                   populationSize = 1.0,
+                   populationSize = 1,
                    history = DoubleMarkovHistory)
 
    def compatible(self, history):
       return (hasattr(history, 'lastPopulation')
-              and hasattr(history, 'penultimate'))
+              and hasattr(history, 'penultimate')
+              and hasattr(history, 'reportAcceptance'))
 
    def batch(self, popSize):
       temp = self.temperature()
       last = self.history.lastPopulation()
       penultimate = self.history.penultimate()
-      scoreProposed = np.array([s for x,s in lastPopulation])
+      scoreProposed = np.array([s for x,s in last])
       scoreAccepted = np.array([s for x,s in penultimate])
       exponent = (scoreProposed - scoreAccepted) / temp
-      if not self.config.minimize:
+      if self.config.minimize:
          exponent = -exponent
-      probs = minimum(1.0, np.exp(exponent))
-      selection = np.random.binomial(1, probs, shape(probs))
+      probs = np.minimum(1.0, np.exp(exponent))
+      selection = np.random.binomial(1, probs, np.shape(probs))
+      accepted = 0.0
       result = []
       for i,sel in enumerate(selection):
          if sel > 0.5:
             result.append(last[i][0])
+            accepted += 1.0
          else:
             result.append(penultimate[i][0])
+      self.history.reportAcceptance(accepted / popSize)
       return result
       
    def temperature(self):
-      n = self.history.updates / self.config.divisor
+      n = 1 + float(self.history.updates) / self.config.divisor
       if hasattr(self.config.schedule, '__call__'):
          return self.config.schedule(n)
       elif self.config.schedule == "linear":
-         return 1. / (n * self.learningRate)
+         return 1. / (n * self.config.learningRate)
       elif self.config.schedule == "log":
-         return 1. / (log(n) * self.learningRate)
+         return 1. / (np.log(n) * self.config.learningRate)
       elif self.config.schedule == "discount":
          return 1. / (self.config.temp0 * (self.config.discount ** n))
 
 
 # Euclidean space
 RealSimulatedAnnealing = (
-   Gaussian[_(sd=.005)] << SimulatedAnnealingAcceptance
+   GaussianProposal[_(sd=.005)] << SimulatedAnnealingAcceptance
 )
 
 # fixed-length bit strings
@@ -102,10 +106,10 @@ BinarySimulatedAnnealing = (
 )
 
 # Structure search in a Bayes net
-BayesNetSimulatedAnnealing = (
-   StructureProposal[_(branchFactor=5)] <<
-   SimulatedAnnealingAcceptance[_(learningRate=0.1,
-                                  temp0=100.,
-                                  discount=0.95,
-                                  divisor=400.)]
-)[_(minimize=False)]
+#BayesNetSimulatedAnnealing = (
+#   StructureProposal[_(branchFactor=5)] <<
+#   SimulatedAnnealingAcceptance[_(learningRate=0.1,
+#                                  temp0=100.,
+#                                  discount=0.95,
+#                                  divisor=400.)]
+#)[_(minimize=False)]

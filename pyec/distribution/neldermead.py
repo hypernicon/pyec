@@ -59,8 +59,12 @@ class NelderMeadHistory(History):
             self.centroid = None
             self.reflectScore = None
             self.shrinkIdx = None
-            self.current = None
-            self._empty = True
+            if self.config.initial is None:
+               self.current = self.config.space.random()
+            elif hasattr(self.config.initial, 'batch'):
+               self.current = self.config.initial.batch(1)[0]
+            else:
+               self.current = self.config.initial()
             self.state = NM_REFLECT_INIT   
    
    def reflect(self):
@@ -101,7 +105,7 @@ class NelderMeadHistory(History):
          if len(self.vertices) < self.dim + 1:
             self.current = self.vertices[0][0].copy()
             idx = len(self.vertices) - 1
-            self.current[idx] += self.scale
+            self.current[idx] += self.scale[idx]
             """
             if abs(self.current[idx] - self.config.center) > self.config.scale:
                self.current[idx] = self.config.center + self.config.scale
@@ -149,7 +153,7 @@ class NelderMeadHistory(History):
                self.reflect()
          # contract
          elif self.state == NM_CONTRACT:
-            if self.better(self.reflectScore > self.vertices[-1][1]):
+            if self.better(self.reflectScore, self.vertices[-1][1]):
                if not self.better(self.reflectScore, pop[0][1]):
                   self.state = NM_REFLECT
                   self.vertices[-1] = pop[0]

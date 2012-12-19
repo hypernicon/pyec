@@ -10,18 +10,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 import numpy as np
 
-from pyec.distribution.basic import FixedCube
-from pyec.distribution.de import DEConfigurator
-from pyec.distribution.cmaes import CmaesConfigurator
-from pyec.distribution.neldermead import NMConfigurator
-from pyec.distribution.gss import GSSConfigurator
-from pyec.distribution.sa import SAConfigurator
-from pyec.distribution.pso import PSOConfigurator
-from pyec.distribution.ec.evoanneal import REAConfigurator
+from pyec.config import Config
+from pyec.distribution.de import DifferentialEvolution as DE
+from pyec.distribution.cmaes import Cmaes
+from pyec.distribution.neldermead import NelderMead
+from pyec.distribution.gss import GeneratingSetSearch
+from pyec.distribution.sa import RealSimulatedAnnealing
+from pyec.distribution.pso import ParticleSwarmOptimization
+from pyec.distribution.ec.evoanneal import RealEvolutionaryAnnealing
+from pyec.space import Euclidean, Hyperrectangle
 
-def optimize(configurator, func, dimension=5, population=25, generations=100,**kwargs):
+def optimize(optimizer, func, dimension=5, population=25, generations=100,**kwargs):
    """
-      Configure and run an optimizer on a function using a :class:`ConfigBuilder` object in order to instantiate the optimizer.
+      Configure and run an optimizer on a function.
       
       By default the function will be minimize, but maximization can be performed by setting the keyword argument *minimize* to ``False``.
       
@@ -41,8 +42,8 @@ def optimize(configurator, func, dimension=5, population=25, generations=100,**k
       - weierstrass -- Everywhere continuous, nowhere differentiable; minimum is 0 at 0.
       
       
-      :param configurator: A builder used to generate a parameterized optimizer.
-      :type configurator: :class:`ConfigBuilder`
+      :param optimizer: A :class:`PopulationDistribution` subclass
+      :type optimizer: ``class``
       :param func: The function to be optimized, or a lookup key for a benchmark.
       :type func: any callable object or str
       :param dimension: The vector dimension in the search domain
@@ -62,36 +63,32 @@ def optimize(configurator, func, dimension=5, population=25, generations=100,**k
       * constraint -- A :class:`Boundary` object implementing a constraint region (default is unconstrained). 
       
    """
-   configurator.cfg.printOut = False
-   minimize = True
-   if kwargs.has_key('minimize'):
-      minimize = kwargs['minimize']
-   if type(func) == type("") or type(func) == type(u""):
+   space = ("constraint" in kwargs and kwargs["constraint"]
+            or Euclidean(dim=dimension))
+   config = {
+      "minimize":True,
+      "space":space,
+      "populationSize":population
+   }
+   config.update(kwargs)
+   
+   if isinstance(func, basestring):
       from pyec.util.registry import BENCHMARKS
       func = BENCHMARKS.load(func)
-      if minimize:
-         h = func
-         func = lambda x: -h(x)
-   if kwargs.has_key('display'):
-      configurator.cfg.printOut = kwargs['display']
-   configurator.cfg.save = kwargs.has_key('save') and kwargs['save'] or False
-   configurator.cfg.dim = dimension
-   configurator.cfg.bounded = False
-   if kwargs.has_key('constraint'):
-      configurator.cfg.in_bounds = kwargs['constraint']
-      configurator.cfg.bounded = True
-   if kwargs.has_key('initial'):
-      configurator.cfg.initialDistribution = kwargs['initial']
-   elif configurator.cfg.bounded:
-      configurator.cfg.initialDistribution = FixedCube(configurator.cfg)
-   if minimize:
+      #if config["minimize"]:
+      #   h = func
+      #   func = lambda x: -h(x)
+         
+   if config["minimize"]:
      optfunc = lambda x: -func(x)
    else:
      optfunc = func
-   alg = configurator.configure(generations, population, dimension, optfunc)
-   alg.run("",optfunc)
-   trainer = alg.trainer
-   return trainer.maxOrg, minimize and -trainer.maxScore or trainer.maxScore
+   
+   config = Config(**config)
+   alg = (optimizer[config] << generations)()
+   pop = alg[None, optfunc]()
+   alg.history.update(pop, optfunc, space)
+   return alg.history.best()
 
 def differential_evolution(func, **kwargs):
    """
@@ -103,14 +100,9 @@ def differential_evolution(func, **kwargs):
       
       * CR -- The crossover probability for DE, default 0.2.
       * F -- The learning rate for DE, default 0.5.
-      * variance -- The standard deviation for DE to use during unconstrained initialization, default 1.0.
    
    """
-   configurator = DEConfigurator()
-   configurator.cfg.crossoverProb = kwargs.has_key('CR') and kwargs["CR"] or .2
-   configurator.cfg.learningRate = kwargs.has_key('F') and kwargs["F"] or .5
-   configurator.cfg.varInit = kwargs.has_key('variance') and kwargs["variance"] or 1.0
-   return optimize(configurator, func, **kwargs)
+   return optimize(DE, func, **kwargs)
 
 """
    Synonym for :func:`differential_evolution`.
@@ -129,11 +121,10 @@ def cmaes(func, **kwargs):
       * variance -- The standard deviation for CMA-ES to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.
       
    """
-   
-   configurator = CmaesConfigurator()
-   configurator.cfg.varInit = kwargs.has_key('variance') and kwargs["variance"] or 1.0
-   configurator.cfg.muProportion = kwargs.has_key('parents') and kwargs['parents'] or .5
-   return optimize(configurator, func, **kwargs)
+   popSize = "population" in kwargs and kwargs["population"] or 25
+   if "parents" in kwargs:
+      kwargs["mu"] = int(kwargs["parents"] * popSize)
+   return optimize(Cmaes, func, **kwargs)
    
 def nelder_mead(func, generations=500, population=1, **kwargs):
    """
@@ -144,18 +135,12 @@ def nelder_mead(func, generations=500, population=1, **kwargs):
       Extra keyword arguments:
       
       * convergence -- The tolerance on the simplex before restarting; default 1e-10.
-      * variance -- The standard deviation for CMA-ES to use during initialization; default is 1.0 (unconstrained spaces).
       * alpha, beta, gamma, delta -- standard parameters for Nelder-Mead.
       
    """
-   configurator = NMConfigurator()
-   configurator.cfg.varInit = kwargs.has_key('variance') and kwargs["variance"] or 1.0
-   if kwargs.has_key('convergence'): configurator.cfg.restartTolerance = kwargs['convergence']
-   if kwargs.has_key('alpha'): configurator.cfg.alpha = kwargs['alpha']
-   if kwargs.has_key('beta'): configurator.cfg.beta = kwargs['beta']
-   if kwargs.has_key('gamma'): configurator.cfg.gamma = kwargs['gamma']
-   if kwargs.has_key('delta'): configurator.cfg.delta = kwargs['delta']
-   return optimize(configurator, func, generations=generations, population=population, **kwargs)
+   if "convergence" in kwargs:
+      kwargs["tol"] = kwargs["convergence"]
+   return optimize(NelderMead, func, generations=generations, population=population, **kwargs)
 
 """
    Synomnym for :func:`nelder_mead`.
@@ -179,13 +164,11 @@ def generating_set_search(func, generations=500, population=1, **kwargs):
       * initial_step -- The initial step.
       
    """
-   configurator = GSSConfigurator()
-   if kwargs.has_key('convergence'): configurator.cfg.tolerance = kwargs['convergence']
-   if kwargs.has_key('penalty_func'): configurator.cfg.penalty = kwargs['penalty_func']
-   if kwargs.has_key('expansion_factor'): configurator.cfg.expandStep = kwargs['expansion_factor']
-   if kwargs.has_key('contraction_factor'): configurator.cfg.contractStep = kwargs['contraction_factor']
-   if kwargs.has_key('initial_step'): configurator.cfg.stepInit = kwargs['initial_step']
-   return optimize(configurator, func, generations=generations, population=population, **kwargs)
+   if kwargs.has_key('convergence'): kwargs["tol"] = kwargs['convergence']
+   if kwargs.has_key('expansion_factor'): kwargs["expand"] = kwargs['expansion_factor']
+   if kwargs.has_key('contraction_factor'): kwargs["contract"] = kwargs['contraction_factor']
+   if kwargs.has_key('initial_step'): kwargs["step"] = kwargs['initial_step']
+   return optimize(GeneratingSetSearch, func, generations=generations, population=population, **kwargs)
 
 """
    Synonym for :func:`generating_set_search`.
@@ -202,19 +185,14 @@ def simulated_annealing(func, generations=1000, population=1, **kwargs):
       
       * schedule -- One of (log, linear) for a logarithmic or linear cooling schedule, or a function T(n) to return the temperature at time n.
       * learning_rate -- The temperature will be divided by the learning rate is a logarithmic or linear schedule is used.
-      * proposal -- The proposal distribution; a Gaussian with adaptive variance is used by default.
-      * variance -- Initial standard deviation for the default Gaussian.
       * restart_prob -- A probability to restart simulated annealing; 0.001 by default.
       
    """
-   configurator = SAConfigurator()
-   if kwargs.has_key('schedule'): configurator.cfg.schedule = kwargs['schedule']
-   if kwargs.has_key('proposal'): configurator.cfg.proposal = kwargs['proposal']
-   if kwargs.has_key('learning_rate'): configurator.cfg.learningRate = kwargs['learning_rate']
-   if kwargs.has_key('schedule_divisor'): configurator.cfg.divisor = kwargs['schedule_divisor']
-   if kwargs.has_key('variance'): configurator.cfg.varInit = kwargs['variance']
-   if kwargs.has_key('restart_prob'): configurator.cfg.restartProb = kwargs['restart_prob']
-   return optimize(configurator, func, generations=generations, population=population, **kwargs)
+   if kwargs.has_key('variance'): kwargs["sd"] = kwargs['variance']
+   if kwargs.has_key('learning_rate'): kwargs["learningRate"] = kwargs['learning_rate']
+   if kwargs.has_key('schedule_divisor'): kwargs["divisor"] = kwargs['schedule_divisor']
+   if kwargs.has_key('restart_prob'): kwargs["restart"] = kwargs['restart_prob']
+   return optimize(RealSimulatedAnnealing, func, generations=generations, population=population, **kwargs)
 
 """
    Synonym for :func:`simulated_annealing`.
@@ -234,11 +212,10 @@ def particle_swarm_optimization(func, generations=100, population=25, **kwargs):
       * phi_p -- The local best influence parameter.
       
    """
-   configurator = PSOConfigurator()
-   if kwargs.has_key('omega'): configurator.cfg.omega = kwargs['omega']
-   if kwargs.has_key('phi_g'): configurator.cfg.phig = kwargs['phi_g']
-   if kwargs.has_key('phi_p'): configurator.cfg.phip = kwargs['phi_p']
-   return optimize(configurator, func, generations=generations, population=population, **kwargs)
+   if kwargs.has_key('omega'): kwargs["omega"] = kwargs['omega']
+   if kwargs.has_key('phi_g'): kwargs["phig"] = kwargs['phi_g']
+   if kwargs.has_key('phi_p'): kwargs["phip"] = kwargs['phi_p']
+   return optimize(ParticleSwarmOptimization, func, generations=generations, population=population, **kwargs)
 
 """
    Synonym for :func:`particle_swarm_optimization`.
@@ -255,20 +232,17 @@ def evolutionary_annealing(func, **kwargs):
       
       * learning_rate -- A scaling factor controlling the temperature schedule; smaller numbers search more slowly and thoroughly, larger numbers search faster and less thoroughly. 
       * variance -- The initial standard deviation of the Gaussian mutation distribution, i.e. how locally the search is spaced. Defaults to 1.0, does not need to be changed.
-      * space_scale -- For unconstrained optimization, the standard deviation of the initial Gaussian and of the Gaussian warping in the space. Should match a general notion of the size or scale of the function in the search domain.
-      
+      * jogo2012 -- Use the parameters from Lockett and Miikkulainen in JOGO   
    """
-   
-   configurator = REAConfigurator()
-   if kwargs.has_key('learning_rate'): configurator.cfg.learningRate = kwargs['learning_rate']
-   if kwargs.has_key('variance'): configurator.cfg.varInit = kwargs['variance']
-   configurator.cfg.spaceScale = kwargs.has_key('space_scale') and kwargs['space_scale'] or 10.0
+   if kwargs.has_key('learning_rate'): kwargs["learningRate"] = kwargs['learning_rate']
+   if kwargs.has_key('variance'): kwargs["sd"] = kwargs['variance']
    if kwargs.has_key('jogo2012'):
-      configurator.cfg.jogo2012 = True
-      configurator.cfg.anneal_log = True
-      configurator.cfg.partitionLongest = False
-   kwargs['save'] = True
-   return optimize(configurator, func, **kwargs)
+      from pyec.util.partitions import VectorSeparationAlgorithm
+      kwargs["jogo2012"] = True
+      kwargs["schedule"] = "log"
+      kwargs["separator"] = VectorSeparationAlgorithm
+
+   return optimize(RealEvolutionaryAnnealing, func, **kwargs)
 
 """
    Synonym for :func:`evolutionary_annealing`.

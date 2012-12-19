@@ -28,14 +28,14 @@ class History(object):
         self.config = config
         self.evals = 0
         self.minSolution = None
-        self.minScore = 1e300
+        self.minScore = np.inf
         self.maxSolution = None
-        self.maxScore = -1e300 
+        self.maxScore = -np.inf 
         self._empty = True
         if not hasattr(self, 'cache'):
             self.cache = LRUCache() # 10,000 items by default
         self.updates = 0
-        self.printEvery = 1000000000000L #how often to print generation report
+        self.printEvery = config.printEvery or 1000000000000L #how often to print generation report
         self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
                           "minSolution", "maxSolution","_empty","cache",
                           "update","printEvery", "useCache"])
@@ -96,10 +96,17 @@ class History(object):
             return score1 > score2
     
     def best(self):
+        """Get the best solution, whether minimizing or maximizing.
+        
+        Same as ``optimal``
+        
+        """
         if self.config.minimize:
             return self.minimal()
         else:
             return self.maximal()
+    
+    optimal = best
     
     def minimal(self):
         """Get the minimal solution and its score.
@@ -249,14 +256,33 @@ class MarkovHistory(History):
      def __init__(self, config):
          super(MarkovHistory, self).__init__(config)
          self.population = None
-         self.attrs |= set(["population"])
+         self.acceptanceRate = None
+         self.tempAcceptanceRate = None # intentionally not in attrs; transient
+         self.attrs |= set(["population", "acceptanceRate"])
          
      def internalUpdate(self, population):
          """Overrides ``internalUpdate`` in :class:`History`"""
          self.population = population
+         if self.tempAcceptanceRate is not None:
+            if self.acceptanceRate is None:
+                self.acceptanceRate = self.tempAcceptanceRate
+            else:
+                self.acceptanceRate *= (self.updates - 1.0) / self.updates
+                self.acceptanceRate += self.tempAcceptanceRate / self.updates
          
      def lastPopulation(self):
          return self.population
+        
+     def reportAcceptance(self, newRate):
+         """Record the current acceptance rate, to be added into the existing
+         acceptance rate on update. Used by simulated annealing, evolution
+         strategies to update a proposal distribution.
+         
+         :param newRate: The lastest acceptance percentange
+         :type newRate: ``float``
+         
+         """
+         self.tempAcceptanceRate = newRate
      
 class DoubleMarkovHistory(MarkovHistory):
      """Like :class:`MarkovHistory`, but stores the last two populations.
@@ -264,15 +290,15 @@ class DoubleMarkovHistory(MarkovHistory):
      """
      def __init__(self, config):
          super(DoubleMarkovHistory, self).__init__(config)
-         self.penultimate = None
-         self.attrs |= set(["penultimate"])
+         self._penultimate = None
+         self.attrs |= set(["_penultimate"])
          
      def internalUpdate(self, population):
-         self.penultimate = self.population
+         self._penultimate = self.population
          super(DoubleMarkovHistory, self).internalUpdate(population)
          
      def penultimate(self):
-         return self.penultimate
+         return self._penultimate
      
         
 class MultiStepMarkovHistory(History):
@@ -368,7 +394,8 @@ class CheckpointedHistory(History):
     """
     def __init__(self, config, historyClass):
         super(CheckpointedHistory, self).__init__(config)
-        self.history = historyClass(self.config) 
+        self.history = historyClass(self.config)
+        self.history.printEvery = 100000000L
         self.cache = self.history.cache
         self.useCache = self.history.useCache
         self.states = []

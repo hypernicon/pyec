@@ -116,7 +116,7 @@ class GeneratingSetSearchHistory(History):
                self.state = GSS_SEARCH
                
             self.contractStep()
-            if self.step < self.config.tol:
+            if (self.step < self.config.tol).all():
                self.__init__(self.config)
                return
             #   #self.step = self.config.stepInit * self.config.scale

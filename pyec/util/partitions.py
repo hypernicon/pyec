@@ -111,10 +111,9 @@ class Point(object):
             stats.start("insert")
             segment.scoreTree.insert(gp, segment.config, stats)
             stats.stop("insert")
-         except:
+         except SeparationException:
             logg.debug("Exception when separating or inserting points")
             gp.alive = False
-            raise
 
    @classmethod
    def sampleTournament(cls, segment, temp, config):
@@ -664,16 +663,14 @@ class Partition(object):
       children = current.children
       while len(children) > 0:
          if current == last:
-            #if not (pointrep < pointrep).any():
-            #   print "partition.traverse looped, exception"
-            #   print lower
-            #   print upper
-            #   print pointrep
+            print "partition.traverse looped, exception"
+            print current.bounds.extent()
+            print point.point
             raise Exception("Loop in partition.traverse!")
          last = current
          
          for child in children:
-            if child.bounds.in_bounds(point.point):
+            if child.bounds.in_bounds(point.point, index=child.index):
                current = child
                path.append(current)
                children = current.children

@@ -14,7 +14,7 @@ from numpy.linalg import cholesky, eig, inv, det
 import numpy as np
 from basic import Distribution, PopulationDistribution
 from pyec.config import Config
-from pyec.history import History
+from pyec.history import History, SortedMarkovHistory
 
 class CmaesHistory(SortedMarkovHistory):
     """A history that stores the parameters for CMA-ES"""
@@ -72,7 +72,8 @@ class CmaesHistory(SortedMarkovHistory):
     def internalUpdate(self, population):
         super(CmaesHistory,self).internalUpdate(population)
         base = np.array([x for x, s in self.population[:self.mu]])
-        if self.mean is None: 
+        if self.mean is None:
+           print self.population
            oldMean = np.average([x for x,s in self.population])
         else:
            oldMean = self.mean
@@ -125,14 +126,13 @@ class CmaesHistory(SortedMarkovHistory):
                self.active = cholesky(self.covar) # np.dot(self.B, np.dot(np.diag(1. / self.D), self.B.transpose())) 
             except Exception:
                self.covar = oldCovar
-        if self.sigma > self.scale:
-            self.sigma = self.scale
+        self.sigma = np.minimum(self.sigma, self.scale)
         detcv = det(self.covar)
-        if self.sigma * detcv > self.scale:
+        if (self.sigma * detcv > self.scale).any():
             self.sigma /= (detcv * self.sigma) 
             self.sigma *= self.scale
     
-        if self.restart and self.sigma * detcv < 1e-25:
+        if self.restart and (self.sigma * detcv).max() < 1e-25:
             self.__init__(self.config)
 
 
@@ -198,7 +198,7 @@ class Cmaes(PopulationDistribution):
    def batch(self, popSize):
       if self.history.mean is  None:
          if self.config.initial is None:
-             return [self.config.space.random for i in xrange(popSize)]
+             return [self.config.space.random() for i in xrange(popSize)]
          elif hasattr(self.config.initial, 'batch'):
              return self.config.initial.batch(popSize)
          else:

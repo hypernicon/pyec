@@ -70,7 +70,7 @@ class Space(Region):
         """
         raise NotImplementedError("Not all spaces have well-defined extent")
    
-    def in_bounds(self, x):
+    def in_bounds(self, x, **kwargs):
         """Check whether a point is inside of the constraint region.
         
         Should first check type, then check constraint.
@@ -182,7 +182,7 @@ class Euclidean(Space):
         parts = [((point+i)**2).sum() for i in np.arange(10)]
         return ",".join([str(pt) for pt in parts])
     
-    def in_bounds(self, point):
+    def in_bounds(self, point, **kwargs):
         return isinstance(point, self.type) and np.shape(point) == (self.dim,)
 
 
@@ -209,7 +209,10 @@ class Hyperrectangle(Euclidean):
         self.lower = lower
         self.upper = upper
     
-    def in_bounds(self, y):
+    def in_bounds(self, y, **kwargs):
+        if "index" in kwargs:
+            index = kwargs["index"]
+            return self.lower[index] <= y[index] <= self.upper[index]
         return (self.lower <= y).all() and (y <= self.upper).all()
    
     def extent(self):
@@ -268,6 +271,9 @@ class Binary(Space):
         
         """
         return TernaryString.random(.5, self.dim)
+    
+    def in_bounds(x, **kwargs):
+        return isinstance(x, TernaryString) and x.length == self.dim
 
 
 class BinaryReal(Binary):
@@ -354,7 +360,7 @@ class BinaryRectangle(Binary):
         dim = spec.length
         super(BinaryRectangle, self).__init__(dim)
        
-    def in_bounds(self, x):
+    def in_bounds(self, x, **kwargs):
         """Test containment; x must "know" more than spec, and be equal at 
         the known bits.
        
@@ -364,6 +370,14 @@ class BinaryRectangle(Binary):
                   otherwise
        
         """
+        if "index" in kwargs:
+            index = 1L << kwargs["index"]
+            if (self.spec.known & index) == 0:
+                return True
+            elif (x.known & index) == 0:
+                return False
+            else:
+                return (self.spec.base & index) == (x.spec.base & index)
         return self.spec < x
     
     def extent(self):

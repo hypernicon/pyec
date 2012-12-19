@@ -13,7 +13,7 @@ import numpy.linalg as la
 import binascii, struct
 import inspect
 from pyec.config import Config, ConfigBuilder
-from pyec.history import History, SortedMarkovHistory
+from pyec.history import History, MarkovHistory, SortedMarkovHistory, DoubleMarkovHistory
 from pyec.space import Euclidean, Binary
 from pyec.util.registry import BENCHMARKS
 from pyec.util.TernaryString import TernaryString
@@ -664,30 +664,39 @@ class GaussianProposal(ProposalDistribution, PopulationDistribution):
    config = Config(sd=1.0,   # the initial standard dev for the Gaussian; 
                              # may be float or ndarray
                    sd_factor=1.05, # the factor to multiply / divide
-                                   # when adjusting the std. dev. dynamically          
+                                     # when adjusting the std. dev. dynamically
+                   # use a DoubleMarkovHistory to match simulated annealing
+                   # so that convolution doesn't cause the different
+                   # histories to disagree on the acceptance rate.
+                   # This feels like a hack, and could cause
+                   # problems for anyone using this class, and so
+                   # a better solution should be devised.
+                   history=DoubleMarkovHistory
                   )
    
    def __init__(self, **kwargs):
-      super(Gaussian, self).__init__(**kwargs)
-      if not isinstance(config.space, Euclidean):
+      super(GaussianProposal, self).__init__(**kwargs)
+      if not isinstance(self.config.space, Euclidean):
          raise ValueError("Cannot use Gaussian on a non-Euclidean space")
       self.var = self.config.sd
+      if not isinstance(self.var, ndarray):
+         self.var = self.var * ones(self.config.space.dim)
       self.varIncr = self.config.sd_factor
       self.last = None
       
    def compatible(self, history):
       return hasattr(history, 'lastPopulation')
 
-   def sample(self):
-      center = self.history.lastPopulation
+   def sample(self, **kwargs):
+      center = self.history.lastPopulation()
       if center is None:
          center = zeros(self.config.space.dim)
+      else:
+         index = "index" in kwargs and kwargs["index"] or 0
+         center = center[index][0]
       
       var = self.variance()
-      if kwargs.has_key('idx') and hasattr(var, '__len__'):
-         var = var[kwargs['idx']]
-      
-      varied = random.randn(self.config.dim) * var + center
+      varied = random.randn(self.config.space.dim) * var + center
       
       # check bounds; call again if outside bounds
       try:
@@ -700,7 +709,7 @@ class GaussianProposal(ProposalDistribution, PopulationDistribution):
       return varied
 
    def batch(self, popSize):
-      return [self.sample(idx=i) for i in xrange(popSize)]
+      return [self.sample(index=i) for i in xrange(popSize)]
    
    def density(self, x, center):
       var = self.variance()
@@ -718,23 +727,20 @@ class GaussianProposal(ProposalDistribution, PopulationDistribution):
                      
    def variance(self):
       return self.var
+   
+   def update(self, history, fitness):
+      super(GaussianProposal, self).update(history,fitness)
+      if hasattr(history, 'acceptanceRate') and (history.evals % 100) == 0:
+         self.adjust(history.acceptanceRate)
             
    def adjust(self, rate):
-      if not hasattr(rate, '__len__'):
-         if rate < .23:
-            self.var /= self.varIncr
-         else:
-            if self.var < self.config.scale / 5.:
-               self.var *= self.varIncr
+      if rate is None:
          return
-      self.var = self.var * ones(len(rate))
-      for i in  xrange(len(rate)):
-         if rate[i] < .23:
-            self.var[i] /= self.varIncr
-         else:
-            if self.var[i] < self.config.scale / 5.:
-               self.var[i] *= self.varIncr
-      #print rate, self.var
+      elif rate < .23:
+         self.var /= self.varIncr
+      else:
+         self.var *= self.varIncr
+         self.var = minimum(self.config.space.scale/5., self.var)
 
    def densityRatio(self, x1, x2, i = None):
       if self.usePrior:
