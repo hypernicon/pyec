@@ -8,117 +8,109 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from numpy import *
-from basic import PopulationDistribution, FixedCube, Gaussian
-from pyec.config import Config, ConfigBuilder
+import inspect
+import numpy as np
 
-class PSOConfigurator(ConfigBuilder):
-   registryKeys = ('omega', 'phig', 'phip', 'center', 'scale')
-   registry = {
-      'sphere': (-.5, 2.0, 2.0, 0, 5.12),
-      'ellipsoid': (-.5, 2.0, 2.0, 0, 5.12),
-      'rotatedEllipsoid': (-.5, 2.0, 2.0, 0, 5.12),
-      'rosenbrock': (-.5, 2.0, 2.0, 0, 5.12),
-      'rastrigin': (-.5, 2.0, 2.0, 0, 5.12),
-      'miscaledRastrigin': (-.5, 2.0, 2.0, 0, 5.12),
-      'schwefel': (-.5, 2.0, 2.0, 0, 512),
-      'salomon': (-.5, 2.0, 2.0, 0, 30),
-      'whitley': (-.5, 2.0, 2.0, 0, 5.12),
-      'ackley': (-.5, 2.0, 2.0, 0, 30),
-      'langerman': (-.5, 2.0, 2.0, 0, 15),
-      'shekelsFoxholes': (-.5, 2.0, 2.0, 0, 15),
-      'shekel2': (-.5, 2.0, 2.0, 5, 10),
-      'rana': (-.5, 2.0, 2.0, 0, 520),
-      'griewank': (-.5, 2.0, 2.0, 0, 600)
-   }
+from basic import PopulationDistribution
+from pyec.config import Config
+from pyec.history import LocalBestHistory
+from pyec.space import Euclidean
 
-   def __init__(self, *args):
-      super(PSOConfigurator, self).__init__(ParticleSwarmOptimization)
-      self.cfg.sort = False
-      self.cfg.omega = -.5
-      self.cfg.phig = 2.0
-      self.cfg.phip = 2.0
-      
-   def postConfigure(self, cfg):   
-      if cfg.bounded:
-         cfg.initialDistribution = FixedCube(cfg)
-      else:
-         cfg.initialDistribution = Gaussian(cfg)
-
-
-
-class ParticleSwarmOptimization(PopulationDistribution):
-   unsorted = True
+class PSOHistory(LocalBestHistory):
+   """A :class:`History` for Particle Swarm Optimization.
+   Rembers the local best and the velocities.
    
-   def __init__(self, cfg):
-      super(ParticleSwarmOptimization, self).__init__(cfg)
-      self.initial = cfg.initialDistribution
-      if hasattr(self.initial, 'batch'):
-         self.positions = array(self.initial.batch(cfg.populationSize))
-         self.velocities = array(self.initial.batch(cfg.populationSize))
-      else:
-         self.positions = array([self.initial() for i in xrange(cfg.populationSize)])
-         self.velocities = array([self.initial() for i in xrange(cfg.populationSize)])
-      #print self.positions, self.velocities
-      self.upperv = self.positions.max(axis=0)
-      self.lowerv = self.positions.min(axis=0)
-      self.bestLocal = self.positions.copy()
-      self.bestLocalScore = zeros(cfg.populationSize)
-      self.omega = cfg.omega
-      self.phig = cfg.phig
-      self.phip = cfg.phip
-      self.bestGlobal = self.bestLocal
-      self.bestGlobalScore = None
-   
-   @classmethod
-   def configurator(cls):
-      return PSOConfigurator(cls)      
+   """
+   def __init__(self, config):
+      super(PSOHistory, self).__init__(config)
+      self._positions = None
+      self._velocities = None
+      self.lowerv = None
+      self.upperv = None
+      self.attrs |= set(["_velocities", "_positions", "upperv", "lowerv"])
       
+   def velocities(self):
+      return self._velocities
+   
+   def positions(self):
+      return self._positions
+
    def updateVelocity(self):
-      rp = outer(random.random_sample(self.config.populationSize), ones(self.config.dim))
-      rg = outer(random.random_sample(self.config.populationSize), ones(self.config.dim))
+      popSize = self.config.populationSize
+      if self._velocities is None:
+         if self.config.initial is None:
+            self._velocities = np.array([self.config.space.random()
+                                         for i in xrange(popSize)])
+         elif (inspect.isclass(self.config.initial) and
+               isinstance(self.config.initial, PopulationDistribution)):
+            self._velocities = np.array([self.config.initial.batch(popSize)])
+         else:
+            self._velocities = np.array([self.config.initial()
+                                         for i in xrange(popSize)])
+         return
+      
+      rp = np.outer(np.random.random_sample(popSize),
+                    np.ones(self.config.dim))
+      rg = np.outer(np.random.random_sample(popSize),
+                    np.ones(self.config.dim))
       
       #print shape(rp), shape(self.bestLocal), shape(self.bestGlobal), shape(self.positions), shape(self.velocities)
-      velocities = self.omega * self.velocities \
-       + self.phip * rp * (self.bestLocal - self.positions) \
-       + self.phig * rg * (self.bestGlobal - self.positions)   
-      del self.velocities
-      self.velocities = maximum(self.lowerv, minimum(self.upperv, velocities))
+      bestLocal = np.array([x for x,s in self.localBestPop])
+      bestGlobal = self.best()[0]
+      velocities = (self.config.omega * self._velocities 
+                    + self.config.phip * rp * (bestLocal - self._positions) 
+                    + self.config.phig * rg * (bestGlobal - self._positions))   
+      del self._velocities
+      self._velocities = np.maximum(self.lowerv,
+                                    np.minimum(self.upperv, velocities))
       del rp
       del rg
       
+   def internalUpdate(self, population):
+      super(PSOHistory, self).internalUpdate(population)
+      initialize = True
+      if self._positions is not None:
+         del self._positions
+         initialize = False
       
+      self._positions = np.array([x for x,s in population])
+      
+      if hasattr(self.config.space, 'extent'):
+         lower, upper = self.config.space.extent()
+         self._positions = np.maximum(self._positions, lower)
+         self._positions = np.minimum(self._positions, upper)
+         
+      if initialize:
+         self.upperv = self._positions.max(axis=0)
+         self.lowerv = self._positions.min(axis=0)
+      
+      self.updateVelocity() 
+
+
+class ParticleSwarmOptimization(PopulationDistribution):
+   """Particle Swarm Optimization.
+       
+      Config parameters
+      
+      * omega -- The decay factor for velocities
+      * phig -- The global best component in velocity update
+      * phip -- The local best component in velocity update
+   
+   """
+   config = Config(history=PSOHistory,
+                   omega=-.5,
+                   phig=2.0,
+                   phip=2.0)
+   
+   def __init__(self, **kwargs):
+      super(ParticleSwarmOptimization, self).__init__(**kwargs)
+      if self.config.space.type != np.ndarray:
+         raise ValueError("Space must have type numpy.ndarray")
+   
+   def compatible(self, history):
+      return isinstance(history, PSOHistory)
+   
    def batch(self, popSize):
-      # print sqrt((velocities ** 2).sum())
-      positions = self.positions + self.velocities
-      if self.config.bounded:
-         center = self.config.center
-         scale = self.config.scale
-         if self.config.bounded and hasattr(self.config.in_bounds, 'extent'):
-            center, scale = self.config.in_bounds.extent()
-         positions = maximum(positions, center-scale)
-         positions = minimum(positions, center+scale)
+      positions = self.history.positions() + self.history.velocities()
       
       return positions
-
-   def update(self, generation, population):
-      del self.positions
-      self.positions = array([x for x,s in population])
-
-      idx = 0
-      maxScore = 0
-      maxOrg = None
-      for x,s in population:
-         if maxOrg is None or s >= maxScore:
-            maxOrg = x
-            maxScore = s
-         if self.bestGlobalScore is None or s >= self.bestLocalScore[idx]:
-            self.bestLocalScore[idx] = s
-            self.bestLocal[idx] = x
-         idx += 1
-      if self.bestGlobalScore is None or maxScore >= self.bestGlobalScore:
-         self.bestGlobalScore = maxScore
-         self.bestGlobal = maxOrg
-         
-      self.updateVelocity()
-      #print self.positions   

@@ -7,12 +7,17 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+import binascii
+import copy
+import inspect
+import numpy as np
+import struct
 
-from numpy import *
 from pyec.util.TernaryString import TernaryString
-import copy, binascii, struct
+
 from pyec.distribution.basic import PopulationDistribution
 from pyec.util.partitions import Segment, Partition
+from pyec.history import MarkovHistory, MultiStepMarkovHistory
 
 class Crosser(object):
    """ 
@@ -20,6 +25,7 @@ class Crosser(object):
       
       :param config: The configuration parameters.
       :type config: :class:`Config`
+      
    """
    def __init__(self, config):
       self.config = config
@@ -33,29 +39,34 @@ class Crosser(object):
          :param prob: Probability of performing any crossover. Returns the first item in ``orgs`` if a bernoulli test on this parameter fails.
          :type prob: float between 0 and 1
          :returns: The recombined organism.
+         
       """
       return orgs[0]
+
 
 class UniformCrosser(Crosser):
    """
       Uniform crossover.
       
       See <http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#Uniform_Crossover_and_Half_Uniform_Crossover>
+   
    """
    def __call__(self, orgs, prob):
-      if random.random_sample() > prob:
+      if np.random.random_sample() > prob:
          return orgs[0]
-      if isinstance(orgs[0], ndarray):
-         rnd = random.random_sample(len(orgs[0])).round()
+      if self.config.space.type == np.ndarray:
+         rnd = np.random.random_sample(len(orgs[0])).round()
          return rnd * orgs[0] + (1 - rnd) * orgs[1]
-      elif isinstance(orgs[0], TernaryString):
-         rnd = random.bytes(len(str(orgs[0])) * 8)
+      elif self.config.space.type == TernaryString:
+         rnd = np.random.bytes(len(str(orgs[0])) * 8)
          rnd = long(binascii.hexlify(rnd), 16)
          base = rnd & orgs[0].base | ~rnd & orgs[1].base
          known = rnd & orgs[0].known | ~rnd & orgs[1].known
          return TernaryString(base, known)
       else:
-         return None
+         err = "Unknown type for UniformCrossover: {0}"
+         raise NotImplementException(err.format(self.config.space.type))
+
 
 class OnePointDualCrosser(Crosser):
    """
@@ -78,10 +89,12 @@ class OnePointDualCrosser(Crosser):
    """
    dual = True
    def __call__(self, orgs, prob=1.0):
-      if random.random_sample() > prob:
+      if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = random.random_integers(0, len(orgs[0]) - 1)
-      return append(orgs[0][:idx], orgs[1][idx:], axis=0), append(orgs[1][:idx], orgs[0][idx:], axis=0)
+      idx = np.random.random_integers(0, len(orgs[0]) - 1)
+      return (np.append(orgs[0][:idx], orgs[1][idx:], axis=0),
+              np.append(orgs[1][:idx], orgs[0][idx:], axis=0))
+
 
 class OnePointCrosser(Crosser):
    """
@@ -92,10 +105,11 @@ class OnePointCrosser(Crosser):
       See <http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#One-point_crossover>.
    """
    def __call__(self, orgs, prob=1.0):
-      if random.random_sample() > prob:
+      if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = random.random_integers(0, len(orgs[0]) - 1)
-      return append(orgs[0][:idx], orgs[1][idx:], axis=0)
+      idx = np.random.random_integers(0, len(orgs[0]) - 1)
+      return np.append(orgs[0][:idx], orgs[1][idx:], axis=0)
+      
       
 class TwoPointCrosser(Crosser):
    """
@@ -104,19 +118,21 @@ class TwoPointCrosser(Crosser):
       See <http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#Two-point_crossover>.
    """
    def __call__(self, orgs, prob=1.0):
-      if random.random_sample() > prob:
+      if np.random.random_sample() > prob:
          return orgs[0]
-      idx1 = random.random_integers(0, len(orgs[0]) - 1)
+      idx1 = np.random.random_integers(0, len(orgs[0]) - 1)
       idx2 = idx1
       while idx1 == idx2:
-         idx2 = random.random_integers(0, len(orgs[0]) - 1)
+         idx2 = np.random.random_integers(0, len(orgs[0]) - 1)
     
       if idx1 > idx2:
          a = idx1
          idx1 = idx2
          idx2 = a
 
-      return append(append(orgs[0][:idx1], orgs[1][idx1:idx2],axis=0), orgs[0][idx2:], axis=0)
+      return np.append(np.append(orgs[0][:idx1], orgs[1][idx1:idx2],axis=0),
+                       orgs[0][idx2:],
+                       axis=0)
 
 
 class IntermediateCrosser(Crosser):
@@ -126,7 +142,8 @@ class IntermediateCrosser(Crosser):
       Normally used by evolution strategies.
    """
    def __call__(self, orgs, prob=1.0):
-      return array(orgs).sum(axis=0) / len(orgs)
+      return np.array(orgs).sum(axis=0) / len(orgs)
+      
       
 class DominantCrosser(Crosser):
    """
@@ -135,9 +152,10 @@ class DominantCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       x = []
       for i in xrange(len(orgs[0])):
-         idx = random.randint(0, len(orgs) - 1)
+         idx = np.random.randint(0, len(orgs) - 1)
          x.append(orgs[idx][i])
-      return array(x)
+      return np.array(x)
+      
       
 class DifferentialCrosser(Crosser):
    def __init__(self, learningRate, crossoverProb):
@@ -146,25 +164,72 @@ class DifferentialCrosser(Crosser):
 
    def __call__(self, orgs, prob=1.0):
       y, a, b, c = orgs
-      d = random.randint(0, len(y))
+      d = np.random.randint(0, len(y))
       idx2 = 0
       for yi in y:
-         r = random.random_sample()
+         r = np.random.random_sample()
          if idx2 == d or r < self.CR:
             y[idx2] = a[idx2] + self.F * (b[idx2] - c[idx2]) 
             idx2 += 1
       return y
 
+
+class Crossover(PopulationDistribution):
+   """
+      Performs recombination using a crossover policy given by
+      a :class:`Crosser` instance.
+   
+      Config parameters
+      
+      * crossoverProb -- A probability that is sampled; if a bernouli test
+                         on this value fails, then no crossover is performed,
+                         and the first selected organism is chosen
+      * order -- The number of organisms to crossover at each step
+      * crosser -- A :class:`Crosser` to perform the crossover
+      
+   """
+   config = Config(crossoverProb=1.0, # probability of performing crossover
+                   order=2, # number of solutions to crossover
+                   crosser=UniformCrosser, # descendant of Crosser
+                   history=MultiStepMarkovHistory) # num steps must match order
+   
+   def __init__(self, **kwargs):
+      super(Crossover, self).__init__(**kargs)
+      self.dual = (hasattr(self.config.crosser, 'dual')
+                   and self.config.crosser.dual)
+   
+   def compatible(self, history):
+      return (hasattr(history, 'populations') and hasattr(history, 'order')
+              and history.order() == self.config.order)
+   
+   def batch(self, popSize):
+      if self.dual:
+         psize = popSize / 4
+      else:
+         psize = popSize
+      crossoverProb = self.config.crossoverProb
+      if crossoverProb < 1e-16:
+         return [x for x,s in self.history.populations[0]]
+      pops = self.history.populations
+      newpop = [self.crosser(orgs, crossoverProb) for orgs in zip(*pops)]
+      if self.dual:
+         pop = []
+         for x,y in newpop:
+            pop.append(x)
+            pop.append(y)
+         newpop = pop
+      return newpop
+
+
 class Mutation(PopulationDistribution):
    """
       Base class for mutation operators. Provides a method ``mutate`` that performs mutation on a single member of a population.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
-   def __init__(self, config):
-      super(Mutation, self).__init__(config)
-      self.population = None
+   config = Config(history=MarkovHistory)
+   
+   def needsScore(self):
+      return False
    
    def mutate(self, x):
       """
@@ -178,83 +243,24 @@ class Mutation(PopulationDistribution):
 
    def batch(self, popSize):
       pop = []
-      for i, val in enumerate(self.population):
+      for i, val in enumerate(self.history.lastPopulation()):
          x,s = val
          self.idx = i
          z = self.mutate(x)
-         if isinstance(z, ndarray) and self.config.bounded:
-            while not self.config.in_bounds(z):
-               z = self.mutate(x)
+         cnt = 0
+         while not self.config.space.in_bounds(z):
+            cnt += 1
+            if cnt > 10000:
+               raise RuntimeError("Rejection sampling in mutation failed"
+                                  " to generate a point in the space after"
+                                  " 10,000 attempts.")
+            z = self.mutate(x)
          pop.append(z)
       return pop
-   
-   def update(self, generation, population):
-      self.population = population
 
-class Crossover(Mutation):
-   """
-      Performs recombination using a crossover policy given by
-      a :class:`Crosser` instance.
-   
-      :param selector: A selector to use for choosing the "mother" organism(s).
-      :type selector: :class:`Selector`
-      :param crossFunc: A crossover policy.
-      :type config: :class:`Crosser`
-      :param order: The number of parents; default is 2.
-      :type order: int
-   """
-   def __init__(self, selector, crossFunc, order=2):
-      super(Crossover, self).__init__(selector.config)
-      self.selector = selector
-      self.crosser = crossFunc
-      self.order = order
-      self.n = 1
-      self.dual = hasattr(crossFunc, 'dual') and crossFunc.dual
-   
-   def mutate(self, x):
-      raise Exception, "Operation not supported"   
-            
-   def batch(self, popSize):
-      if self.dual:
-         psize = popSize / 4
-      else:
-         psize = popSize
-      crossoverProb = hasattr(self.config, 'crossoverProb') and self.config.crossoverProb or 1.0
-      if crossoverProb < 1e-16:
-         return [x for x,s in self.population1]
-      if hasattr(self.config, 'passArea') and self.config.passArea:
-         pops = [[x[0] for x,s in self.population1]]
-         areas = [x[1].area for x,s in self.population1]
-         crossoverProb *= array(areas) ** (1. / self.config.dim)
-      else:
-         pops = [[x for x,s in self.population1]]
-         crossoverProb = crossoverProb * ones(psize) * sqrt(1./self.n)
-      for i in xrange(self.order - 1):
-         if hasattr(self.config, 'passArea') and self.config.passArea:
-            pops.append([x[0] for x in self.selector.batch(psize)])
-         else:
-            pops.append(self.selector.batch(psize))
-      pops.append(list(crossoverProb))
-      newpop = [self.crosser(orgs[:-1], orgs[-1]) for orgs in zip(*pops)]
-      if self.dual:
-         pop = []
-         for i in xrange(popSize/2):
-            pop.append(pops[0][i])
-         for x,y in newpop:
-            pop.append(x)
-            pop.append(y)
-         newpop = pop
-      if hasattr(self.config, 'passArea') and self.config.passArea:
-         return zip(newpop, areas)
-      else:
-         return newpop
-   
-   def update(self, generation, population):
-      self.n = generation
-      self.population1 = population # copy.copy(population)
-      # self.selector should already be updated, update is called to give us
-      # the selected result
-      self.selector.update(generation, population)
+   def compatible(self, historyClass):
+      return hasattr(historyClass, 'lastPopulation')
+ 
 
 class Gaussian(Mutation):
    """
@@ -262,115 +268,117 @@ class Gaussian(Mutation):
       of a real vector.
       
       Config parameters
-      * stddev -- The standard deviation to use. 
-      * mutationProb -- The probability of mutating each component; defaults to 1.0
+      * sd -- The standard deviation to use. 
+      * p -- The probability of mutating each component; defaults to 1.0
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   def __init__(self, config):
-      super(Gaussian, self).__init__(config)
-      self.sd = config.stddev
-      
+  """
+   config = Config(sd=1.0,
+                   p=1.0)
+   
+   def __init__(self, **kwargs):
+      super(Gaussian, self).__init__(**kwargs)
+      if self.config.space.type != np.ndarray:
+         raise ValueError("Space for Gaussian must have type numpy.ndarray")
+         
+   def sd(self):
+      return self.config.sd
+         
    def mutate(self, x):
-      if hasattr(self.config, 'mutationProb'):
-         p = random.binomial(1, self.config.mutationProb, len(x))
-         return x + p * random.randn(len(x)) * self.sd
-      return x + random.randn(len(x)) * self.sd
+      p = np.random.binomial(1, self.config.p, len(x))
+      return x + p * np.random.randn(len(x)) * self.sd()
       
    def density(self, center, point):
-      return exp(-(1. / (2. * self.sd * self.sd)) * ((point - center) ** 2).sum()) / self.sd / sqrt(2*pi)
+      sd = self.sd()
+      return np.exp(-(1. / (2. * sd * sd)) *
+                    ((point - center) ** 2).sum()) / sd / np.sqrt(2*np.pi)
+
 
 class DecayedGaussian(Gaussian):
    """
       Gaussian mutation with a variance that decreases over time according to fixed formula.
       
       Config parameters
-      * varInit -- A scale factor on the standard deviation.
-      * varDecay -- A multiplicative decay factor.
-      * varExp -- An exponential decay factor.
+      * sd -- A scale factor on the standard deviation.
+      * decay -- A multiplicative decay factor.
+      * decayExp -- An exponential decay factor.
       
       Standard deviation is determined by::
       
-         sd = varInit * exp(-(generation * varDecay) ** varExp)
+         sd = sd0 * exp(-(generation * varDecay) ** varExp)
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
-   def update(self, generation, population):
-      super(DecayedGaussian, self).update(generation, population)
-      self.sd = self.config.varInit * exp(-(generation * self.config.varDecay) ** self.config.varExp) 
+   config = Config(decay=1.0,
+                   decayExp=1.0)
+   
+   def sd(self):
+      n = self.history.updates
+      decay = self.config.decay
+      decayExp = self.config.decayExp
+      return self.config.sd * np.exp(-(n * decay) ** decayExp) 
 
-class AreaSensitiveGaussian(Mutation):
+
+class AreaSensitiveGaussian(Gaussian):
    """
       Gaussian mutation with a variance that depends on the size of a
       partition of the space (see :class:`pyec.util.partitions.Partition`).
       
       Config parameters:
-      * varInit -- Scaling factor for the standard deviation; defaults to 1.0.
-      * scale -- The scale of the space (half the width).
-      * spaceScale -- A scaling factor for the space size.
+      * jogo2012 -- Whether to use the methods from Lockett & Miikkulainen, 2012
       
       Standard deviation is determined by::
       
-         sd = (varInit * scale * (area ** (1/dim)) / sqrt(generation)
+         sd = .5 * ((upper-lower) * scale * ((1/log(generations) ** (1/dim))
          
       where ``dim`` is the dimension of the space (``config.dim``) and 
       ``area`` is the volume of the partition region for the object being mutated.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
-   sdavg = 0
-   sdcnt = 0
-   sdmin = 1e100
-   gen = 1
+   config = Config(jogo2012=False,
+                   history=PartitionHistory)
+   
+   def compatible(self, history):
+      return isinstance(history, PartitionHistory)
+   
    def mutate(self, x):
-      center = self.config.center
-      scale = self.config.scale
-      if self.config.bounded and hasattr(self.config.in_bounds, 'extent'):
-         center, scale = self.config.in_bounds.extent()
-      else:
-         scale = self.config.spaceScale
-      y = x[0]
+      """Apply area-sensitive gaussian mutation.
+         Assume that the passed value is a :class:`Point` object
+         
+         :param x: The point to mutate
+         :type x: :class:`Point`
+         :returns: A numpy.ndarray mutation the ``point`` property of ``x``.
+      
+      """
+      center = self.config.space.center
+      scale = self.config.space.scale
+         
+      y = x.point
       if hasattr(self.config, 'jogo2012') and self.config.jogo2012:
-         area = x[1].area
+         area = y.partition_node.area
          # sd = 2 * scale / (-log(area))
          if area < 0.0: 
             area = 1e-100
-         sd = self.config.varInit * scale * (area ** (1./len(y)))
-         sd /= self.gen ** .5
+         sd = self.config.sd * scale * (area ** (1./len(y)))
+         sd /= self.history.updates ** .5
       else:
-         area = x[1]
+         area = y.partition_node
          sd = .5 * (area.bounds[1] - area.bounds[0])
-         sd = minimum(sd, scale)
-         sd *= (1./log(self.gen)) ** (1./self.config.dim)
+         sd = np.minimum(sd, scale)
+         sd *= (1./np.log(self.history.updates)) ** (1./self.config.space.dim)
       
-      self.sdavg = (self.sdavg * self.sdcnt + sd) / (self.sdcnt + 1.0)
-      self.sdcnt += 1
-      self.sdmin = (average(sd) < self.sdmin) and average(sd) or self.sdmin
-      ret = y + random.randn(len(y)) * sd
-      if self.config.bounded and not self.config.in_bounds(ret):
-         ret = maximum(minimum(ret, scale+center),center-scale)
-         #y + random.randn(1) * sd
+      ret = y + np.random.randn(len(y)) * sd
+      if self.config.space.in_bounds(ret):
+         ret = np.maximum(np.minimum(ret, scale+center),center-scale)
+         
       return ret
 
    def density(self, info, point):
-      scale = self.config.scale
-      if self.config.bounded and hasattr(self.config.in_bounds, 'extent'):
-         dummy, scale = self.config.in_bounds.extent()
+      scale = self.config.space.scale
       center, area = info
-      sd = self.config.varInit * scale * (area ** (1./len(point)))
+      sd = self.config.sd * scale * (area ** (1./len(point)))
       
-      return exp(-(1./ (2 * sd * sd)) * ((point - center) ** 2).sum()) / sd / sqrt(2 * pi) 
+      return exp(-(1./ (2 * sd * sd)) *
+                 ((point - center) ** 2).sum()) / sd / np.sqrt(2*np.pi) 
 
-   def update(self, generation, population):
-      super(AreaSensitiveGaussian, self).update(generation, population)
-      self.sdcnt = 0
-      self.sdavg = 0.0
-      self.sd = self.sdmin
-      self.sdmin = 1e100
-      self.gen = generation
 
 class UniformArea(Mutation):
    """
@@ -379,88 +387,77 @@ class UniformArea(Mutation):
       :param config: The configuration parameters.
       :type config: :class:`Config`
    """
-   segment = None
-   sd = 1.0
    def mutate(self, x):
-      node, lower, upper = Partition.objects.traversePoint(self.segment.id, x, self.config)
-      self.sd = (node.area < self.sd) and node.area or self.sd
-      r = random.random_sample(len(x))
-      return lower + r * (upper - lower)
+      """Apply uniform area mutation.
+         Assume that the passed value is a :class:`Point` object
+         
+         :param x: The point to mutate
+         :type x: :class:`Point`
+         :returns: A numpy.ndarray mutation the ``point`` property of ``x``.
       
-   def update(self, n, population):
-      super(UniformArea, self).update(n, population)
-      if self.segment is None:
-         self.segment = Segment.objects.get(name=self.config.segment)
+      """
+      y = x.point
+      area = x.partition_node
+      upper = area.bounds[1]
+      lower = area.bounds[0]
+      sd = (area.area < 1.0) and area.area or 1.0
+      r = np.random.random_sample(len(x))
+      return lower + r * (upper - lower)
+
 
 class Cauchy(Mutation):
    """
       Cauchy mutation.
       
       Config parameters
-      * stddev -- The width parameter of the Cauchy (\pi)
+      * sd -- The width parameter of the Cauchy (\pi)
+      * p -- The probability of mutating each component, 1.0 by default
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
+   config = Config(sd=1.0,
+                   p = 1.0)
+
    def __init__(self, config):
       super(Cauchy, self).__init__(config)
-      self.sd = config.stddev
 
    def mutate(self, x):
-      return x + random.standard_cauchy(len(x))
-      
-class OnePointCauchy(Mutation):
-   """
-      Mutates just one random component of an organism with a Cauchy distribution.
-      
-      Config parameter
-      * stddev -- The width parameter of the Cauchy (\pi)
-      * mutationProb -- The probability of applying the mutation.
-      
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   def __init__(self, config):
-      super(OnePointCauchy, self).__init__(config)
-      self.sd = config.stddev
+      p = np.random.binomial(1, self.config.p, len(x))
+      return x + self.config.sd * p * np.random.standard_cauchy(len(x))
 
-   def mutate(self, x):
-      if self.idx >= len(self.population) / 2 \
-       and random.random_sample() < self.config.mutationProb:
-         idx = random.randint(0, len(x))
-         x[idx] += .3 * random.standard_cauchy()
-      return x
 
-class DecayedCauchy(Cauchy):
-   """
-      Like :class:`DecayedGaussian`, except with a Cauchy distribution.
-     
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   def update(self, generation, population):
-      super(DecayedGaussian, self).update(generation, population)
-      self.sd = self.config.varInit * exp(-(generation * self.config.varDecay) ** self.config.varExp) 
-      
 class Bernoulli(Mutation):
    """
       Bernoulli mutation on a :class:`TernaryString` object. Randomly flips bits on a fully specified binary string.
       
       Config parameters
-      * bitFlipProbs -- The probability of flipping a bit. 
-   
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      * p -- The probability of flipping each bit.   
+ 
    """
+   config = Config(p=0.01)
 
-   def __init__(self, config):
-      super(Bernoulli, self).__init__(config)
-      self.bitFlipProbs = .5
-      if hasattr(config, 'bitFlipProbs'):
-         self.bitFlipProbs = config.bitFlipProbs
+   def __init__(self, **kwargs):
+      super(Bernoulli, self).__init__(**kwargs)
+      if (not inspect.isclass(self.config.space.type) or
+          not issubclass(self.config.space.type, TernaryString)):
+         raise ValueError("Space must produce points descending "
+                          "from TernaryString")
+      p = self.config.p
+      if ((isinstance(p, np.ndarray) and (p > 1.0).any()) or
+          (not isinstance(p, np.ndarray) and p > 1.0)):
+         raise ValueError("bit flip probability > 1.0: " + str(p))
+
+   def p(self):
+      return self.config.p
 
    def mutate(self, x):
-      numBytes = int(ceil(self.config.dim / 8.0))
+      """This method uses an iterative algorithm to flip bits in
+      a TernaryString with a given probability. The algorithm essentially
+      uses the binary representation of the bit-flipping probability in order
+      to convert random byte sampling (``p=.5``) to account for any probability,
+      with resolution of ``1e-16``.
+      
+      """
+      numBytes = int(np.ceil(self.config.space.dim / 8.0))
       numFull  = self.config.dim / 8
       initial = ''
       if numBytes != numFull:
@@ -471,15 +468,13 @@ class Bernoulli(Mutation):
             initMask |= 1
          initial = struct.pack('B',initMask)
       
-      start = (1L << (self.config.dim + 1)) - 1
-      p = self.bitFlipProbs
-      if (isinstance(p, ndarray) and (p > 1.0).any()) or (not isinstance(p, ndarray) and p > 1.0): raise Exception, "bit flip probability > 1.0: " + str(p)
+      start = (1L << (self.config.space.dim + 1)) - 1
+      p = self.p()
       base = 0L
       active = TernaryString(x.known,x.known)
-      while (isinstance(p, ndarray) and (p > 1e-16).any()) or (not isinstance(p, ndarray) and p > 1e-16):
-         #print p
-         reps = minimum(100, -floor(log2(p)))
-         #print p, reps
+      while ((isinstance(p, ndarray) and (p > 1e-16).any()) or
+             (not isinstance(p, ndarray) and p > 1e-16)):
+         reps = np.minimum(100, -np.floor(np.log2(p)))
          q = 2.0 ** -reps
          next = start
          activeReps = TernaryString(active.base, active.known)
@@ -487,13 +482,12 @@ class Bernoulli(Mutation):
             for j, pj in enumerate(p):
                if pj < 1e-16:
                   active[j] = False
-            #print "active: ", active.toArray(p.size)
             for i in xrange(int(max(reps))):
                for j,r in enumerate(reps):
                   if i >= r:
                      activeReps[j] = False
-               #print "activeReps: ", activeReps.toArray(p.size)
-               next &= activeReps.base & long(binascii.hexlify(random.bytes(numBytes)), 16)
+               next &= (activeReps.base &
+                        long(binascii.hexlify(random.bytes(numBytes)), 16))
          else:
             for i in xrange(int(reps)):
                next &= long(binascii.hexlify(random.bytes(numBytes)), 16) 
@@ -502,44 +496,55 @@ class Bernoulli(Mutation):
             
       
       base = x.base & ~base | ~x.base & base
-      known = x.known# long(binascii.hexlify(initial + '\xff'*numFull), 16)
+      known = x.known
       return TernaryString(base, known)
-
 
 
 class DecayedBernoulli(Bernoulli):
    """
       Like :class:`DecayedGaussian`, but with a Bernoulli distribution instead of a Gaussian; the bit flipping probability decays to zero.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      Config parameters
+      * sd -- A scale factor on the standard deviation.
+      * decay -- A multiplicative decay factor.
+      * decayExp -- An exponential decay factor.
+      
+      Bit flip prob is determined by::
+      
+         p = p0 * exp(-(generation * varDecay) ** varExp)
+      
    """
-   def update(self, generation, population):
-      super(DecayedBernoulli, self).update(generation, population)
-      self.bitFlipProbs = self.config.varInit * exp(-(generation * self.config.varDecay) ** self.config.varExp) 
+   config = Config(decay=1.0,
+                   decayExp=1.0)
+   
+   def p(self):
+      n = self.history.updates
+      decay = self.config.decay
+      decayExp = self.config.decayExp
+      return self.config.p * np.exp(-(n * decay) ** decayExp) 
+
 
 class AreaSensitiveBernoulli(Bernoulli):
    """
-      Like :class:`AreaSensitiveGaussian` but with a Bernoulli. The bit flipping prob decays with the logarithm of the area of a partition region, i.e.::
+      Like :class:`AreaSensitiveGaussian` but with a Bernoulli.
       
-         bf = self.config.varInit / (-log(area))
-      
-      where ``area`` is the volume of a partition region.
+      Because a bit space is finite, there is no need to decay, but
+      we still want to make exiting the area less likely to promote
+      exploration within the selected area.
       
       Config parameters
-      * varInit -- The scaling factor for the bit flipping probability.
+      * p -- The bit-flipping prob
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
-   bfavg = 0
-   bfcnt = 0
-   bfmin = 1e100
+   _p = None
+   
+   def p(self):
+      return self._p
    
    def density(self, x, z):
       y = x[0]
       area = x[1]
-      bf = self.config.varInit / (-log(area))
+      bf = self._p
       prod = 1.0
       for i in xrange(self.config.dim):
          if z[i] != y[i]:
@@ -549,87 +554,51 @@ class AreaSensitiveBernoulli(Bernoulli):
       return prod
       
    def mutate(self, x):
-      y = x[0]
-      area = x[1]
-      bf = self.config.varInit / (-log(area))
-      #bf = .2 ** (-log(area)/self.config.rawdim)
-      self.bfavg = (self.bfavg * self.bfcnt + bf) / (self.bfcnt + 1.0)
-      self.bfcnt += 1
-      self.bfmin = (bf < self.bfmin) and bf or self.bfmin
-      self.bitFlipProbs = minimum(bf, 1.0)
-      ret = super(AreaSensitiveBernoulli, self).mutate(y)
-      #print "bit flip prob: ", self.bitFlipProbs, area
-      #print "percent flipped: ", abs(y.toArray(self.config.dim) - ret.toArray(self.config.dim)).sum() / self.config.dim
-      return ret
+      y = x.point
+      area = x.partition_node
+      diff = (area.bounds[1] ^ area.bounds[0]).toArray()
+      logArea = self.config.space.dim - diff.sum()
+      self._p = (diff * self.config.p  +
+                 (1.0 - diff) * self.config.p ** logArea)
+      return super(AreaSensitiveBernoulli, self).mutate(y)
 
-   def update(self, generation, population):
-      super(AreaSensitiveBernoulli, self).update(generation, population)
-      self.bitFlipProbs = self.bfavg
-      self.bfmin = 1e100
-      self.bfcnt = 0
-      self.bfavg = 0.0
-
-class UniformAreaBernoulli(Bernoulli):
-   """
-      Like :class:`UniformArea`, but in a binary space. Flips the bits on an organism so that after the mutation, the object remains in the same partition region, and is uniformly chosen within the partition region. See :class:`pyec.util.partitions.Partition`.
-      
-      Config params
-      * varInit -- Scaling factor for the bit flipping probability.
-      
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   segment = None
-   bitFlipProbs = 1.0
-   def mutate(self, x):
-      node, lower, upper = Partition.objects.traversePoint(self.segment.id, x[0], self.config)
-      #print node.id, lower, upper
-      #bitFlipProbs = (upper - lower) * .5
-      self.bitFlipProbs = maximum(((upper - lower) > .75) * .5 * self.config.varInit,self.config.varInit / (-log(x[1]))) 
-      #print self.bitFlipProbs
-      self.sd = .1/-log(x[1])
-      ret = super(UniformAreaBernoulli, self).mutate(x[0])
-      #print "x: ", x[0]
-      #print "y: ", ret
-      return ret
-      
-   def update(self, n, population):
-      super(UniformAreaBernoulli, self).update(n, population)
-      if self.segment is None:
-         self.segment = Segment.objects.get(name=self.config.segment)      
-
-      
+  
 class EndogeneousGaussian(Mutation):
    """
-      Gaussian mutation for evolution strategies, where the adaptive mutation parameters are encoded with the organism.
+      Gaussian mutation for evolution strategies, where the adaptive mutation
+      parameters are encoded with the organism.
+    
+      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      Config params
+      
+      * sd -- The standard deviation to start with.
+      * baseDim -- The portion of the genotype encoding the point, i.e. the
+                   number of dimensions being searched.
+      
    """
-   def __init__(self, config):
-      super(EndogeneousGaussian, self).__init__(config)
-      self.sd = config.varInit
-      self.dim = config.dim
-      self.scale = config.scale
-      self.bounded = config.bounded
-      self.tau = self.sd / sqrt(2*sqrt(config.populationSize))
-      self.tau0 = self.sd / sqrt(2*config.populationSize)
-      self.numEndogeneous = self.dim
+   config = Config(baseDim=None)
+   
+   def __init__(self, **kwargs):
+      super(EndogeneousGaussian, self).__init__(**kwargs)
+      if self.config.space.type != np.ndarray:
+         raise ValueError("Endogeneous Gaussian expects space with "
+                          "type numpy.ndarray")
+      self.sd = self.config.sd
+      self.dim = self.config.baseDim
+      self.tau = self.sd / np.sqrt(2*np.sqrt(self.config.populationSize))
+      self.tau0 = self.sd / np.sqrt(2*self.config.populationSize)
    
    def mutate(self, x):
-      z = 2 * self.scale * ones(self.dim)
-      while (abs(z) > self.scale).any():
-         y = x[:self.dim]
-         sig = x[self.dim:]
-         rnd = self.tau * random.randn(len(sig))
+      y = x[:self.dim]
+      sig = x[self.dim:]
+      rnd = self.tau * np.random.randn(len(sig))
             
-         sig2 = exp(self.tau0 * random.randn(1)) * sig * exp(rnd) 
-         z = y + sig2 * random.randn(len(y))
-         if not self.bounded:
-            break
-      return append(z, sig2, axis=0) 
+      sig2 = np.exp(self.tau0 * np.random.randn(1)) * sig * np.exp(rnd) 
+      z = y + sig2 * np.random.randn(len(y))
       
-   
+      return np.append(z, sig2, axis=0) 
+
 
 class CorrelatedEndogeneousGaussian(Mutation):
    """
@@ -637,21 +606,42 @@ class CorrelatedEndogeneousGaussian(Mutation):
       Correlated Matrix Adaption method of Hansen and Ostermeier.
       
       This method is obsolete and is very different from the modern version.
+      
+      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS
+      
+      
+      Config Parameters:
+      
+      * baseDim -- The dimension of the Euclidean space without mutation params
+      * sd
+      * cmaCumulation
+      * cmaDamping
+      * cmaCorrelation
+      
    """
+   config = Config(baseDim=None,
+                   sd=1.0,
+                   cmaCumulation=1.0,
+                   cmaDamping=1.0,
+                   cmaCorrelation=1.0)
+   
    def __init__(self, config):
       super(CorrelatedEndogeneousGaussian,self).__init__(config)
-      self.sd = config.varInit
-      self.dim = config.dim
-      self.center = config.center
-      self.scale = config.scale
-      self.bounded = config.bounded
-      self.cumulation = config.cmaCumulation
-      self.cu = sqrt(self.cumulation * (2 - self.cumulation))
-      self.beta = config.cmaDamping
-      self.chi = sqrt(config.populationSize) \
-       * (1. - (1./(4*config.populationSize)) \
-          + (1./(21 * (config.populationSize ** 2))))
-      self.correlation = config.cmaCorrelation
+      if self.config.space.type != np.ndarray:
+         raise ValueError("Correlated Endogeneous Gaussian expects space with "
+                          "type numpy.ndarray")
+      
+      self.sd = self.config.sd
+      self.dim = self.config.space.dim
+      self.center = self.config.space.center
+      self.scale = self.config.space.scale
+      self.cumulation = self.config.cmaCumulation
+      self.cu = np.sqrt(self.cumulation * (2 - self.cumulation))
+      self.beta = self.config.cmaDamping
+      self.chi = (np.sqrt(self.config.populationSize) 
+                  * (1. - (1./(4*self.config.populationSize)) 
+                  + (1./(21 * (self.config.populationSize ** 2)))))
+      self.correlation = self.config.cmaCorrelation
       self.numEndogeneous = self.dim * (self.dim - 1) / 2 + 3*self.dim
     
    def unpack(self, sig):
@@ -680,35 +670,33 @@ class CorrelatedEndogeneousGaussian(Mutation):
       return array(sig) 
    
    def mutate(self, x):
-      z = 2 * self.scale * ones(self.dim) + self.center
+      z = 2 * self.scale * np.ones(self.dim) + self.center
       y = x[:self.dim]
       sig = x[self.dim:-3*self.dim]
       cum = x[-3*self.dim:-2*self.dim]
       delta = x[-2*self.dim:-self.dim]
       deltaCum = x[-self.dim:]
       rot = self.unpack(sig)
-      corr = dot(rot, rot)
+      corr = np.dot(rot, rot)
             
       deltaRot = rot / outer(rot.sum(axis=1), ones(self.dim))
       while (abs(z - self.center) > self.scale).any():
          deltaCum2 = (1 - self.cumulation) * deltaCum \
-          + self.cu * dot(deltaRot, random.randn(self.dim))
-         delta2 = delta * exp(self.beta * (sqrt(deltaCum2 ** 2) - self.chi))
+          + self.cu * np.dot(deltaRot, np.random.randn(self.dim))
+         delta2 = delta * np.exp(self.beta * (np.sqrt(deltaCum2 ** 2) - self.chi))
             
          cum2 = (1 - self.cumulation) * cum \
-          + self.cu * dot(rot, random.randn(self.dim))
+          + self.cu * dot(rot, np.random.randn(self.dim))
          corr2 = (1 - self.correlation) * corr \
           + self.correlation * outer(cum2, cum2)
-         rot2 = linalg.cholesky(corr2)
+         rot2 = np.linalg.cholesky(corr2)
          sig2 = self.pack(rot2)
             
                         
          z = y + delta * dot(rot, random.randn(len(y)))
             
-         if not self.bounded:
-            break
-      z0 = append(append(z, sig2, axis=0), cum2, axis=0)
-      z1 = append(append(z0, delta2, axis=0), deltaCum2, axis=0)
-      self.sd = average(sig)
+      z0 = np.append(np.append(z, sig2, axis=0), cum2, axis=0)
+      z1 = np.append(np.append(z0, delta2, axis=0), deltaCum2, axis=0)
+      self.sd = np.average(sig)
       return z1   
             

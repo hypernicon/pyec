@@ -8,10 +8,17 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from numpy import *
-import copy, traceback, sys
+
+import copy
+import numpy as np
+import random
+import sys
+import traceback
+
+
+from pyec.config import Config
 from pyec.distribution.basic import PopulationDistribution
-from pyec.util.partitions import Point, Partition, ScoreTree, Segment
+from pyec.history import SortedMarkovHistory
 from pyec.util.TernaryString import TernaryString
 
 import logging
@@ -19,61 +26,127 @@ logger = logging.getLogger(__file__)
 
 class Selection(PopulationDistribution):
    """A selection method (Abstract class)"""
-   pass
+   config = Config(history=SortedMarkovHistory)
+   
+   def needsScores(self):
+      return True
+   
+   def compatible(self, history):
+      return hasattr(history, 'lastPopulation')
 
 class BestSelection(Selection):
    """
-      Select the best member of the population.
+      Select the best member of the prior population.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
    """
-   def __init__(self, config):
-      super(Selection, self).__init__(config)
-      self.best = None
-      self.score = None
+   
+   def __init__(self, **kwargs):
+      super(Selection, self).__init__(**kwargs)
       
-   def __call__(self):
-      return self.best
-
-   def update(self, generation, population):
-      for x, s in population:
-         if s >= self.score:
-            self.best = x
-            self.score = s
+   def batch(self, popSize):
+      return [self.history.lastPopulation()[0][0] for i in xrange(popSize)]
+   
 
 class EvolutionStrategySelection(Selection):
    """
       Implements standard selection for evolution strategies.
       
-      The property ``config.selection`` determines the type of selection, either "plus" or "comma".
+      The property ``config.selection`` determines the type of selection,
+      either "plus" or "comma". The config should provide \mu, and the
+      population size together with mu and the selection type determines
+      lambda.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      Config parameters
+      
+      * mu -- The number of parents to be taken from the prior population
+      * selection -- Either "plus" selection or "comma"; "comma" is default
+      
    """
-   def __init__(self, config):
-      super(EvolutionStrategySelection, self).__init__(config)
+   config = Config(mu=None,
+                   selection="comma")
+   
+   def __init__(self, **kwargs):
+      super(EvolutionStrategySelection, self).__init__(**kwargs)
       self.total = 0
-      self.mu = config.mu
-      self.plus = config.selection == 'plus' # plus or comma selection, for ES
+      self.mu = self.config.mu
+      self.plus = self.config.selection == 'plus' # plus or comma selection, for ES
 
-   def __call__(self):
-      idx = random.randint(0,self.mu-1)
-      return self.population[idx]
+   def sample(self):
+      idx = np.random.randint(0,self.mu-1)
+      return self.lastPopulation()[idx][0]
 
    def batch(self, popSize):
       if self.plus:
-         return self.population \
-          + [self.__call__() for i in xrange(popSize - self.mu)]
+         return ([x for x,s in population[:self.mu]]
+                  + [self.sample() for i in xrange(popSize - self.mu)])
       else:
-         return [self.__call__() for i in xrange(popSize)]
+         return [self.sample() for i in xrange(popSize)]
 
-   def update(self, generation, population):
-      """the population is ordered by score, take the first mu as parents"""
-      self.population = [x for x,s in population][:self.mu]
+
+class GeneralizedProportional(Selection):
+   """
+      Fitness proportional selection with a modulating function.
       
+      Config parameters:
+      
+      * modulator -- A funtion applied to the fitness; proportional selection
+                     is performed on the image of this function. For fitness
+                     $f$, this is $modulator\cdot f$. The modulator is given
+                     the index of the element in the population second.
+                     The modulator is passed
+                     the configuration function as a third argument; if this
+                     causes an exception, then on the score is passed. That is,
+                     the fitness ``s = f(x)`` is computed, and then a call is
+                     made to ``modulator(s,i,cfg)``, and if this causes an
+                     exception, ``modulator(s,i)`` is used.
 
-class Proportional(Selection):
+   """
+   config = Config(modulator=None)
+   
+   def __init__(self, **kwargs):
+      super(GeneralizedProportional, self).__init__(**kwargs)
+      self.total = 0
+      self.matchedPopulation = []
+
+   def sample(self):
+      rnd = np.random.random_sample() * self.total
+      for x,amt in self.matchedPopulation:
+         if amt >= rnd:
+            return x
+      return self.matchedPopulation[0][0]
+
+   def batch(self, popSize):
+      return [self.sample() for i in xrange(popSize)]
+
+   def update(self, history, fitness):
+      super(Proportional, self).update(history, fitness)
+      self.buildProbabilities(self.history.lastPopulation())
+      
+   def buildProbabilities(self, lastPopulation):
+      """Take the last population (with scores) and recompute the
+      sampling vector for proportional selection.
+      
+      :param lastPopulation: The last population, of size
+                             ``config.populationSize``
+      :type lastPopulation: A list of (point, score) tuples
+      
+      """
+      try:
+         population = [(p[0], self.config.modulator(p[1],i,cfg))
+                       for i,p in enumerate(lastPopulation)]
+      except:
+         population = [(x, self.config.modulator(s))
+                       for x,s in lastPopulation]
+      self.total = sum([s for x,s in population])
+      self.matchedPopulation = []
+      
+      amt = 0
+      for x,s in population:
+         amt += s
+         self.matchedPopulation.append((x,amt))
+
+
+class Proportional(GeneralizedProportional):
    """
       Fitness proportional selection (roulette wheel selection).
       
@@ -81,76 +154,74 @@ class Proportional(Selection):
       
       Fitness values must be nonnegative.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   def __init__(self, config):
-      super(Proportional, self).__init__(config)
-      self.total = 0
-      self.matchedPopulation = []
-
-   def __call__(self):
-      rnd = random.random_sample() * self.total
-      for x,amt in self.matchedPopulation:
-         if amt >= rnd:
-            return x
-      return self.matchedPopulation[-1][0]
+      This :class:`Selection` method is just :class:`GeneralizedProportional`
+      with a modulating function
       
+   """
+   config = Config(modulator = lambda s,i,cfg:
+                      cfg.minimize and -abs(s) or abs(s))
 
-   def batch(self, popSize):
-      return [self.__call__() for i in xrange(popSize)]
-
-   def update(self, generation, population):
-      self.population = copy.deepcopy(population)
-      self.total = sum([s for x,s in population])
-      self.matchedPopulation = []
-      amt = 0
-      for x,s in population:
-         amt += s
-         self.matchedPopulation.append((x,amt))
-      return self.population
+class ExponentiatedProportional(GeneralizedPropotional):
+   """Fitness propotional selection, but with an exponentional modulationg
+   function so that any fitness values may be used.
+   
+   $p(x) = \exp(\frac{-f(x)}{T})$
+   
+   Config parameters:
+   
+   * T -- A "temperature" to divide the explicand.
+   
+   """
+   config = Config(T=1.0, # a temperature value
+                   modulator=lambda s,i,cfg:
+                      cfg.minimize and np.exp(-s/cfg.T) or np.exp(s/cfg.T))
 
    
-class Tournament(Selection):
+class Tournament(GeneralizeProportional):
    """
       Tournament selection on the entire population.
       
       See <http://en.wikipedia.org/wiki/Tournament_selection>.
       
-      Config parameters:
-      * selectionPressure -- The probability of choosing the best member of the population.
+      This class extends :class:`GeneralizedProportional`, but only to
+      get the method ``buildProbabilities`` (and the particular use of
+      ``batch``). Its modulating function is
+      built-in and is just the rank of the member in the population.
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      Config parameters:
+      * pressure -- The probability of choosing the best
+                    member of the randomly subsampled population.
+      * order -- The size of the subsample to select from, or ``None``
+                 for tournament selection over the entire population
+      
    """
-   def __init__(self, config):
-      super(Tournament, self).__init__(config)
-      self.pressure = config.selectionPressure
-      self.total = 0
-      self.matchedPopulation = []
+   config = Config(pressure=0.1,
+                   order=None,
+                   history=SortedMarkovHistory)
+   
+   def __init__(self, **kwargs):
+      super(Tournament, self).__init__(**kwargs)
+      self.pressure = config.pressure
+      self.order = self.config.order or self.config.populationSize
+      self.ordered = None
 
+   def compatible(self, history):
+      return super(Tournament, self).compatible(history) and history.sorted
 
-   def __call__(self):
-      rnd = random.random_sample() * self.total
-      for x,amt in self.matchedPopulation:
-         if amt >= rnd:
-            return x
-      return self.matchedPopulation[-1][0]
-    
+   def sample(self):
+      newpop = random.shuffle(self.ordered)[:self.order]
+      newpop = sorted(newpop, key=lambda x: x[1])
+      idx = 0
+      while True:
+         rnd = np.random.random_sample()
+         if rnd <= self.pressure:
+            return newpop[idx % self.order][0]
+         idx += 1
 
-   def batch(self, popSize):
-      return [self.__call__() for i in xrange(popSize)]
+   def buildProbabilities(self, lastPopulation):
+      self.ordered = [(p[0],i) for i,p in
+                      enumerate(self.history.lastPopulation())]  
 
-   def update(self, generation, population):
-      self.population = copy.deepcopy(population)
-      self.matchedPopulation = []
-      amt = self.pressure
-      self.total = 0
-      for x,s in population:
-         self.matchedPopulation.append((x,amt))
-         self.total += amt
-         amt *= (1 - self.pressure)
-      return self.population
 
 class Ranker(object):
    """
@@ -173,12 +244,14 @@ class LinearRanker(Ranker):
       
       See e.g. <http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html>
    """
-   def __init__(self, pressure):
+   def __init__(self, config):
       """pressure between 1.0 and 2.0"""
-      self.pressure = pressure
+      self.pressure = config.pressure
+      self.popSize = config.populationSize
 
-   def __call__(self, rank, popSize):
-      return 2 - self.pressure + (2 * (self.pressure-1))* ((rank-1.0)/(popSize - 1.0)) 
+   def __call__(self, rank):
+      return (2 - self.pressure +
+              (2 * (self.pressure-1))* ((rank-1.0)/(self.popSize - 1.0))) 
       
 class NonlinearRanker(Ranker):
    """
@@ -187,60 +260,51 @@ class NonlinearRanker(Ranker):
       See e.g. <http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html>
    """
 
-   def __init__(self, pressure, popSize):
-      self.pressure = pressure
-      self.coeffs = [self.pressure for i in xrange(popSize)]
+   def __init__(self, config):
+      self.pressure = config.pressure
+      self.coeffs = [self.pressure for i in xrange(self.config.populationSize)]
       self.coeffs[0] -= popSize
       self.root = roots(self.coeffs)[0].real
 
-   def __call__(self, rank, popSize):
+   def __call__(self, rank):
       """ root is root of (pressure * sum_k=0^(popSize-1) x^k) - popSize * x ^(popSize - 1)"""
       return self.root ** (rank - 1.0) 
 
 
-class Ranking(Selection):
+class Ranking(GeneralizedProportional):
    """
-      Ranking selection, e.g. <http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html>
+      Ranking selection, e.g.
+      <http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html>
    
       Takes a ranking function which weights individuals according to rank
       Rank is 1 for lowest, K for highest in population of size K
       
-      Config parameters
-      * ranker -- A :class:`Ranker` instance for the ranking policy.
+      Note that the ranking function is a class, instantiated with the
+      algorithm's config. When this method is initialized, the ranking
+      function is instanted and placed in ``config.rankerInst``, unless
+      the ``config.rankerInst`` is provided first
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      Config parameters
+      
+      * pressure -- The selection pressure passed to the ranker.
+      * ranker -- A :class:`Ranker` subclass for the ranking policy.
+      * rankerInst -- A :class:`Ranker` instance for the ranking policy;
+                      if not provided, then ``ranker(config)`` is used.
+    
    """
-   def __init__(self, config):
-      super(Ranking, self).__init__(config)
-      self.ranker = config.ranker
-      self.total = 0
-      self.matchedPopulation = []
-
-   def __call__(self):
-      rnd = random.random_sample() * self.total
-      for x,amt in self.matchedPopulation:
-         if amt >= rnd:
-            return x
-      return self.matchedPopulation[-1][0]
+   config = config(pressure=1.0,
+                   ranker=LinearRanker,
+                   modulator=lambda s,i,cfg:
+                     cfg.rankerInst(cfg.populationSize-i))
    
+   def __init__(self, **kwargs):
+      super(Ranking, self).__init__(**kwargs)
+      if self.config.rankerInst is None:
+         self.config.rankerInst = self.config.ranker(self.config)
+  
    def density(self, idx):
       return self.ranker(idx, len(self.matchedPopulation)) / self.total
 
-   def batch(self, popSize):
-      return [self.__call__() for i in xrange(popSize)]
-
-   def update(self, generation, population):
-      self.population = population # copy.deepcopy(population)
-      self.matchedPopulation = []
-      amt = 0
-      idx = len(population)
-      for x,s in population:
-         amt += self.ranker(idx, len(population))
-         self.matchedPopulation.append((x,amt))
-         idx -= 1
-      self.total = amt
-      return self.population
 
 class Elitist(Selection):
    """
@@ -248,148 +312,17 @@ class Elitist(Selection):
       with the best solution seen so far. If the best solution is a member
       of the current population, nothing is changed.
       
-      Elitism can be applied to an algorithm by convolving elitism with the 
-      algorithm.
+      Elitism can be applied to an algorithm by piping the algorithm
+      with elitism, i.e.::
       
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
+      ElitistVersion = .2 * Elitist | .8 * SomeAlgorithm
+      
+      for a new version of ``SomeAlgorithm`` that selects the first
+      20 % of the population as the best solutions so far, and fills
+      in the rest of the population with ``SomeAlgorithm``.
+      
    """
-   def __init__(self, config):
-      super(Elitist, self).__init__(config)
-      self.maxScore = -1e100
-      self.maxOrg = None
-      self.population = None
-
    def batch(self, popSize):
       return self.population
 
-   def update(self, generation, population):
-      if population[0][1] > self.maxScore or self.maxOrg is None:
-         self.maxScore = population[0][1]
-         self.maxOrg = population[0][0]
-         self.population = copy.deepcopy(population)
-      else:
-         self.population = [(self.maxOrg, self.maxScore)]
-         self.population.extend(population)
-         self.population = self.population[:-1]
 
-
-class Annealing(Selection):
-   """
-      Base class for annealed selection. See e.g.
-      
-      Lockett, A. and Miikkulainen, R. Real-space Evolutionary Annealing, 2011.
-      
-      For a more up-to-date version, see Chapters 11-13 of 
-      
-      <http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf>.
-      
-      Config parameters
-      * taylorCenter -- Center for Taylor approximation to annealing densities.
-      * taylorDepth -- The number of coefficients to use for Taylor approximation of the annealing density.
-      * activeField -- One of (point, binary, bayes, other); refers to the properties of :class:`pyec.util.partitions.Point` and differs according to the space being searched. Future versions will deprecate this aspect.  
-      * initialDistribution -- A distribution used to select central points in the first generation.
-      * anneal -- Whether to apply annealing or use a constant temperature of 1.0; defaults to ``True``.
-      * segment -- The name of the :class:`pyec.util.partitions.Segment` object that refers to the points and partitions.
-      
-      :param config: The configuration parameters.
-      :type config: :class:`Config`
-   """
-   def __init__(self, config):
-      super(Annealing, self).__init__(config)
-      self.n = 0
-      self.ids = []
-      self.segment = None
-      self.activeField = config.activeField
-      config.taylorCenter = 1.0
-      if not hasattr(config, 'taylorDepth'):
-         config.taylorDepth = 0
-   
-   def sample(self):
-      """
-         Child classes should override this method in order to select a point
-         from the active segment in :class:`pyec.util.partitions.Point`.
-      """
-      pass
-                                                         
-                                                                                                                                                                     
-   def __call__(self, **kwargs):
-      # handle initial case
-      id = None
-      area = 1.0
-      if self.n == 0:
-         center = self.config.initialDistribution()
-      else:
-         # select a mixture point
-         try:
-            point, area = self.sample()
-            center = getattr(point, self.activeField)
-            id = point.id
-            self.ids.append(id)
-         except Exception, msg:
-            traceback.print_exc(file=sys.stdout)
-            center = self.config.initialDistribution()
-            
-      if self.config.passArea:
-         return center, area
-      else:
-         return center
-      
-   def batch(self, m):
-      self.ids = []
-      ret = [self() for i in xrange(m)]
-      self.config.primaryPopulation = self.ids
-      return ret
-      
-   def update(self, n, population):
-      rerun = self.n == n
-      self.n = n
-      if hasattr(self.config, 'anneal') and not self.config.anneal:
-         self.temp = 1.0
-      elif hasattr(self.config, 'anneal_log') and self.config.anneal_log:
-         self.temp = log(n)
-      else:
-         self.temp = -log(Partition.segment.partitionTree.largestArea())
-         #print "TEMP: ", self.temp, self.temp**2, log(n)
-      if self.segment is None:
-         self.segment = Segment.objects.get(name=self.config.segment)
-      if not rerun:
-         if hasattr(self.config.fitness, 'train'):
-            self.config.fitness.train(self, n)
-      
-class ProportionalAnnealing(Annealing):
-   """
-      Proportional Annealing, as described in 
-      
-      Lockett, A. And Miikkulainen, R. Real-space Evolutionary Annealing (2011).
-      
-      See :class:`Annealing` for more details.
-   """
-   def __init__(self, config):
-      if not hasattr(config, 'taylorDepth'):
-         config.taylorDepth = 10
-      super(ProportionalAnnealing, self).__init__(config)
-      
-   def sample(self):
-      return Point.objects.sampleProportional(self.segment, self.temp, self.config)
-      #print "sampled: ", ret.binary, ret.score
-      #return ret
-      
-   def update(self, n, population):
-      rerun = n == self.n
-      super(ProportionalAnnealing, self).update(n, population)
-      if not rerun and .5 * floor(2*self.temp) > self.config.taylorCenter:
-         ScoreTree.objects.resetTaylor(self.segment, .5 * floor(2 *self.temp), self.config)
-      
-class TournamentAnnealing(Annealing):
-   """
-      Tournament Annealing, as described in Chapter 11 of
-      
-      <http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf>
-      
-      See :class:`Annealing` for more details.
-   """
-   def sample(self):
-      return Point.objects.sampleTournament(self.segment, self.temp, self.config)
-      
-      

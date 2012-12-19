@@ -13,8 +13,10 @@ from cStringIO import StringIO
 from sample import *
 from structure import *
 from variables import *
+from pyec.config import Config
 from pyec.distribution.basic import Distribution
 from pyec.util.cache import LinkedList, LRUCache
+from pyec.util.TernaryString import TernaryString
 
 def checkDeferred(handler):
       def handle(*args, **kwargs):
@@ -35,11 +37,16 @@ class BayesNet(Distribution):
    densityCache = LRUCache()
    weightCache = LRUCache()
    likelihoodCache = LRUCache()
+   config = Config(numVariables=0,
+                   variableGenerator=None,
+                   structureGenerator=None,
+                   randomizer=None,
+                   sampler=None)
 
-   def __init__(self, config = None):
+
+   def __init__(self, **kwargs):
       BayesNet.cfg = config
-      super(BayesNet, self).__init__(config)
-      self.config = config
+      super(BayesNet, self).__init__(**kwargs)
       self.numVariables = config.numVariables
       self.variableGenerator = config.variableGenerator
       self.structureGenerator = config.structureGenerator
@@ -57,7 +64,7 @@ class BayesNet(Distribution):
       self.edgeTuples = None
       self.cacheKeys = dict([(v.index, v.cacheKey) for v in self.variables])
       self.edgeMap = {}
-      self.binary = zeros(len(self.variables)**2)
+      self.binary = TernaryString(0L, -1L, len(self.variables)**2)
       self.deferred = False
       self.deferredWeights = False
       self.edgeRep = None
@@ -235,7 +242,7 @@ class BayesNet(Distribution):
       return prod
       
    @checkDeferredWeights   
-   def __call__(self):
+   def sample(self):
       """sample the network"""
       return self.sampler(self)
 
@@ -418,11 +425,10 @@ class BayesNet(Distribution):
          del self.edgeMap
       self.edgeMap = {}
          
-      ret = self
-      #ret = zeros(len(self.variables)**2)
-      #for frm,t in self.edges:
-      #   idx = frm.index + len(self.variables) * t.index
-      #   ret[idx] = 1
+      ret = TernaryString(0L, -1L, len(self.variables)**2)
+      for frm,t in self.edges:
+         idx = frm.index + len(self.variables) * t.index
+         ret[idx] = True
       self.binary = ret
       return ret
             

@@ -8,33 +8,133 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from numpy import *
+import copy
+
 from numpy.linalg import cholesky, eig, inv, det
-from basic import PopulationDistribution, FixedCube, Gaussian
-from pyec.config import Config, ConfigBuilder
+import numpy as np
+from basic import Distribution, PopulationDistribution
+from pyec.config import Config
+from pyec.history import History, SortedMarkovHistory
 
-
-class CmaesConfigurator(ConfigBuilder):
-   """
-      A :class:`ConfigBuilder` object to construct the 
-      Correlated Matrix Adaption Evolution Strategy (CMA-ES).
+class CmaesHistory(SortedMarkovHistory):
+    """A history that stores the parameters for CMA-ES"""
+    
+    def __init__(self, config):
+        super(CmaesHistory, self).__init__(config)
+        self.attrs |= set(["mu", "dim", "restart", "muw", "mueff", "cc",
+                           "cs", "c1", "cmu","damps", "chiN", "eigeneval",
+                           "sigma", "weights", "B", "D", 
+                           "covar", "active", "ps", "pc", "mean"])
+        self.mu = self.config.mu or int(.5 * self.config.populationSize)
+        self.scale = self.config.space.scale
+        self.dim = self.config.space.dim
+        self.restart = self.config.restart
       
-      By default, sets the ratio of `mu` over `lambda` to .5
-   """
+        self.mean = None
+        self.sigma = self.scale * .5
+        self.ps = np.zeros(self.dim)
+        self.pc = np.zeros(self.dim)
+      
+        weights = (np.log(self.mu + .5) - 
+                   np.log(np.array([i+1. for i in xrange(self.mu)])))
+        weights /= np.sum(weights)
+        muw = 1. / (np.sum(weights) ** 2)
+        mueff = (np.sum(weights) ** 2) * muw
+      
+        cc = ((4+mueff/self.dim) / 
+              (self.dim + 4 + 2 * mueff / self.dim));
+        cs = (mueff + 2) / (self.dim + mueff + 5.)
+      
+        c1 = 2. / ((self.dim + 1.3)**2 + mueff)
+        cmu = 2 * (mueff -2 + 1./mueff) / ((self.dim + 2.) ** 2 + mueff)
+        damps = 1 + 2*max([0, np.sqrt((mueff-1)/(self.dim + 1)) - 1]) + cs
+      
+        self.weights = weights
+        self.muw = muw
+        self.mueff = mueff
+        self.cc = np.float(cc)
+        self.cs = np.float(cs)
+        self.c1 = np.float(c1)
+        self.cmu = np.float(cmu)
+        self.damps = np.float(damps)
+        self.chiN = np.sqrt(self.dim) * (1. - 1. / (4 * self.dim) + 
+                                         1. / (21. * self.dim * self.dim))
+        self.chiN = float(self.chiN)
+      
+        self.eigeneval = 0
+        self.B = np.eye(self.dim, self.dim)
+        self.D = np.ones(self.dim)
+        self.covar = np.dot(self.B, 
+                            np.dot(np.diag(self.D ** 2),self.B.transpose())) 
+        self.active = np.dot(self.B, 
+                             np.dot(np.diag(1./self.D),self.B.transpose()))
 
-   def __init__(self, *args):
-      super(CmaesConfigurator, self).__init__(Cmaes)
-      self.cfg.muProportion = .5
-      self.cfg.restart = True
-   
-   def postConfigure(self, cfg):
-      if cfg.varInit is None:
-         cfg.initialDistribution = FixedCube(cfg)
-      else:
-         cfg.usePrior = False
-         cfg.initialDistribution = Gaussian(cfg)
+    def internalUpdate(self, population):
+        super(CmaesHistory,self).internalUpdate(population)
+        base = np.array([x for x, s in self.population[:self.mu]])
+        if self.mean is None:
+           print self.population
+           oldMean = np.average([x for x,s in self.population])
+        else:
+           oldMean = self.mean
+        self.mean = (np.outer(self.weights, np.ones(self.dim)) 
+                     * base).sum(axis=0)
+        cc = self.cc
+        cs = self.cs
+        muw = self.muw
+        mueff = self.mueff
+        chiN = self.chiN
+      
+        self.ps *= (1. - cs)
+        self.ps += (np.sqrt(cs * (2. - cs) * mueff) * 
+                    np.dot(self.active, self.mean - oldMean) / 
+                    self.sigma)
+       
+        isonorm = np.sqrt((self.ps ** 2).sum())
+        hsig = (isonorm / 
+                np.sqrt(1 - (1 - cs) ** 
+                            (2. * self.updates / len(self.population))) / 
+                self.chiN)
+        self.pc *= (1 - cc)
+        if hsig < 1.4 + 2/(self.dim + 1):
+           self.pc += (np.sqrt(cc * (2 - cc) * mueff) * 
+                       (self.mean - oldMean) / 
+                       self.sigma)  
+           matfactor = np.outer(self.pc, self.pc)
+        else:
+           matfactor = np.outer(self.pc, self.pc) + cc * (2 - cc) * self.covar
+      
+        artmp = (base - oldMean) / self.sigma
+        oldCovar = self.covar
+        self.covar *= (1 - self.c1 - self.cmu)
+        self.covar += self.c1 * matfactor
+        self.covar += (self.cmu * 
+                       np.dot(artmp.transpose(),
+                              np.dot(np.diag(self.weights),artmp)))
+          
+        self.sigma *= np.exp((cs / self.damps) * (isonorm / chiN - 1.))
+      
+        if (self.updates - self.eigeneval > 
+            len(self.population) / (self.c1 + self.cmu) / self.dim / 10.):
+            try:
+               self.eigeneval = self.updates
+               self.covar = (np.triu(self.covar) + 
+                             np.triu(self.covar,1).transpose())
+               self.B, self.D = eig(self.covar)
+               self.D = np.sqrt(np.diag(np.abs(self.D)))
+         
+               self.active = cholesky(self.covar) # np.dot(self.B, np.dot(np.diag(1. / self.D), self.B.transpose())) 
+            except Exception:
+               self.covar = oldCovar
+        self.sigma = np.minimum(self.sigma, self.scale)
+        detcv = det(self.covar)
+        if (self.sigma * detcv > self.scale).any():
+            self.sigma /= (detcv * self.sigma) 
+            self.sigma *= self.scale
+    
+        if self.restart and (self.sigma * detcv).max() < 1e-25:
+            self.__init__(self.config)
 
-   
 
 class Cmaes(PopulationDistribution):
    """
@@ -51,133 +151,70 @@ class Cmaes(PopulationDistribution):
       Akimoto (2010) proved that CMA-ES is an instance of Natural Evolution Strategies (Wierstra, 2008), which implements a gradient-following method at the population level. 
       
       Config parameters 
-      * muProportion -- the ratio of `mu` to `lambda`, i.e. the proportion of solutions from each generation used as parents for the next. By default equal to 0.5.
-      * initialDistribution -- the distribution used to sample the initial mean
-      * populationSize -- the size of the population for each generation
-      * scale -- the scale of the space, used to initialize the variance of the Gaussian
-      * dim -- the dimension of the real vector space being searched.
+      * mu -- the number of solutions from each generation used as parents for the next. By default equal to half the ``Config.populationSize``.
       * restart -- whether to restart when the distribution collapses; defaults to ``True`` (see e.g. `Auger and Hansen, 2005)
    
       :params cfg: The configuration object for CMA-ES.
       :type cfg: :class:`Config`
    
    """
+   config = Config(mu=None, # the number of parents, default half population
+                   restart=True, # whether to restart when variance collapses
+                   populationSize=25,
+                   history=CmaesHistory)
 
-   def __init__(self, cfg):
-      super(Cmaes, self).__init__(cfg)
-      self.sigma = self.config.scale * .5
-      self.mean = self.config.initialDistribution()
-      self.ps = zeros(self.config.dim)
-      self.pc = zeros(self.config.dim)
-      self.mu = int(self.config.populationSize * self.config.muProportion)
+   def __init__(self, **kwargs):
+      super(Cmaes, self).__init__(**kwargs)
+      if not issubclass(self.config.space.type, np.ndarray):
+          err = ("This implementation of CMA-ES needs type "
+                 "numpy.ndarray, not {0}")
+          err = err.format(self.config.space.type)
+          raise ValueError(err)
+                           
+      x = self.config.space.random()
+      if not x.dtype == np.float:
+          raise ValueError("CMA-ES expects numpy.ndarray with dtype float")
+      self.sigma = self.config.space.scale * .5
+      #if self.config.initial is None:
+      #    self.mean = [self.config.space.random for i in xrange(popSize)]
+      #elif hasattr(self.config.initial, 'batch'):
+      #    self.mean = self.config.initial.batch(popSize)
+      #else:
+      #    self.mean = [self.config.initial() for i in xrange(popSize)]
       
-      weights = log(self.mu + .5) - log(array([i+1. for i in xrange(self.mu)]))
-      weights /= sum(weights)
-      muw = 1. / sum(weights ** 2)
-      mueff = (sum(weights) ** 2) * muw
-      
-      cc = (4+mueff/self.config.dim) / (self.config.dim + 4 + 2 * mueff / self.config.dim);
-      cs = (mueff + 2) / (self.config.dim + mueff + 5.)
-      
-      c1 = 2. / ((self.config.dim + 1.3)**2 + mueff)
-      cmu = 2 * (mueff -2 + 1./mueff) / ((self.config.dim + 2.) ** 2 + mueff)
-      damps = 1 + 2*max([0, sqrt((mueff-1)/(self.config.dim + 1)) - 1]) + cs
-      
-      self.weights = weights
-      self.muw = muw
-      self.mueff = mueff
-      self.cc = cc
-      self.cs = cs
-      self.c1 = c1
-      self.cmu = cmu
-      self.damps = damps
-      self.chiN = sqrt(self.config.dim) * (1. - 1. / (4 * self.config.dim) + 1. / (21. * self.config.dim * self.config.dim))
-      
-      self.eigeneval = 0
-      self.B = eye(self.config.dim, self.config.dim)
-      self.D = ones(self.config.dim)
-      self.covar = dot(self.B, dot(diag(self.D ** 2),self.B.transpose())) 
-      self.active = dot(self.B, dot(diag(1./self.D),self.B.transpose()))
+      if self.config.mu >= self.config.populationSize:
+          raise ValueError("CMA-ES mu must be less than populationSize")
 
+   def compatible(self, history):
+      return isinstance(history, CmaesHistory)
 
-   @classmethod
-   def configurator(cls):
-      return CmaesConfigurator(cls)
-   
-   def __call__(self):
-      next = self.mean + self.sigma * dot(self.active, random.randn(self.mean.size))
+   def sample(self):
+      h = self.history
+      next = (h.mean + 
+              h.sigma * 
+              np.dot(h.active, np.random.randn(h.mean.size)))
       return next
             
    def batch(self, popSize):
-      if self.mean is  None:
-         if hasattr(self.config.initialDistribution, 'batch'):
-            return self.config.initialDistribution.batch(popSize)
+      if self.history.mean is  None:
+         if self.config.initial is None:
+             return [self.config.space.random() for i in xrange(popSize)]
+         elif hasattr(self.config.initial, 'batch'):
+             return self.config.initial.batch(popSize)
          else:
-            return [self.config.initialDistribution() for i in xrange(popSize)]
-      return [self.__call__() for i in xrange(popSize)]
+             return [self.config.initial() for i in xrange(popSize)]
+      return [self.sample() for i in xrange(popSize)]
       
    def density(self, x):
-      diff = self.mean - x
-      pow = -.5 * dot(diff, dot(inv(self.covar), diff))
-      d = ((((2*pi)**(len(x))) * det(self.covar)) ** -.5) * exp(pow)
+      diff = self.history.mean - x
+      pow = -.5 * np.dot(diff, np.dot(inv(self.history.covar), diff))
+      d = (((((2*pi)**(len(x))) * det(self.history.covar)) ** -.5) * 
+           np.exp(pow))
       return d
    
    @property
    def var(self):
-      return self.sigma * det(self.covar)
+      return self.history.sigma * det(self.history.covar)
 
-   def update(self, n, population):
-      base = array([x for x, s in population[:self.mu]])
-      if self.mean is None: 
-         oldMean = average([x for x,s in population])
-      else:
-         oldMean = self.mean
-      self.mean = (outer(self.weights, ones(self.config.dim)) * base).sum(axis=0)
-      cc = self.cc
-      cs = self.cs
-      muw = self.muw
-      mueff = self.mueff
-      chiN = self.chiN
-      
-      self.ps *= (1. - cs)
-      self.ps += sqrt(cs * (2. - cs) * mueff) \
-       * dot(self.active, self.mean - oldMean) / self.sigma
-       
-      isonorm = sqrt((self.ps ** 2).sum())
-      hsig = isonorm / sqrt(1 - (1 - cs) ** (2. * n / len(population))) / self.chiN
-      self.pc *= (1 - cc)
-      if hsig < 1.4 + 2/(self.config.dim + 1):
-         self.pc += sqrt(cc * (2 - cc) * mueff) * (self.mean - oldMean) / self.sigma  
-         matfactor = outer(self.pc, self.pc)
-      else:
-         matfactor = outer(self.pc, self.pc) + cc * (2 - cc) * self.covar
-      
-      artmp = (base - oldMean) / self.sigma
-      oldCovar = self.covar
-      self.covar *= (1 - self.c1 - self.cmu)
-      self.covar += self.c1 * matfactor
-      self.covar += self.cmu * dot(artmp.transpose(), dot(diag(self.weights),artmp))
-          
-      self.sigma *= exp((cs / self.damps) * (isonorm / chiN - 1.))
-      
-      if n - self.eigeneval > len(population) / (self.c1 + self.cmu) / self.config.dim / 10.:
-         try:
-            self.eigenval = n
-            self.covar = triu(self.covar) + triu(self.covar,1).transpose()
-            self.B, self.D = eig(self.covar)
-            self.D = sqrt(diag(abs(self.D)))
-         
-            self.active = cholesky(self.covar) # dot(self.B, dot(diag(1. / self.D), self.B.transpose())) 
-         except:
-            self.covar = oldCovar
-      if self.sigma > self.config.scale:
-         self.sigma = self.config.scale
-      detcv = det(self.covar)
-      if self.sigma * detcv > self.config.scale:
-         self.sigma /= (detcv * self.sigma) 
-         self.sigma *= self.config.scale
-    
-      if self.config.restart and self.sigma * detcv < 1e-25:
-      #   print "restarting"
-         self.__init__(self.config)
+
 
