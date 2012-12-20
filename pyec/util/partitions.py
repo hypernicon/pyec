@@ -28,10 +28,11 @@ class AreaException(Exception):
 
 
 class Segment(object):
-   segment = None
 
    def __init__(self, config):
       self.config = config
+      self.taylorCenter = config.taylorCenter or 1.0
+      self.taylorDepth = config.taylorDepth or 0
       
       self.points = []
       self.partitionTree = Partition(self,config)
@@ -62,9 +63,6 @@ class Point(object):
    @property
    def id(self):
       return self   
-          
-   def save(self):
-      pass
       
    def separable(self, config):
       """
@@ -102,10 +100,10 @@ class Point(object):
    def bulkSave(cls, segment, points, stats):
       segment.points.extend(points)
       
+      sep = segment.config.separator(segment.config)
       for gp in points:
          try:
             stats.start("separate")
-            sep = segment.config.separator(segment.config)
             sep.separate(segment.partitionTree, gp)
             stats.stop("separate")
             stats.start("insert")
@@ -127,6 +125,7 @@ class Point(object):
          if config.shiftToDb is True, this will attempt to call sampleTournamentInDb.
       """
       current = segment.scoreTree.root
+      min = int(config.minimize)
       
       while True:
          children = sorted(current.children, key=lambda c: not c.left)
@@ -135,7 +134,7 @@ class Point(object):
             break
          
          try:
-            if children[0].max_score == children[1].min_score:
+            if children[min].max_score == children[1-min].min_score:
                p = .5
             else:
                p = 1. / (1. + ((1. - config.pressure) ** (config.learningRate / temp * (2 ** children[0].height))))
@@ -144,19 +143,18 @@ class Point(object):
          
          if p < 1.0:
             p = (p / (1. - p))
-            p *= children[0].area
-            div = p + children[1].area
+            p *= children[min].area
+            div = p + children[1-min].area
             if div > 0.0:
                p /= div
             else:
                p = 0.5
          
          rnd = random.random_sample()
-         if (config.minimize and rnd > p or
-             not config.minimize and rnd < p):
-            current = children[0]
+         if rnd < p:
+            current = children[min]
          else:
-            current = children[1]
+            current = children[1-min]
          
       return current.point, current.point.partition_node
 
@@ -173,9 +171,9 @@ class Point(object):
       """
       # choose the proper center
       # this function has better approximates to the right of the center
-      center = config.taylorCenter
+      center = segment.taylorCenter
       offset = 0
-      depth = config.taylorDepth
+      depth = segment.taylorDepth
       
       current = segment.scoreTree.root
       
@@ -196,7 +194,7 @@ class Point(object):
          current = children[idx]
          children = sorted(current.children, key=lambda c: not c.left)
       
-      return current.point, current
+      return current.point, current.point.partition_node
 
    @classmethod
    def sampleRegionalTournament(cls, segment, temp, config):
@@ -578,8 +576,6 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       up = BinaryRectangle(upSpec)
       up.parent = other.partition_node.bounds
       
-      print downSpec.base, downSpec.known, downSpec.length
-      print upSpec.base, upSpec.known, upSpec.length
       return down, up, downPoint, upPoint
 
 
@@ -1415,15 +1411,15 @@ class ScoreTree(object):
       stats.start("insert.main")
       lr = config.learningRate
       
-      ns = [i+0. for i in xrange(config.taylorDepth)]
+      ns = [i+0. for i in xrange(self.segment.taylorDepth)]
       fs = ns * 1
       if config.taylorDepth > 0:
          fs[0] = 1.0
-         for i in xrange(config.taylorDepth - 1):
+         for i in xrange(self.segment.taylorDepth - 1):
             fs[i+1] *= fs[i]
       ns = array(ns)
       fs = array(fs)
-      center = config.taylorCenter      
+      center = self.segment.taylorCenter      
       
       if node.point is None:
          node.point = point
@@ -1433,7 +1429,7 @@ class ScoreTree(object):
          score = (config.minimize and -1 or 1) * point.score * lr 
          taylor = nan_to_num(score ** ns) / fs
          taylor *= node.area
-         taylor *= nan_to_num(exp(score) ** (1./center)) 
+         taylor *= nan_to_num(exp(score/center)) 
          node.taylor = nan_to_num(taylor)
          return
       
@@ -1461,12 +1457,12 @@ class ScoreTree(object):
       score2 = (config.minimize and -1 or 1) * downPoint.score * lr    
       taylor1 = (score1 ** ns) / fs
       taylor1 *= upArea
-      taylor1 *= (exp(score1) ** (1./center)) 
+      taylor1 *= (exp(score1/center)) 
       taylor2 = (score2 ** ns) / fs
       taylor2 *= downArea
-      taylor2 *= (exp(score2) ** (1./center))
+      taylor2 *= (exp(score2/center))
       
-      if config.taylorDepth > 0:
+      if self.segment.taylorDepth > 0:
          if (abs(taylor1) < 1e-300).all() and (abs(taylor2) < 1e-300).all():
             node.point = other
             node.height = 0
@@ -1525,11 +1521,11 @@ class ScoreTree(object):
       """
       logg.info("resetTaylor: segment %s, new center %s, old center %s" % (segment, temp, config.taylorCenter))
       
-      ns = [i+0. for i in xrange(config.taylorDepth)]
+      ns = [i+0. for i in xrange(segment.taylorDepth)]
       fs = ns * 1
       if len(fs) > 0:
          fs[0] = 1.0
-         for i in xrange(config.taylorDepth - 1):
+         for i in xrange(segment.taylorDepth - 1):
             fs[i+1] *= fs[i]
       ns = array(ns)
       fs = array(fs)
@@ -1543,18 +1539,18 @@ class ScoreTree(object):
       
       heights = {0: next}
       height = 0
+      mult = config.minimize and -1 or 1
       while len(heights) > 0:
          nodes = set(heights[height])
          for node in nodes:
             if node.point is not None:
-               score = config.minimize and -node.point.score or node.point.score
-               score = score * lr
+               score = mult * lr * node.point.score
                taylor = nan_to_num(score ** ns) / fs
                taylor *= node.area
                taylor *= nan_to_num(exp(score/center)) 
                node.taylor = nan_to_num(taylor)
             else:
-               node.taylor = zeros(config.taylorDepth)
+               node.taylor = zeros(segment.taylorDepth)
                for child in node.children:
                   node.taylor += child.taylor
             if node.parent is not None:
@@ -1565,7 +1561,9 @@ class ScoreTree(object):
                      heights[node.parent.height].append(node.parent)
          del heights[height]
          height += 1
-            
+       
+      segment.taylorCenter = temp
+
 
 class AreaTreeNode(object):
     idgen = 1
@@ -1582,10 +1580,6 @@ class AreaTreeNode(object):
         
 
 class AreaTree(object):
-    
-    @classmethod
-    def get(cls,**kwargs):
-        return cls.segment
       
     root = None
     map = {}
@@ -1593,7 +1587,7 @@ class AreaTree(object):
     def traverse(self, area):
         if self.root is None:
            raise AreaException("Cannot traverse empty tree")
-        elif self.root.low > area or self.root.high < area:
+        elif self.root.low > area or self.root.high < area: # if we want this check, it needs to get the high from the space
            err = "Area {0} out of bounds ({1},{2})"
            err = err.format(area, self.root.low, self.root.high)
            raise AreaException(err)

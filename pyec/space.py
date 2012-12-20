@@ -234,7 +234,8 @@ class Hyperrectangle(Euclidean):
                                                 kwargs["index"]))
         else:
             # Lebesgue
-            self._area = (2*self.scale).prod()
+            #self._area = (2*self.scale).prod()
+            self._area = 1.0
             
         return self._area
    
@@ -270,9 +271,9 @@ class Binary(Space):
         use a random byte string.
         
         """
-        return TernaryString.random(.5, self.dim)
+        return TernaryString.random(self.dim)
     
-    def in_bounds(x, **kwargs):
+    def in_bounds(self, x, **kwargs):
         return isinstance(x, TernaryString) and x.length == self.dim
 
 
@@ -377,7 +378,7 @@ class BinaryRectangle(Binary):
             elif (x.known & index) == 0:
                 return False
             else:
-                return (self.spec.base & index) == (x.spec.base & index)
+                return (self.spec.base & index) == (x.base & index)
         return self.spec < x
     
     def extent(self):

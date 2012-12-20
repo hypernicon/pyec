@@ -11,13 +11,15 @@ import numpy as np
 
 from pyec.config import Config
 from pyec.distribution.convolution import Convolution
-from pyec.distribution import Gaussian as SimpleGaussian
-from pyec.distribution import BernoulliTernary as SimpleBernoulli
-from pyec.distribution import FixedCube
 from pyec.distribution.bayes.mutators import *
 from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.bayes.sample import DAGSampler
-from pyec.distribution.ec.mutators import (AreaSensitiveGaussian,
+from pyec.distribution.ec.selectors import Selection
+from pyec.distribution.ec.mutators import (Mutation,
+                                           Bernoulli,
+                                           Crossover,
+                                           Gaussian,
+                                           AreaSensitiveGaussian,
                                            AreaSensitiveBernoulli)
 from pyec.history import History
 from pyec.space import Euclidean, Binary
@@ -27,6 +29,7 @@ from pyec.util.partitions import (Segment,
                                   ScoreTree,
                                   AreaTree,
                                   Point,
+                                  SeparationAlgorithm,
                                   VectorSeparationAlgorithm,
                                   LongestSideVectorSeparationAlgorithm,
                                   BinarySeparationAlgorithm,
@@ -51,8 +54,8 @@ class PartitionHistory(History):
    def __init__(self, config):
       super(PartitionHistory, self).__init__(config)
       self.segment = Segment(config=self.config)
-      config.stats = RunStats()
-      self.stats = config.stats
+      self.config.stats = RunStats()
+      self.stats = self.config.stats
       self.stats.recording = self.config.record
       self.separator = self.config.separator(config)
       self.attrs |= set(["segment", "stats"])
@@ -62,14 +65,14 @@ class PartitionHistory(History):
       if hasattr(self.config.schedule, '__call__'):
          return self.config.schedule(n)
       elif self.config.schedule == "linear":
-         return 1. / (n * self.learningRate)
+         return 1. / (n * self.config.learningRate)
       elif self.config.schedule == "log":
-         return 1. / (np.log(n) * self.learningRate)
+         return 1. / (np.log(n) * self.config.learningRate)
       elif self.config.schedule == "discount":
          return 1. / (self.config.temp0 * (self.config.discount ** n))
       elif self.config.schedule == "log_area":
-         return 1./-(np.log(self.history.segment.partitionTree.largestArea())
-                     * self.learningRate)
+         return 1./-(np.log(self.segment.partitionTree.largestArea())
+                     * self.config.learningRate)
       else:
          return 1.0
       
@@ -81,10 +84,14 @@ class PartitionHistory(History):
          # skip unscored updates inside convolution
          return
       
+      if not isinstance(population[0][0], self.config.space.type):
+         # again, skip intermediate
+         return
+      
       pts = [Point(self.segment, x, None, s) for x,s in population]
-      stats.start("save")
-      Point.bulkSave(pts, self.stats)
-      stats.stop("save")
+      self.config.stats.start("save")
+      Point.bulkSave(self.segment, pts, self.stats)
+      self.config.stats.stop("save")
 
 
 class TaylorPartitionHistory(PartitionHistory):
@@ -97,10 +104,9 @@ class TaylorPartitionHistory(PartitionHistory):
          return
       
       super(TaylorPartitionHistory, self).internalUpdate(population)
-      bottom = .5 * floor(2*(1./self.temperature())*self.config.learningRate)
-      if  bottom > 1./self.taylorCenter:
-         ScoreTree.resetTaylor(self.segment, 1./bottom, self.config)
-         self.config.taylorCenter = 1./bottom
+      bottom = .5 * floor(2*(1./self.temperature())/self.config.learningRate)
+      if  bottom > 1./self.segment.taylorCenter:
+         self.segment.scoreTree.resetTaylor(self.segment, 1./bottom, self.config)
 
 
 class Annealing(Selection):
@@ -142,13 +148,22 @@ class Annealing(Selection):
                    separator = SeparationAlgorithm,
                    history = PartitionHistory)
    
+   def __init__(self, **kwargs):
+      super(Annealing, self).__init__(**kwargs)
+      if self.config.jogo2012:
+         self.config.schedule = "log"
+         self.config.separator = VectorSeparationAlgorithm
+   
    def compatible(self, history):
-      return isinstance(self.history, PartitionHistory)
+      return isinstance(history, PartitionHistory)
    
    def sample(self):
       """
          Child classes should override this method in order to select a point
          from the active segment in :class:`pyec.util.partitions.Point`.
+         
+         The actual return should be a partition node.
+         
       """
       pass
       
@@ -175,7 +190,7 @@ class ProportionalAnnealing(Annealing):
                    history = TaylorPartitionHistory)
    
    def compatible(self, history):
-      return isinstance(self.history, TaylorPartitionHistory)
+      return isinstance(history, TaylorPartitionHistory)
          
    def sample(self):
       return Point.sampleProportional(self.history.segment,
@@ -200,22 +215,46 @@ class TournamentAnnealing(Annealing):
                                     self.config)
 
 
+class AreaStripper(Mutation):
+   """:class:`Annealing` and its descendents pass along a tuple; this class
+   extracts the point for use with other methods.
+   
+   """
+   def mutate(self, x):
+      return x[0].point
+   
+
+AnnealingCrossover = (
+   ((TournamentAnnealing << AreaStripper) <<
+    ((TournamentAnnealing >> 1) << AreaStripper) <<
+    Crossover)
+)
+
 RealEvolutionaryAnnealing = (
    TournamentAnnealing << AreaSensitiveGaussian
 )[Config(separator=LongestSideVectorSeparationAlgorithm)]
 
 RealEvolutionaryAnnealingJogo2012 = RealEvolutionaryAnnealing[Config(
    jogo2012=True,
+   schedule="log",
    separator=VectorSeparationAlgorithm
 )]
 
+CrossedRealEvolutionaryAnnealing = (
+   AnnealingCrossover << Gaussian
+)[Config(separator=LongestSideVectorSeparationAlgorithm)]
+
 BinaryEvolutionaryAnnealing = (
-   TournamentAnnealing << AreaSensitiveBernoulli
+   TournamentAnnealing << AreaStripper << Bernoulli
 )[Config(separator=BinarySeparationAlgorithm)]
 
-BayesEvolutionaryAnnealing = (
-   TournamentAnnealing << StructureMutator
-)[Config(separator=BayesSeparationAlgorithm)]
+CrossedBinaryEvolutionaryAnnealing = (
+   AnnealingCrossover << Bernoulli
+)[Config(separator=BinarySeparationAlgorithm)]
+
+#BayesEvolutionaryAnnealing = (
+#   TournamentAnnealing << StructureMutator
+#)[Config(separator=BayesSeparationAlgorithm)]
 
 """
 class BayesEAConfigurator(REAConfigurator):

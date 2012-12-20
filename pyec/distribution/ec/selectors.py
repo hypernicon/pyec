@@ -161,7 +161,7 @@ class Proportional(GeneralizedProportional):
    config = Config(modulator = lambda s,i,cfg:
                       cfg.minimize and -abs(s) or abs(s))
 
-class ExponentiatedProportional(GeneralizedPropotional):
+class ExponentiatedProportional(GeneralizedProportional):
    """Fitness propotional selection, but with an exponentional modulationg
    function so that any fitness values may be used.
    
@@ -177,7 +177,7 @@ class ExponentiatedProportional(GeneralizedPropotional):
                       cfg.minimize and np.exp(-s/cfg.T) or np.exp(s/cfg.T))
 
    
-class Tournament(GeneralizeProportional):
+class Tournament(GeneralizedProportional):
    """
       Tournament selection on the entire population.
       
@@ -292,7 +292,7 @@ class Ranking(GeneralizedProportional):
                       if not provided, then ``ranker(config)`` is used.
     
    """
-   config = config(pressure=1.0,
+   config = Config(pressure=1.0,
                    ranker=LinearRanker,
                    modulator=lambda s,i,cfg:
                      cfg.rankerInst(cfg.populationSize-i))

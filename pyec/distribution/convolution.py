@@ -59,7 +59,7 @@ class Convolution(PopulationDistribution):
        self.history.checkpoint()
        for sub in self.subs:
            if pop is not None:
-               fitness = sub.needsScores and self.fitness or None
+               fitness = sub.needsScores() and self.fitness or None
                self.history.update(pop, fitness, sub.config.space)
            sub.update(self.mapHistory(sub), self.fitness)
            pop = sub.batch(popSize)
@@ -85,8 +85,11 @@ class Convolution(PopulationDistribution):
       if history is None:
             history = self.history
       for h in history.histories:
-         if sub.compatible(h):
-             return h
+         try:
+             if sub.compatible(h):
+                 return h
+         except ValueError:
+             pass
       c = sub.__class__.__name__  
       raise ValueError("No compatible history found for {0}".format(c ))
       
@@ -163,7 +166,7 @@ class SelfConvolution(PopulationDistribution):
                 pop = [self.config.initial() for i in xrange(popSize)]
             times -= 1
         
-        fitness = self.opt.needsScores and self.fitness or None
+        fitness = self.opt.needsScores() and self.fitness or None
         for i in xrange(times):
             if pop is not None:
                 self.history.update(pop, fitness, self.opt.config.space)
