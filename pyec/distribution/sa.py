@@ -65,6 +65,8 @@ class SimulatedAnnealingAcceptance(PopulationDistribution):
       temp = self.temperature()
       last = self.history.lastPopulation()
       penultimate = self.history.penultimate()
+      if penultimate is None:
+         return [x for x,s in last]
       scoreProposed = np.array([s for x,s in last])
       scoreAccepted = np.array([s for x,s in penultimate])
       exponent = (scoreProposed - scoreAccepted) / temp
@@ -97,12 +99,14 @@ class SimulatedAnnealingAcceptance(PopulationDistribution):
 
 # Euclidean space
 RealSimulatedAnnealing = (
-   GaussianProposal[_(sd=.005)] << SimulatedAnnealingAcceptance
+   SimulatedAnnealingAcceptance << GaussianProposal[_(sd=.005)]
+   #GaussianProposal[_(sd=.005)] << SimulatedAnnealingAcceptance
 )
 
 # fixed-length bit strings
 BinarySimulatedAnnealing = (
-   Bernoulli[_(p=.01)] << SimulatedAnnealingAcceptance
+   SimulatedAnnealingAcceptance << Bernoulli[_(p=.01)]
+   #Bernoulli[_(p=.01)] << SimulatedAnnealingAcceptance
 )
 
 # Structure search in a Bayes net
