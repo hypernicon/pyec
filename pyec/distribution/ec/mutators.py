@@ -18,6 +18,7 @@ from pyec.config import Config
 from pyec.distribution.basic import PopulationDistribution
 #from pyec.util.partitions import Segment, Partition
 from pyec.history import MarkovHistory, MultiStepMarkovHistory
+from pyec.space import EndogeneousProduct
 
 class Crosser(object):
    """ 
@@ -175,7 +176,7 @@ class DominantCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       x = []
       for i in xrange(len(orgs[0])):
-         idx = np.random.randint(0, len(orgs) - 1)
+         idx = np.random.randint(0, len(orgs))
          x.append(orgs[idx][i])
       return np.array(x)
       
@@ -620,23 +621,26 @@ class EndogeneousGaussian(Mutation):
    
    def __init__(self, **kwargs):
       super(EndogeneousGaussian, self).__init__(**kwargs)
-      if self.config.space.type != np.ndarray:
-         raise ValueError("Endogeneous Gaussian expects space with "
+      if (not isinstance(self.config.space, EndogeneousProduct) or
+          len(self.config.space.spaces) < 2 or
+          self.config.space.spaces[0].type != np.ndarray or
+          self.config.space.spaces[1].type != np.ndarray):
+         raise ValueError("Endogeneous Gaussian expects EndogeneousProduct "
+                          "space with two components, each of "
                           "type numpy.ndarray")
       self.sd = self.config.sd
-      self.dim = self.config.baseDim
       self.tau = self.sd / np.sqrt(2*np.sqrt(self.config.populationSize))
       self.tau0 = self.sd / np.sqrt(2*self.config.populationSize)
    
    def mutate(self, x):
-      y = x[:self.dim]
-      sig = x[self.dim:]
+      y = x[0]
+      sig = x[1]
       rnd = self.tau * np.random.randn(len(sig))
             
       sig2 = np.exp(self.tau0 * np.random.randn(1)) * sig * np.exp(rnd) 
       z = y + sig2 * np.random.randn(len(y))
       
-      return np.append(z, sig2, axis=0) 
+      return [z,sig2] 
 
 
 class CorrelatedEndogeneousGaussian(Mutation):

@@ -52,7 +52,7 @@ class EvolutionStrategySelection(Selection):
       Implements standard selection for evolution strategies.
       
       The property ``config.selection`` determines the type of selection,
-      either "plus" or "comma". The config should provide \mu, and the
+      either "plus" or "comma". The config should provide $\mu$, and the
       population size together with mu and the selection type determines
       lambda.
       
@@ -72,12 +72,12 @@ class EvolutionStrategySelection(Selection):
       self.plus = self.config.selection == 'plus' # plus or comma selection, for ES
 
    def sample(self):
-      idx = np.random.randint(0,self.mu-1)
-      return self.lastPopulation()[idx][0]
+      idx = np.random.randint(0,self.mu)
+      return self.history.lastPopulation()[idx][0]
 
    def batch(self, popSize):
       if self.plus:
-         return ([x for x,s in population[:self.mu]]
+         return ([x for x,s in self.history.lastPopulation()[:self.mu]]
                   + [self.sample() for i in xrange(popSize - self.mu)])
       else:
          return [self.sample() for i in xrange(popSize)]
