@@ -9,12 +9,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 import numpy as np
 
-from pyec.distribution.basic import PopulationDistribution
+from pyec.distribution.basic import PopulationDistribution, HistoryMapper
 from pyec.config import Config
 from pyec.history import CheckpointedHistory, CheckpointedMultipleHistory
 
 
-class Convolution(PopulationDistribution):
+class Convolution(PopulationDistribution, HistoryMapper):
    """Build a convolved optimizer.
    
    :param subs: The optimizer instances to convolve
@@ -59,7 +59,7 @@ class Convolution(PopulationDistribution):
        self.history.checkpoint()
        for sub in self.subs:
            if pop is not None:
-               fitness = sub.needsScores and self.fitness or None
+               fitness = sub.needsScores() and self.fitness or None
                self.history.update(pop, fitness, sub.config.space)
            sub.update(self.mapHistory(sub), self.fitness)
            pop = sub.batch(popSize)
@@ -73,22 +73,6 @@ class Convolution(PopulationDistribution):
       super(Convolution, self).update(history, fitness)
       for sub in self.subs:
           sub.update(self.mapHistory(sub), fitness)  
-      
-   def mapHistory(self, sub, history=None):
-      """Find a compatible subhistory for this suboptimizer.
-      
-      :param sub: One of the suboptimizers for this convolution
-      :type sub: :class:`PopulationDistribution`
-      :returns: A compatible :class:`History` for the suboptimizer
-      
-      """
-      if history is None:
-            history = self.history
-      for h in history.histories:
-         if sub.compatible(h):
-             return h
-      c = sub.__class__.__name__  
-      raise ValueError("No compatible history found for {0}".format(c ))
       
    def needsScores(self):
       return self.subs[0].needsScores()
@@ -163,7 +147,7 @@ class SelfConvolution(PopulationDistribution):
                 pop = [self.config.initial() for i in xrange(popSize)]
             times -= 1
         
-        fitness = self.opt.needsScores and self.fitness or None
+        fitness = self.opt.needsScores() and self.fitness or None
         for i in xrange(times):
             if pop is not None:
                 self.history.update(pop, fitness, self.opt.config.space)

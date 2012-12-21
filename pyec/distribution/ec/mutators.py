@@ -14,9 +14,9 @@ import numpy as np
 import struct
 
 from pyec.util.TernaryString import TernaryString
-
+from pyec.config import Config
 from pyec.distribution.basic import PopulationDistribution
-from pyec.util.partitions import Segment, Partition
+#from pyec.util.partitions import Segment, Partition
 from pyec.history import MarkovHistory, MultiStepMarkovHistory
 
 class Crosser(object):
@@ -62,7 +62,7 @@ class UniformCrosser(Crosser):
          rnd = long(binascii.hexlify(rnd), 16)
          base = rnd & orgs[0].base | ~rnd & orgs[1].base
          known = rnd & orgs[0].known | ~rnd & orgs[1].known
-         return TernaryString(base, known)
+         return TernaryString(base, known, self.config.space.dim)
       else:
          err = "Unknown type for UniformCrossover: {0}"
          raise NotImplementException(err.format(self.config.space.type))
@@ -91,9 +91,19 @@ class OnePointDualCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = np.random.random_integers(0, len(orgs[0]) - 1)
-      return (np.append(orgs[0][:idx], orgs[1][idx:], axis=0),
-              np.append(orgs[1][:idx], orgs[0][idx:], axis=0))
+      if isinstance(orgs[0], np.ndarray):
+         idx = np.random.random_integers(0, len(orgs[0]) - 1)
+         return (np.append(orgs[0][:idx], orgs[1][idx:], axis=0),
+                 np.append(orgs[1][:idx], orgs[0][idx:], axis=0))
+      elif isinstance(orgs[0], TernaryString):
+         idx = np.random.random_integers(0, orgs[0].length - 1)
+         ret1 = TernaryString(orgs[0].base, orgs[0].known, orgs[0].length)
+         ret2 = TernaryString(orgs[1].base, orgs[1].known, orgs[1].length)
+         ret1[idx:] = orgs[1][idx:]
+         ret2[idx:] = orgs[0][idx:]
+         return ret1,ret2
+      else:
+         raise ValueError("Received unknown type in OnePointDualCrosser.")
 
 
 class OnePointCrosser(Crosser):
@@ -107,9 +117,16 @@ class OnePointCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = np.random.random_integers(0, len(orgs[0]) - 1)
-      return np.append(orgs[0][:idx], orgs[1][idx:], axis=0)
-      
+      if isinstance(orgs[0], np.ndarray):
+         idx = np.random.random_integers(0, len(orgs[0]) - 1)
+         return np.append(orgs[0][:idx], orgs[1][idx:], axis=0)
+      elif isinstance(orgs[0], TernaryString):
+         idx = np.random.random_integers(0, orgs[0].length - 1)
+         ret = TernaryString(orgs[0].base, orgs[0].known, orgs[0].length)
+         ret[idx:] = orgs[1][idx:]
+         return ret
+      else:
+         raise ValueError("Received unknown type in OnePointCrosser")
       
 class TwoPointCrosser(Crosser):
    """
@@ -124,16 +141,22 @@ class TwoPointCrosser(Crosser):
       idx2 = idx1
       while idx1 == idx2:
          idx2 = np.random.random_integers(0, len(orgs[0]) - 1)
-    
+      
+      idx = 0
       if idx1 > idx2:
+         idx = 1
          a = idx1
          idx1 = idx2
          idx2 = a
 
-      return np.append(np.append(orgs[0][:idx1], orgs[1][idx1:idx2],axis=0),
-                       orgs[0][idx2:],
-                       axis=0)
-
+      if isinstance(orgs[0], np.ndarray):
+         return np.append(np.append(orgs[idx][:idx1],
+                                    orgs[1-idx][idx1:idx2],axis=0),
+                          orgs[idx][idx2:],
+                          axis=0)
+      elif isinstance(orgs[0], TernaryString):
+         ret = TernartString(orgs[idx].base, orgs[idx].known, orgs[idx].length)
+         ret[idx1:idx2] = orgs[1-idx]
 
 class IntermediateCrosser(Crosser):
    """
@@ -194,9 +217,10 @@ class Crossover(PopulationDistribution):
                    history=MultiStepMarkovHistory) # num steps must match order
    
    def __init__(self, **kwargs):
-      super(Crossover, self).__init__(**kargs)
+      super(Crossover, self).__init__(**kwargs)
       self.dual = (hasattr(self.config.crosser, 'dual')
                    and self.config.crosser.dual)
+      self.crosser = self.config.crosser(self.config)
    
    def compatible(self, history):
       return (hasattr(history, 'populations') and hasattr(history, 'order')
@@ -211,7 +235,8 @@ class Crossover(PopulationDistribution):
       if crossoverProb < 1e-16:
          return [x for x,s in self.history.populations[0]]
       pops = self.history.populations
-      newpop = [self.crosser(orgs, crossoverProb) for orgs in zip(*pops)]
+      newpop = [self.crosser([org for org, s in orgs], crossoverProb)
+                for orgs in zip(*pops)]
       if self.dual:
          pop = []
          for x,y in newpop:
@@ -228,7 +253,7 @@ class Mutation(PopulationDistribution):
    """
    config = Config(history=MarkovHistory)
    
-   def needsScore(self):
+   def needsScores(self):
       return False
    
    def mutate(self, x):
@@ -272,7 +297,7 @@ class Gaussian(Mutation):
       * p -- The probability of mutating each component; defaults to 1.0
       
   """
-   config = Config(sd=1.0,
+   config = Config(sd=0.01,
                    p=1.0)
    
    def __init__(self, **kwargs):
@@ -285,7 +310,12 @@ class Gaussian(Mutation):
          
    def mutate(self, x):
       p = np.random.binomial(1, self.config.p, len(x))
-      return x + p * np.random.randn(len(x)) * self.sd()
+      ret = x + p * np.random.randn(len(x)) * self.sd()
+      if not self.config.space.in_bounds(ret):
+         scale = self.config.space.scale
+         center = self.config.space.center
+         ret = np.maximum(np.minimum(ret, scale+center),center-scale)
+      return ret
       
    def density(self, center, point):
       sd = self.sd()
@@ -324,20 +354,30 @@ class AreaSensitiveGaussian(Gaussian):
       
       Config parameters:
       * jogo2012 -- Whether to use the methods from Lockett & Miikkulainen, 2012
+      * decay -- A function ``decay(n,config)`` to compute the multiplier
+                 that controls the rate of decrease in standard deviation.
+                 Faster decay causes faster convergence, but may miss the
+                 optimum. Default is ``((1/generations))``
       
       Standard deviation is determined by::
       
-         sd = .5 * ((upper-lower) * scale * ((1/log(generations) ** (1/dim))
+         sd = .5 * ((upper-lower) * decay(n)
          
       where ``dim`` is the dimension of the space (``config.dim``) and 
       ``area`` is the volume of the partition region for the object being mutated.
       
    """
    config = Config(jogo2012=False,
-                   history=PartitionHistory)
+                   decay=lambda n,cfg: (1./n)) # **(1./cfg.space.dim))
+   
+   def __init__(self, **kwargs):
+      super(AreaSensitiveGaussian, self).__init__(**kwargs)
+      if self.config.jogo2012:
+         self.config.decay = lambda n,cfg: (1/n)**.5
    
    def compatible(self, history):
-      return isinstance(history, PartitionHistory)
+      # N.B. we use a Markov history, but assume we are passed the partition nodes
+      return hasattr(history, 'lastPopulation')
    
    def mutate(self, x):
       """Apply area-sensitive gaussian mutation.
@@ -350,25 +390,27 @@ class AreaSensitiveGaussian(Gaussian):
       """
       center = self.config.space.center
       scale = self.config.space.scale
-         
-      y = x.point
-      if hasattr(self.config, 'jogo2012') and self.config.jogo2012:
-         area = y.partition_node.area
+      
+      y, node = x
+      y = y.point
+      if self.config.jogo2012:
+         area = node.area
          # sd = 2 * scale / (-log(area))
          if area < 0.0: 
             area = 1e-100
          sd = self.config.sd * scale * (area ** (1./len(y)))
-         sd /= self.history.updates ** .5
+         sd *= self.config.decay(self.history.updates, self.config)
       else:
-         area = y.partition_node
-         sd = .5 * (area.bounds[1] - area.bounds[0])
+         area = node
+         lower, upper = area.bounds.extent()
+         sd = .5 * (upper - lower)
          sd = np.minimum(sd, scale)
-         sd *= (1./np.log(self.history.updates)) ** (1./self.config.space.dim)
+         sd *= self.config.decay(self.history.updates, self.config)
       
       ret = y + np.random.randn(len(y)) * sd
-      if self.config.space.in_bounds(ret):
+      if not self.config.space.in_bounds(ret):
          ret = np.maximum(np.minimum(ret, scale+center),center-scale)
-         
+      
       return ret
 
    def density(self, info, point):
@@ -396,13 +438,8 @@ class UniformArea(Mutation):
          :returns: A numpy.ndarray mutation the ``point`` property of ``x``.
       
       """
-      y = x.point
-      area = x.partition_node
-      upper = area.bounds[1]
-      lower = area.bounds[0]
-      sd = (area.area < 1.0) and area.area or 1.0
-      r = np.random.random_sample(len(x))
-      return lower + r * (upper - lower)
+      y, area = x
+      return area.bounds.random()
 
 
 class Cauchy(Mutation):
@@ -458,10 +495,10 @@ class Bernoulli(Mutation):
       
       """
       numBytes = int(np.ceil(self.config.space.dim / 8.0))
-      numFull  = self.config.dim / 8
+      numFull  = self.config.space.dim / 8
       initial = ''
       if numBytes != numFull:
-         extra = self.config.dim % 8
+         extra = self.config.space.dim % 8
          initMask = 0
          for i in xrange(extra):
             initMask <<= 1
@@ -472,13 +509,13 @@ class Bernoulli(Mutation):
       p = self.p()
       base = 0L
       active = TernaryString(x.known,x.known)
-      while ((isinstance(p, ndarray) and (p > 1e-16).any()) or
-             (not isinstance(p, ndarray) and p > 1e-16)):
+      while ((isinstance(p, np.ndarray) and (p > 1e-16).any()) or
+             (not isinstance(p, np.ndarray) and p > 1e-16)):
          reps = np.minimum(100, -np.floor(np.log2(p)))
          q = 2.0 ** -reps
          next = start
          activeReps = TernaryString(active.base, active.known)
-         if isinstance(p, ndarray):
+         if isinstance(p, np.ndarray):
             for j, pj in enumerate(p):
                if pj < 1e-16:
                   active[j] = False
@@ -487,17 +524,17 @@ class Bernoulli(Mutation):
                   if i >= r:
                      activeReps[j] = False
                next &= (activeReps.base &
-                        long(binascii.hexlify(random.bytes(numBytes)), 16))
+                        long(binascii.hexlify(np.random.bytes(numBytes)), 16))
          else:
             for i in xrange(int(reps)):
-               next &= long(binascii.hexlify(random.bytes(numBytes)), 16) 
+               next &= long(binascii.hexlify(np.random.bytes(numBytes)), 16) 
          base |= next & active.base
          p = (p - q) / (1.0 - q)
             
       
       base = x.base & ~base | ~x.base & base
       known = x.known
-      return TernaryString(base, known)
+      return TernaryString(base, known, self.config.space.dim)
 
 
 class DecayedBernoulli(Bernoulli):
@@ -542,7 +579,7 @@ class AreaSensitiveBernoulli(Bernoulli):
       return self._p
    
    def density(self, x, z):
-      y = x[0]
+      y = x[0].point
       area = x[1]
       bf = self._p
       prod = 1.0
@@ -554,12 +591,14 @@ class AreaSensitiveBernoulli(Bernoulli):
       return prod
       
    def mutate(self, x):
-      y = x.point
-      area = x.partition_node
-      diff = (area.bounds[1] ^ area.bounds[0]).toArray()
-      logArea = self.config.space.dim - diff.sum()
-      self._p = (diff * self.config.p  +
-                 (1.0 - diff) * self.config.p ** logArea)
+      y = x[0].point
+      area = x[1]
+      #lower, upper = area.bounds.extent()
+      #diff = TernaryString(lower.base ^ upper.base,-1L,lower.length).toArray()
+      #logArea = self.config.space.dim - diff.sum()
+      #self._p = (diff * self.config.p  +
+      #           (1.0 - diff) * self.config.p ** logArea)
+      self._p = self.config.p
       return super(AreaSensitiveBernoulli, self).mutate(y)
 
   

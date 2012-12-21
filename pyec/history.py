@@ -22,6 +22,7 @@ class History(object):
     """
     useCache = True
     attrs = set()
+    sorted = False
     
     def __init__(self, config):
         super(History, self).__init__()
@@ -35,7 +36,8 @@ class History(object):
         if not hasattr(self, 'cache'):
             self.cache = LRUCache() # 10,000 items by default
         self.updates = 0
-        self.printEvery = config.printEvery or 1000000000000L #how often to print generation report
+        #how often to print generation report
+        self.printEvery = config.printEvery or 1000000000000L 
         self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
                           "minSolution", "maxSolution","_empty","cache",
                           "update","printEvery", "useCache"])
@@ -236,7 +238,7 @@ class History(object):
         if not space.in_bounds(point):
            # use NaN so that the result is less than nor greater than
            # any other score, and therefore NEVER optimal
-           s = 1e400 / 1e400
+           s = np.inf - np.inf
         else:
            s = fitness(space.convert(point))
         
@@ -307,8 +309,8 @@ class MultiStepMarkovHistory(History):
     """
     def __init__(self, config):
         super(MultiStepMarkovHistory, self).__init__(config)
-        self.populations = None
-        self.attrs |= self(["populations"])
+        self.populations = []
+        self.attrs |= set(["populations"])
         
     def internalUpdate(self, population):
         self.populations.append(population)
@@ -328,6 +330,7 @@ class SortedMarkovHistory(MarkovHistory):
        ``config.history = lambda h: SortedMarkovHistory(lambda p: -p[1])``
                      
     """
+    sorted = True
     
     def __init__(self, config):
         super(SortedMarkovHistory, self).__init__(config)
@@ -343,9 +346,9 @@ class SortedMarkovHistory(MarkovHistory):
         
         """
         if self.config.minimize:
-            return x[1]
+            return x[1] or np.inf
         else:
-            return -x[1]
+            return -(x[1] or np.inf)
     
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
@@ -537,6 +540,7 @@ class DelayedHistory(History):
     def __init__(self, config, history, delay=1):
         super(DelayedHistory, self).__init__(config)
         self.history = history
+        self.history.printEvery = 100000000L
         if delay < 1:
             err = "Delay must be a positive integer, not {0}".format(delay)
             raise ValueError(err)

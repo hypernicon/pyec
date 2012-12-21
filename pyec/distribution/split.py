@@ -9,12 +9,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 import numpy as np
 
-from pyec.distribution.basic import PopulationDistribution
+from pyec.distribution.basic import PopulationDistribution, HistoryMapper
 from pyec.config import Config
 from pyec.history import MultipleHistory
 
 
-class Splitter(PopulationDistribution):
+class Splitter(PopulationDistribution, HistoryMapper):
     """Build an optimizer from two or more optimizers. Uses the
     ``weight`` property of the suboptimizers to deterministically
     apportion the population among the suboptimizers.
@@ -33,7 +33,7 @@ class Splitter(PopulationDistribution):
         super(Splitter, self).__init__(**kwargs)
         self.subs = subs
         self.history = None
-        self.useScores = np.array([s.needsScores for s in self.subs]).any()
+        self.useScores = np.array([s.needsScores() for s in self.subs]).any()
         
         # force any self-convolutions to self checkpoint
         # since they are now inside of another optimizer
@@ -57,22 +57,6 @@ class Splitter(PopulationDistribution):
             return MultipleHistory(config,
                                    *[opt.config.history for opt in subs])
         return generator
-    
-    def mapHistory(self, sub, history=None):
-        """Find a compatible subhistory for this suboptimizer.
-      
-        :param sub: One of the suboptimizers for this convolution
-        :type sub: :class:`PopulationDistribution`
-        :returns: A compatible :class:`History` for the suboptimizer
-      
-        """
-        if history is None:
-            history = self.history
-        for h in history.histories:
-            if sub.compatible(h):
-                return h
-        c = sub.__class__.__name__  
-        raise ValueError("No compatible history found for {0}".format(c ))
     
     def needsScores(self):
         return self.useScores
