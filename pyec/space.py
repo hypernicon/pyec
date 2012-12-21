@@ -459,7 +459,7 @@ class BayesianNetworks(Space):
         self.proposal = StructureProposal(self.config)
         
     def area(self, **kwargs):
-        return 2.0 ** (self.config.numVariables ** 2)
+        return 1.0
     
     def random(self):
         return self.proposal()
@@ -467,3 +467,50 @@ class BayesianNetworks(Space):
     def extent(self):
         return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
     
+
+class Product(Space):
+    """A topological product space formed from the Cartesian product
+    of multiple spaces.
+    
+    :param spaces: The spaces from which the product is to be formed
+    :type spaces: ``list`` of :class:`Space` objects
+    
+    """
+    def __init__(self, *spaces):
+        super(Product, self).__init__(list)
+        self.spaces = spaces
+        
+    def random(self):
+        return [space.random() for space in self.spaces]
+    
+    def area(self, **kwargs):
+        return float(np.prod([space.area(**kwargs) for space in self.spaces]))
+    
+    def extent(self):
+        extents = [space.extent() for space in self.spaces]
+        lowers = [lower for lower,upper in extents]
+        uppers = [upper for upper in extents]
+        return lowers, uppers
+    
+    def in_bounds(self, x):
+        return np.ndarray([space.in_bounds(y)
+                           for y,space in zip(x,self.spaces)]).all()
+    
+    def hash(self, x):
+        return "|:|".join([space.hash[y] for y,space in zip(x,self.spaces)])
+    
+
+class EndogeneousProduct(Product):
+    """A product space for which only the first portion of the space is to be
+    passed to the objective function. Other spaces represent endogeneous
+    parameters for mutation, as in Evolution Strategies.
+    
+    """
+    def convert(self, x):
+        """Return the value of ``x`` in the first space.
+        
+        :param x: An element in the space
+        :type x: ``list``
+        
+        """
+        return x[0]
