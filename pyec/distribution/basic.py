@@ -131,7 +131,7 @@ class PopulationDistributionMeta(type):
          :type cfg: :class:`Config`
          :returns: A new population distribution class
       """
-      name = "{0}_{1}".format(cls.__name__, hash(cfg))
+      name = "{0}_qqq{1}qqq".format(cls.__name__, hash(cfg))
       cls2 = cls._checkName(name)
       if cls2 is None:
           bases = (cls,)
@@ -155,7 +155,7 @@ class PopulationDistributionMeta(type):
          raise ValueError("Cannot multiply an optimizer by a negative number")
       
       
-      name = "{0}_mult_{1}".format(cls.__name__, val)
+      name = "{0}_mult_qqq{1}qqq".format(cls.__name__, val)
       name = name.replace(".","_").replace("-","_")
       cls2 = cls._checkName(name)
       if cls2 is None:
@@ -181,7 +181,7 @@ class PopulationDistributionMeta(type):
     
       import pyec.distribution.convex
       cvx = pyec.distribution.convex.Convex
-      name = "{0}_add_{1}".format(cls.__name__, other.__name__)
+      name = "{0}_add_qqq{1}qqq".format(cls.__name__, other.__name__)
       cls2 = cls._checkName(name)
       if cls2 is None:
           bases = (cvx,)
@@ -212,7 +212,7 @@ class PopulationDistributionMeta(type):
       conv = pyec.distribution.convolution.Convolution
       
       if inspect.isclass(other) and issubclass(other, PopulationDistribution):
-          name = "{0}_convolve_{1}".format(cls.__name__, other.__name__)
+          name = "{0}_convolve_qqq{1}qqq".format(cls.__name__, other.__name__)
           cls2 = cls._checkName(name)
           if cls2 is None:
               bases = (conv,)
@@ -316,7 +316,7 @@ class PopulationDistributionMeta(type):
          raise ValueError("Expected pipe argument "
                           "to be a PopulationDistribution subclass")
 
-      name = "{0}_pipe_{1}".format(cls.__name__, other.__name__)
+      name = "{0}_pipe_qqq{1}qqq".format(cls.__name__, other.__name__)
       cls2 = cls._checkName(name)
       if cls2 is None:
          import pyec.distribution.split
@@ -644,6 +644,42 @@ class PopulationDistribution(Distribution):
       
       """
       return True
+
+
+class HistoryMapper(object):
+   """Mixin."""
+   def __init__(self, **kwargs):
+      self.history = None
+      self.historyCache = {}
+      
+   def mapHistory(self, sub, history=None):
+      """Find a compatible subhistory for this suboptimizer.
+      
+      :param sub: One of the suboptimizers for this convolution
+      :type sub: :class:`PopulationDistribution`
+      :returns: A compatible :class:`History` for the suboptimizer
+      
+      """
+      if history is None:
+         history = self.history
+      
+      if history is not self.history:
+         self.historyCache = {}
+      
+      if sub not in self.historyCache:
+         for h in history.histories:
+            try:
+               if sub.compatible(h):
+                  self.historyCache[sub] = h
+                  break
+            except:
+               pass
+      
+      if sub in self.historyCache:
+         return self.historyCache[sub]
+      
+      c = sub.__class__.__name__  
+      raise ValueError("No compatible history found for {0}".format(c ))
 
 
 class GaussianProposal(ProposalDistribution, PopulationDistribution):

@@ -119,8 +119,9 @@ class GeneralizedProportional(Selection):
       return [self.sample() for i in xrange(popSize)]
 
    def update(self, history, fitness):
-      super(Proportional, self).update(history, fitness)
-      self.buildProbabilities(self.history.lastPopulation())
+      super(GeneralizedProportional, self).update(history, fitness)
+      if not history.empty():
+         self.buildProbabilities(history.lastPopulation())
       
    def buildProbabilities(self, lastPopulation):
       """Take the last population (with scores) and recompute the
@@ -131,10 +132,13 @@ class GeneralizedProportional(Selection):
       :type lastPopulation: A list of (point, score) tuples
       
       """
+      if lastPopulation is None:
+         return
+      
       try:
-         population = [(p[0], self.config.modulator(p[1],i,cfg))
+         population = [(p[0], self.config.modulator(p[1],i,self.config))
                        for i,p in enumerate(lastPopulation)]
-      except:
+      except Exception:
          population = [(x, self.config.modulator(s))
                        for x,s in lastPopulation]
       self.total = sum([s for x,s in population])
@@ -191,36 +195,38 @@ class Tournament(GeneralizedProportional):
       Config parameters:
       * pressure -- The probability of choosing the best
                     member of the randomly subsampled population.
-      * order -- The size of the subsample to select from, or ``None``
+      * size -- The size of the subsample to select from, or ``None``
                  for tournament selection over the entire population
       
    """
-   config = Config(pressure=0.1,
-                   order=None,
+   config = Config(pressure=0.25,
+                   size=None,
                    history=SortedMarkovHistory)
    
    def __init__(self, **kwargs):
       super(Tournament, self).__init__(**kwargs)
-      self.pressure = config.pressure
-      self.order = self.config.order or self.config.populationSize
+      self.pressure = self.config.pressure
+      self.size = self.config.size or self.config.populationSize
       self.ordered = None
 
    def compatible(self, history):
       return super(Tournament, self).compatible(history) and history.sorted
 
    def sample(self):
-      newpop = random.shuffle(self.ordered)[:self.order]
-      newpop = sorted(newpop, key=lambda x: x[1])
+      random.shuffle(self.ordered)
+      newpop = sorted(self.ordered[:self.size], key=lambda x: x[1])
       idx = 0
       while True:
          rnd = np.random.random_sample()
          if rnd <= self.pressure:
-            return newpop[idx % self.order][0]
+            return newpop[idx % self.size][0]
          idx += 1
 
    def buildProbabilities(self, lastPopulation):
+      if lastPopulation is None:
+         return
       self.ordered = [(p[0],i) for i,p in
-                      enumerate(self.history.lastPopulation())]  
+                      enumerate(self.history.lastPopulation())]
 
 
 class Ranker(object):
@@ -304,6 +310,9 @@ class Ranking(GeneralizedProportional):
   
    def density(self, idx):
       return self.ranker(idx, len(self.matchedPopulation)) / self.total
+   
+   def compatible(self, history):
+      return super(Ranking, self).compatible(history) and history.sorted
 
 
 class Elitist(Selection):
@@ -323,6 +332,6 @@ class Elitist(Selection):
       
    """
    def batch(self, popSize):
-      return self.population
+      return [x for x,s in self.history.lastPopulation()]
 
 

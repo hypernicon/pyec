@@ -91,9 +91,19 @@ class OnePointDualCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = np.random.random_integers(0, len(orgs[0]) - 1)
-      return (np.append(orgs[0][:idx], orgs[1][idx:], axis=0),
-              np.append(orgs[1][:idx], orgs[0][idx:], axis=0))
+      if isinstance(orgs[0], np.ndarray):
+         idx = np.random.random_integers(0, len(orgs[0]) - 1)
+         return (np.append(orgs[0][:idx], orgs[1][idx:], axis=0),
+                 np.append(orgs[1][:idx], orgs[0][idx:], axis=0))
+      elif isinstance(orgs[0], TernaryString):
+         idx = np.random.random_integers(0, orgs[0].length - 1)
+         ret1 = TernaryString(orgs[0].base, orgs[0].known, orgs[0].length)
+         ret2 = TernaryString(orgs[1].base, orgs[1].known, orgs[1].length)
+         ret1[idx:] = orgs[1][idx:]
+         ret2[idx:] = orgs[0][idx:]
+         return ret1,ret2
+      else:
+         raise ValueError("Received unknown type in OnePointDualCrosser.")
 
 
 class OnePointCrosser(Crosser):
@@ -107,9 +117,16 @@ class OnePointCrosser(Crosser):
    def __call__(self, orgs, prob=1.0):
       if np.random.random_sample() > prob:
          return orgs[0], orgs[1]
-      idx = np.random.random_integers(0, len(orgs[0]) - 1)
-      return np.append(orgs[0][:idx], orgs[1][idx:], axis=0)
-      
+      if isinstance(orgs[0], np.ndarray):
+         idx = np.random.random_integers(0, len(orgs[0]) - 1)
+         return np.append(orgs[0][:idx], orgs[1][idx:], axis=0)
+      elif isinstance(orgs[0], TernaryString):
+         idx = np.random.random_integers(0, orgs[0].length - 1)
+         ret = TernaryString(orgs[0].base, orgs[0].known, orgs[0].length)
+         ret[idx:] = orgs[1][idx:]
+         return ret
+      else:
+         raise ValueError("Received unknown type in OnePointCrosser")
       
 class TwoPointCrosser(Crosser):
    """
@@ -124,16 +141,22 @@ class TwoPointCrosser(Crosser):
       idx2 = idx1
       while idx1 == idx2:
          idx2 = np.random.random_integers(0, len(orgs[0]) - 1)
-    
+      
+      idx = 0
       if idx1 > idx2:
+         idx = 1
          a = idx1
          idx1 = idx2
          idx2 = a
 
-      return np.append(np.append(orgs[0][:idx1], orgs[1][idx1:idx2],axis=0),
-                       orgs[0][idx2:],
-                       axis=0)
-
+      if isinstance(orgs[0], np.ndarray):
+         return np.append(np.append(orgs[idx][:idx1],
+                                    orgs[1-idx][idx1:idx2],axis=0),
+                          orgs[idx][idx2:],
+                          axis=0)
+      elif isinstance(orgs[0], TernaryString):
+         ret = TernartString(orgs[idx].base, orgs[idx].known, orgs[idx].length)
+         ret[idx1:idx2] = orgs[1-idx]
 
 class IntermediateCrosser(Crosser):
    """
@@ -274,7 +297,7 @@ class Gaussian(Mutation):
       * p -- The probability of mutating each component; defaults to 1.0
       
   """
-   config = Config(sd=1.0,
+   config = Config(sd=0.01,
                    p=1.0)
    
    def __init__(self, **kwargs):
@@ -287,7 +310,12 @@ class Gaussian(Mutation):
          
    def mutate(self, x):
       p = np.random.binomial(1, self.config.p, len(x))
-      return x + p * np.random.randn(len(x)) * self.sd()
+      ret = x + p * np.random.randn(len(x)) * self.sd()
+      if not self.config.space.in_bounds(ret):
+         scale = self.config.space.scale
+         center = self.config.space.center
+         ret = np.maximum(np.minimum(ret, scale+center),center-scale)
+      return ret
       
    def density(self, center, point):
       sd = self.sd()

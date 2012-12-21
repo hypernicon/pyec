@@ -316,7 +316,29 @@ class BinaryReal(Binary):
         
         if np.shape(scale) != (realDim,):
             raise ValueError("Dimension of scale array doesn't match dim")
+    
+        # nb we could still use a cache for higher bit depth,
+        # we just have to be more careful -- break it into groups of
+        # 16 and then combine
+        self.useCache = self.bitDepth <= 16
+        if self.useCache:
+            self._cache = [self.convertOne(i) for i in xrange(1 << self.bitDepth)]
+        else:
+            self._cache = None
+            
+        self.mask = (1L << self.bitDepth) - 1L
+    
+    def convertOne(self, x):
+        val = 0.0
+        current = 0.5
+        mask = 1L
+        for j in xrange(self.bitDepth):
+            val += current * (x & mask != 0)
+            current /= 2.0
+            mask <<= 1
+        return val
         
+       
     def convert(self, x):
         if not isinstance(x, self.type):
             cname = self.__class__.__name__
@@ -331,13 +353,11 @@ class BinaryReal(Binary):
         
         idx = 0
         for i in xrange(self.realDim):
-            val = 0.0
-            current = 0.5
-            for j in xrange(self.bitDepth):
-                val += current * x[idx]
-                current /= 2.0
-                idx += 1
-            ret[i] = val
+            nextIdx = idx + self.bitDepth
+            b = x[idx:nextIdx]
+            b = b.base & b.known & self.mask
+            idx = nextIdx
+            ret[i] = self.useCache and self._cache[b] or self.convertOne(b)
             
         return self.adj + self.scale2 * ret
 

@@ -22,6 +22,7 @@ class History(object):
     """
     useCache = True
     attrs = set()
+    sorted = False
     
     def __init__(self, config):
         super(History, self).__init__()
@@ -329,6 +330,7 @@ class SortedMarkovHistory(MarkovHistory):
        ``config.history = lambda h: SortedMarkovHistory(lambda p: -p[1])``
                      
     """
+    sorted = True
     
     def __init__(self, config):
         super(SortedMarkovHistory, self).__init__(config)
@@ -344,9 +346,9 @@ class SortedMarkovHistory(MarkovHistory):
         
         """
         if self.config.minimize:
-            return x[1]
+            return x[1] or np.inf
         else:
-            return -x[1]
+            return -(x[1] or np.inf)
     
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
