@@ -166,6 +166,8 @@ class IntermediateCrosser(Crosser):
       Normally used by evolution strategies.
    """
    def __call__(self, orgs, prob=1.0):
+      if isinstance(orgs[0], list):
+         return [np.array(x).sum(axis=0) / len(orgs) for x in zip(*orgs)]
       return np.array(orgs).sum(axis=0) / len(orgs)
       
       
@@ -174,6 +176,8 @@ class DominantCrosser(Crosser):
       Cross multiple organisms using generalized uniform crossover.
    """
    def __call__(self, orgs, prob=1.0):
+      if isinstance(orgs[0], list):
+         return [self.__call__(x, prob) for x in zip(*orgs)]
       x = []
       for i in xrange(len(orgs[0])):
          idx = np.random.randint(0, len(orgs))
@@ -650,12 +654,15 @@ class CorrelatedEndogeneousGaussian(Mutation):
       
       This method is obsolete and is very different from the modern version.
       
-      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS
+      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS, see
+      :class:`EndogeneousProduct`
       
+      1996 paper says to set cmaCumulation to $\frac{1}{\sqrt{n}}$,
+      cmaDamping to $\frac{1}{n}$, cmaCorrelation to $\frac{2}{n^2}$.
+      Default assumes will be run 1000 generations, n=1000
       
       Config Parameters:
       
-      * baseDim -- The dimension of the Euclidean space without mutation params
       * sd
       * cmaCumulation
       * cmaDamping
@@ -664,20 +671,37 @@ class CorrelatedEndogeneousGaussian(Mutation):
    """
    config = Config(baseDim=None,
                    sd=1.0,
-                   cmaCumulation=1.0,
-                   cmaDamping=1.0,
-                   cmaCorrelation=1.0)
+                   cmaCumulation=1./np.sqrt(1000.), # 1/sqrt(n)
+                   cmaDamping=.001, # 1/n
+                   cmaCorrelation=0.000002) # 2/n^2
    
-   def __init__(self, config):
-      super(CorrelatedEndogeneousGaussian,self).__init__(config)
-      if self.config.space.type != np.ndarray:
-         raise ValueError("Correlated Endogeneous Gaussian expects space with "
-                          "type numpy.ndarray")
+   def __init__(self, **kwargs):
+      super(CorrelatedEndogeneousGaussian,self).__init__(**kwargs)
+      if (not isinstance(self.config.space, EndogeneousProduct) or
+          len(self.config.space.spaces) < 5 or
+          self.config.space.spaces[0].type != np.ndarray or
+          self.config.space.spaces[1].type != np.ndarray or
+          (self.config.space.spaces[1].dim !=
+           (self.config.space.spaces[0].dim *
+            (self.config.space.spaces[0].dim + 1) / 2)) or
+          self.config.space.spaces[2].type != np.ndarray or
+          self.config.space.spaces[2].dim != self.config.space.spaces[0].dim or
+          self.config.space.spaces[3].type != np.ndarray or
+          self.config.space.spaces[3].dim != self.config.space.spaces[0].dim or
+          self.config.space.spaces[4].type != np.ndarray or
+          self.config.space.spaces[4].dim != self.config.space.spaces[0].dim):
+         raise ValueError("Correlated Endogeneous Gaussian expects "
+                          "EndogeneousProduct "
+                          "space with five components, each of "
+                          "type numpy.ndarray; if the dimension of "
+                          "the first is N, the dimension of the second "
+                          "must be N(N+1)/2, and the third through fifth are "
+                          "both of dimension N")
       
       self.sd = self.config.sd
-      self.dim = self.config.space.dim
-      self.center = self.config.space.center
-      self.scale = self.config.space.scale
+      self.dim = self.config.space.spaces[0].dim
+      self.center = self.config.space.spaces[0].center
+      self.scale = self.config.space.spaces[0].scale
       self.cumulation = self.config.cmaCumulation
       self.cu = np.sqrt(self.cumulation * (2 - self.cumulation))
       self.beta = self.config.cmaDamping
@@ -688,7 +712,7 @@ class CorrelatedEndogeneousGaussian(Mutation):
       self.numEndogeneous = self.dim * (self.dim - 1) / 2 + 3*self.dim
     
    def unpack(self, sig):
-      """take a N(N-1)/2 array and make a N x N matrix"""
+      """take a N(N+1)/2 array and make a N x N matrix"""
       idx = 0
       mat = []
       for i in xrange(self.dim):
@@ -700,46 +724,40 @@ class CorrelatedEndogeneousGaussian(Mutation):
                 row.append(sig[idx])
                 idx += 1
          mat.append(row)
-      return array(mat)
+      return np.array(mat)
    
    def pack(self, mat):
-      """take a N x N matrix and make a N(N-1)/2 array"""
+      """take a N x N matrix and make a N(N+1)/2 array"""
       idx = 0
       sig = []
       for i in xrange(self.dim):
          for j in xrange(self.dim):
             if j >= i:
                 sig.append(mat[i][j])
-      return array(sig) 
+      return np.array(sig) 
    
    def mutate(self, x):
-      z = 2 * self.scale * np.ones(self.dim) + self.center
-      y = x[:self.dim]
-      sig = x[self.dim:-3*self.dim]
-      cum = x[-3*self.dim:-2*self.dim]
-      delta = x[-2*self.dim:-self.dim]
-      deltaCum = x[-self.dim:]
+      y = x[0]
+      sig = x[1]
+      cum = x[2]
+      delta = x[3]
+      deltaCum = x[4]
       rot = self.unpack(sig)
       corr = np.dot(rot, rot)
             
-      deltaRot = rot / outer(rot.sum(axis=1), ones(self.dim))
-      while (abs(z - self.center) > self.scale).any():
-         deltaCum2 = (1 - self.cumulation) * deltaCum \
-          + self.cu * np.dot(deltaRot, np.random.randn(self.dim))
-         delta2 = delta * np.exp(self.beta * (np.sqrt(deltaCum2 ** 2) - self.chi))
+      deltaRot = rot / np.outer(rot.sum(axis=1), np.ones(self.dim))
+      deltaCum2 = (1 - self.cumulation) * deltaCum \
+       + self.cu * np.dot(deltaRot, np.random.randn(self.dim))
+      delta2 = delta * np.exp(self.beta * (np.sqrt(deltaCum2 ** 2) - self.chi))
             
-         cum2 = (1 - self.cumulation) * cum \
-          + self.cu * dot(rot, np.random.randn(self.dim))
-         corr2 = (1 - self.correlation) * corr \
-          + self.correlation * outer(cum2, cum2)
-         rot2 = np.linalg.cholesky(corr2)
-         sig2 = self.pack(rot2)
-            
-                        
-         z = y + delta * dot(rot, random.randn(len(y)))
-            
-      z0 = np.append(np.append(z, sig2, axis=0), cum2, axis=0)
-      z1 = np.append(np.append(z0, delta2, axis=0), deltaCum2, axis=0)
-      self.sd = np.average(sig)
-      return z1   
-            
+      cum2 = (1 - self.cumulation) * cum \
+          + self.cu * np.dot(rot, np.random.randn(self.dim))
+      corr2 = (1 - self.correlation) * corr \
+          + self.correlation * np.outer(cum2, cum2)
+      rot2 = np.linalg.cholesky(corr2)
+      sig2 = self.pack(rot2)
+      
+      z = y + delta * np.dot(rot, np.random.randn(len(y)))
+      
+      self.sd = np.average(sig)      
+      return [z, sig2, cum2, delta2, deltaCum2]

@@ -556,7 +556,7 @@ class DelayedHistory(History):
         """
         if population is None:
             return self
-            
+        
         if len(self.queue) == self.delay:
             self.evals += len(self.queue[-1])
             self.updates += 1
