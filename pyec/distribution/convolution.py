@@ -62,7 +62,7 @@ class Convolution(PopulationDistribution, HistoryMapper):
                fitness = sub.needsScores() and self.fitness or None
                self.history.update(pop, fitness, sub.config.space)
            sub.update(self.mapHistory(sub), self.fitness)
-           pop = sub.batch(popSize)
+           pop = sub()
              
        self.history.rollback()
        return pop
@@ -152,7 +152,7 @@ class SelfConvolution(PopulationDistribution):
             if pop is not None:
                 self.history.update(pop, fitness, self.opt.config.space)
             self.opt.update(self.history.history, self.fitness)
-            pop = self.opt.batch(popSize)
+            pop = self.opt()
            
         if self.checkpoint:
             self.history.rollback()

@@ -62,7 +62,7 @@ class Convex(PopulationDistribution, HistoryMapper):
         
     def batch(self, popSize):
         sub = self.chooseSub()
-        return sub.batch(popSize)
+        return sub()
             
     def update(self, history, fitness):
         super(Convex, self).update(history, fitness)

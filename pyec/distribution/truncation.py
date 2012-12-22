@@ -52,12 +52,13 @@ class TrajectoryTruncation(PopulationDistribution):
         return self        
         
     def batch(self, popSize):
-        return self.opt.batch(popSize)
+        return self.opt()
 
     def needsScores(self):
         return self.opt.needsScores()
     
     def compatible(self, history):
         return (isinstance(history, DelayedHistory) and
+                history.delay == self.delay and
                 self.opt.compatible(history.history))
                 
