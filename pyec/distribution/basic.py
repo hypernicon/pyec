@@ -31,6 +31,9 @@ class Distribution(object):
       super(Distribution, self).__init__()
       self.config = Distribution.config.merge(Config(**kwargs))
 
+   def __call__(self):
+      return self.sample()
+
    def sample(self, **kwargs):
       """Get a single sample from the distribution."""
       return self.batch(1)[0]

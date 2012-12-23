@@ -11,134 +11,108 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 from numpy import *
 import numpy.linalg
 
-from pyec.distribution.basic import *
+from pyec.distribution.basic import PopulationDistribution
 from pyec.distribution.bayes.net import BayesNet
 from pyec.distribution.bayes.sample import DAGSampler
 from pyec.distribution.bayes.structure.greedy import GreedyStructureSearch
 from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.bayes.score import BayesianDirichletScorer, BayesianInformationCriterion
-from pyec.distribution.bayes.variables import *
+from pyec.distribution.bayes.variables import BinaryVariable, GaussianVariable
+from pyec.history import SortedMarkovHistory
+from pyec.space import Binary, BinaryReal, Euclidean
 from pyec.util.TernaryString import TernaryString
 
-from pyec.config import ConfigBuilder
+from pyec.config import Config
 
 import scipy.cluster.vq as vq
 
 seterr(divide="ignore")
 
-class RBoaConfigurator(ConfigBuilder):
-   
-   def __init__(self, *args):
-      super(RBoaConfigurator, self).__init__(Boa)
-      self.cfg.toSelect = .25
-      self.cfg.space = 'real'
-      self.cfg.branchFactor = 3
-
-   def postConfigure(self, cfg):
-      cfg.numVariables = cfg.dim
-
-class BoaConfigurator(RBoaConfigurator):
-   def __init__(self, *args):
-      super(BoaConfigurator, self).__init__(*args)
-      self.cfg.space = 'binary'
-      self.cfg.branchFactor = 10
-      self.cfg.binaryDepth = 16
-
-   def postConfigure(self, cfg):
-      cfg.rawdim = cfg.dim
-      cfg.rawscale = cfg.scale
-      cfg.rawcenter = cfg.center
-      cfg.dim = cfg.dim * cfg.binaryDepth
-      cfg.center = .5
-      cfg.scale = .5 
-      cfg.numVariables = cfg.dim
 
 class Boa(PopulationDistribution):
-   unsorted = False
+   """The Bayesian Optimization Algorithm of Martin Pelikan. """
+   config = Config(variableGenerator=BinaryVariable,
+                   branchFactor=3,
+                   structureGenerator=GreedyStructureSearch(3, BayesianInformationCriterion()),
+                   randomizer = lambda net: TernaryString(0L, -1L, net.numVariables),
+                   sampler = DAGSampler(),
+                   data = None,
+                   truncate = 0.60, # percentage of the population to keep
+                   space = BinaryReal(realDim=5),
+                   history=SortedMarkovHistory)
 
-   def __init__(self, cfg):
-      super(Boa, self).__init__(cfg)
-      self.dim = cfg.dim
-      self.selected = cfg.toSelect
-      if cfg.space == 'real':
-         cfg.variableGenerator = lambda i: GaussianVariable(i, cfg.dim, cfg.scale)
-         cfg.structureGenerator = GreedyStructureSearch(cfg.branchFactor, BayesianInformationCriterion())
-         cfg.randomizer = lambda x: zeros(cfg.dim)
-         cfg.sampler = DAGSampler()
-         self.network = BayesNet(cfg)
-         self.config.data = None
-         self.network = StructureProposal(self.config)(self.network)
-         self.initial = FixedCube(cfg)
-      else:
-         cfg.variableGenerator = BinaryVariable
-         cfg.structureGenerator = GreedyStructureSearch(cfg.branchFactor, BayesianDirichletScorer())
-         cfg.randomizer = lambda x: TernaryString(0L,0L)
-         cfg.sampler = DAGSampler()
-         self.network = BayesNet(cfg)
-         self.config.data = None
-         self.network = StructureProposal(self.config)(self.network)
-         self.initial = BernoulliTernary(cfg)
+   def __init__(self, **kwargs):
+      super(Boa, self).__init__(**kwargs)
+      self.network = BayesNet(numVariables=self.config.space.dim,
+                              **self.config.__properties__)
+      self.network = StructureProposal(self.config)(self.network)
       self.trained = False
-      self.cfg = cfg
-      self.elitist = False
-      if hasattr(cfg, 'elitist') and cfg.elitist:   
-         self.elitist = True
-      self.maxScore = 0
-      self.maxOrg = None
 
-   def __call__(self):
-      if not self.trained:
-         return self.initial.__call__()
-      
-      if self.cfg.space == "real":
-         # set up the clustering
-         for w, subset in enumerate(self.decomp):
-            # pick a cluster
-            r = random.random_sample()
-            idx = None
-            for i, c in enumerate(self.clusterCoeffs[w]):
-               if c >= r:
-                  idx = i
-            
-            # set the mean, sd, and sdinv to match the cluster choice
-            for j in subset:
-               var = self.network.get(j)
-               var.mu = self.clusterMeans[w][idx][j]
-               var.sd = self.clusterSds[w][idx][j]
-               var.sdinv = self.clusterSdInvs[w][idx][j]
-      
+   def compatible(self, history):
+      return hasattr(history, "lastPopulation") and history.sorted
+
+   def sample(self):
       x = self.network.__call__()
-      if self.cfg.space == "binary":
-         x = self.decodeData(x)
-      elif self.cfg.bounded and not self.cfg.in_bounds(x):
-         return self.__call__()
+      cnt = 0
+      while not self.config.space.in_bounds(x):
+         if cnt > 10000:
+            raise ValueError("Rejection sampling failed after 10,000 attempts in BOA")
+         x = self.network.__call__()
+         cnt += 1
       return x
 
    def batch(self, num):
-      if hasattr(self, 'newpop'):
-         return self.newpop
-      else:
-         return [self.__call__() for i in xrange(num)]
+      return [self.sample() for i in xrange(num)]
 
-   def update(self, generation, population):
-      self.trained = True
-      if self.maxOrg is None or self.maxScore <= population[0][1]:
-         self.maxOrg = population[0][0]
-         self.maxScore = population[0][1]
-      selected = int(self.selected * len(population))
-      if self.elitist:
-         data = [self.convertData(self.maxOrg), self.maxScore] + [self.convertData(x) for x,s in population[:selected]]
-      else:
-         data = [self.convertData(x) for x,s in population[:selected]]
-      self.network = BayesNet(self.config)
-      self.config.data = None
-      self.network = StructureProposal(self.config)(self.network)
-      self.config.data = data
-      self.network.structureSearch(data)
-      self.network.update(generation, data)
-      
-      if self.config.space != "real":
+   def update(self, history, fitness):
+      super(Boa, self).update(history,fitness)
+      if history.lastPopulation() is None:
          return
+      
+      population = [x for x,s in history.lastPopulation()]
+      selected = int(self.config.truncate * len(population))
+      self.network = BayesNet(numVariables=self.config.space.dim,
+                              **self.config.__properties__)
+      self.network.config.data = None
+      self.network = StructureProposal(self.network.config)(self.network)
+      self.network.config.data = population
+      self.network.structureSearch(population)
+      self.network.update(self.history.updates, population)
+
+
+class RBoa(Boa):
+   """The Real-coded Boa algorithm of Ahn et al."""
+   config = Config(variableGenerator=GaussianVariable,
+                   randomizer = lambda net: zeros(net.numVariables),
+                   space=Euclidean(dim=5))
+   
+   def sample(self):
+      # set up the clustering
+      for w, subset in enumerate(self.decomp):
+         # pick a cluster
+         r = random.random_sample()
+         idx = None
+         for i, c in enumerate(self.clusterCoeffs[w]):
+            if c >= r:
+               idx = i
+            
+         # set the mean, sd, and sdinv to match the cluster choice
+         for j in subset:
+            var = self.network.get(j)
+            var.mu = self.clusterMeans[w][idx][j]
+            var.sd = self.clusterSds[w][idx][j]
+            var.sdinv = self.clusterSdInvs[w][idx][j]
+      
+      return super(RBoa, self).sample()
+   
+   def update(self, history, fitness):
+      super(RBoa,self).update(history, fitness)
+      if history.lastPopulation() is None:
+         return
+      
+      population = [x for x,s in history.lastPopulation()]
+      selected = int(self.config.truncate * len(population))
+      data = population[:selected]
       
       decomp = self.network.decompose()
       
@@ -202,9 +176,6 @@ class Boa(PopulationDistribution):
                 self.clusterMeans[w][cnum][idx] = var.mu
                 self.clusterSds[w][cnum][idx] = var.sd
                 self.clusterSdInvs[w][cnum][idx] = var.sdinv
-             
-      self.newpop = data + [self.__call__() for i in xrange(len(population) - selected)]
-         
         
    def project(self, data, subset):
       data2 = []
@@ -214,23 +185,5 @@ class Boa(PopulationDistribution):
             nd.append(d[idx])
          data2.append(nd)
       return array(data2)
-   
-   def convert(self, x):
-      if self.config.space == "binary":
-         ns = array([i+1 for i in xrange(self.config.binaryDepth)] * self.config.rawdim)
-         ms = .5 ** ns
-         y = reshape(x.__mult__(ms), (self.config.binaryDepth, self.config.rawdim))
-         y = y.sum(axis=0).reshape(self.config.rawdim)
-         return y * self.config.rawscale + self.config.rawcenter
-      return x
-   
-   def convertData(self, x):
-      return x
-   
-   def decodeData(self, x):
-      return y
-   
-   @classmethod
-   def configurator(cls):
-      return BoaConfigurator(cls)   
- 
+
+

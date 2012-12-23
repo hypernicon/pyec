@@ -23,6 +23,9 @@ class GreedyStructureSearch(StructureSearch):
    def __call__(self, network, data):
       self.network = network
       stats = RunStats()
+      addDeltas = {}
+      remDeltas = {}
+      revDeltas = {}
    
       # clear the variables
       for variable in network.variables:
@@ -33,25 +36,47 @@ class GreedyStructureSearch(StructureSearch):
       self.network.computeEdgeStatistics()
       
       changes = 1
-      score = -1e300
+      score = self.scorer(network, data)
       start = time()
       self.network.changed = {}
       self.network.likelihood(data)
+      
+      # figure the parents
+      parents = {}
+      for variable in network.variables:
+         parents[variable.index] = ",".join([str(p)
+                                             for p in variable.parents.keys()])
+         
       while True:
          start = time()
          bestType = "none"
          bestIdx1 = 0
          bestIdx2 = 0
          bestScore = score
-      
+         
          # try to remove an edge
+         #stats.start("remove")
          for i1, variable in enumerate(network.variables):
             for idx, v2 in variable.parents.iteritems():
+               parents1 = parents[variable.index]
+               parents2 = parents[v2.index]
+                  
+               if (variable.index, v2.index) in remDeltas:
+                  delta, p1, p2 = remDeltas[(variable.index, v2.index)]
+                  if p1 == parents1 and p2 == parents2:
+                     score2 = score + delta
+                     if not score2 > bestScore:
+                        continue
                try:
                   toRemove = variable.parents[idx]
                   undo = self.removeEdge(idx, variable, data)
                   self.network.changed = {variable.index:True, toRemove.index:True}
                   score2 = self.attempt(lambda: self.scorer(network, data), undo)
+                  self.network.changed = {}
+                  toCache = (score2 - score, parents1, parents2)
+                  remDeltas[(variable.index,v2.index)] = toCache
+                     
+                  
                   if score2 > bestScore:
                      bestScore = score2
                      bestType = "remove"
@@ -60,23 +85,39 @@ class GreedyStructureSearch(StructureSearch):
                   undo()
                except:   
                   pass
-                  
+         #stats.stop("remove")
          
          # try to reverse an edge
+         #stats.start("reverse")
          for i1, variable in enumerate(network.variables):
             for idx, v2 in variable.parents.iteritems():
                toReverse = variable.parents[idx]
                if len(toReverse.parents) >= self.branchFactor:
                   continue
+               
+               parents1 = parents[variable.index]
+               parents2 = parents[v2.index]   
+               
+               if (variable.index, v2.index) in revDeltas:
+                  delta, p1, p2 = revDeltas[(variable.index, v2.index)]
+                  if p1 == parents1 and p2 == parents2:
+                     score2 = score + delta
+                     if not score2 > bestScore:
+                        # fall through if the score is better;
+                        # still have to check for cyclic graph
+                        continue
+               
                if not self.canReverse(toReverse, variable):
                   continue
-               
                
                try:
                   undo = self.reverseEdge(idx, variable, data)
                   self.network.changed = {variable.index:True, toReverse.index:True}
                   score2 = self.attempt(lambda: self.scorer(network, data), undo)
                   self.network.changed = {}
+                  toCache = (score2 - score, parents1, parents2)
+                  revDeltas[(variable.index,v2.index)] = toCache
+                     
                   
                   if score2 > bestScore:
                      bestScore = score2
@@ -86,16 +127,30 @@ class GreedyStructureSearch(StructureSearch):
                   undo()
                except:
                   pass  
-               
+         #stats.stop("reverse")
          
          # try to add an edge
+         #stats.start("add")
          for i1, variable in enumerate(network.variables):
             for i2, variable2 in enumerate(network.variables):
-               if self.admissibleEdge(variable, variable2):
-                  
-                  if len(variable.parents) >= self.branchFactor:
-                     continue
+               if len(variable.parents) >= self.branchFactor:
+                  continue
                
+               if (variable.index, variable2.index) in addDeltas:
+                  parents1 = parents[variable.index]
+                  parents2 = parents[variable2.index]
+                  delta, p1, p2 = addDeltas[(variable.index, variable2.index)]
+                  if p1 == parents1 and p2 == parents2:
+                     score2 = score + delta
+                     if not score2 > bestScore:
+                        # all through if score is better
+                        # because we may end up with a cyclic graph
+                        continue
+                  
+               if self.admissibleEdge(variable, variable2):
+                  parents1 = parents[variable.index]
+                  parents2 = parents[variable2.index]
+                  
                   #stats.start("add.inner")
                   try:
                      #stats.start("add.add")
@@ -104,6 +159,8 @@ class GreedyStructureSearch(StructureSearch):
                      #stats.start("add.score")
                      self.network.changed = {variable.index:True, variable2.index:True}
                      score2 = self.attempt(lambda: self.scorer(network, data), undo)
+                     toCache = (score2 - score, parents1, parents2)
+                     addDeltas[(variable.index,variable2.index)] = toCache
                      self.network.changed = {}
                      #stats.stop("add.score")
                      #print "add ", variable.index, variable2.index, score2, bestScore
@@ -119,6 +176,11 @@ class GreedyStructureSearch(StructureSearch):
                   network.computeEdgeStatistics()
                   #stats.stop("add.compute")
                   #stats.stop("add.inner")
+         #stats.stop("add")
+         
+         #print "bestType: ", bestType, "bestIdx1: ", bestIdx1, "bestIdx2: ", bestIdx2, "bestScore: ", bestScore, "time: ", time() - start
+         #print stats
+         #stats.start("change")
          if bestType == "none":
             break
          elif bestType == "remove":
@@ -148,6 +210,7 @@ class GreedyStructureSearch(StructureSearch):
                for var in network.variables:
                   if var.index == bestIdx1:
                      v1 = var
+                     elem = var
                   if var.index == bestIdx2:
                      v2 = var
                undo = self.addEdge(v1, v2, data)
@@ -155,10 +218,16 @@ class GreedyStructureSearch(StructureSearch):
                print "exception during add"
                traceback.print_exc()   
                pass
+         parents[bestIdx1] = ",".join([str(p) for p in elem.parents.keys()])
          changes += 1
          score = bestScore
+         #stats.stop("change")
+         #stats.start("likelihood")
+         self.network.changed = {bestIdx1:True, bestIdx2:True}
+         self.network.likelihoodChanged(data, storeChange=True)
          self.network.changed = {}
-         self.network.likelihood(data)
+         #stats.stop("likelihood")
       
+      #print "finished greedy: ", score
       return score
          

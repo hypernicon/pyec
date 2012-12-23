@@ -67,7 +67,7 @@ class BayesianInformationCriterion(object):
          total += network.likelihood(data)
       
       return total / len(data)
-      
+   
       
 class ConditionalLogLikelihood(object):
    def __init__(self, index, lmbda = .5):

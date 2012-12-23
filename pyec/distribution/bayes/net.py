@@ -10,13 +10,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 import cPickle
 from cStringIO import StringIO
-from sample import *
-from structure import *
-from variables import *
+from .sample import *
+from .structure.greedy import *
+from .variables import *
+from .score import *
 from pyec.config import Config
 from pyec.distribution.basic import Distribution
 from pyec.util.cache import LinkedList, LRUCache
-from pyec.util.TernaryString import TernaryString
 
 def checkDeferred(handler):
       def handle(*args, **kwargs):
@@ -33,29 +33,27 @@ def checkDeferredWeights(handler):
       return handle
 
 class BayesNet(Distribution):
-   cfg = None
+   config = Config(numVariables=0,
+                   branchFactor=10,
+                   variableGenerator=BayesVariable,
+                   structureGenerator=GreedyStructureSearch(10, BayesianInformationCriterion()),
+                   sampler=DAGSampler(),
+                   randomizer=lambda net: None)
    densityCache = LRUCache()
    weightCache = LRUCache()
    likelihoodCache = LRUCache()
-   config = Config(numVariables=0,
-                   variableGenerator=None,
-                   structureGenerator=None,
-                   randomizer=None,
-                   sampler=None)
-
 
    def __init__(self, **kwargs):
-      BayesNet.cfg = config
       super(BayesNet, self).__init__(**kwargs)
-      self.numVariables = config.numVariables
-      self.variableGenerator = config.variableGenerator
-      self.structureGenerator = config.structureGenerator
-      self.randomizer = config.randomizer
-      self.sampler = config.sampler
+      self.numVariables = self.config.numVariables
+      self.variableGenerator = self.config.variableGenerator
+      self.structureGenerator = self.config.structureGenerator
+      self.randomizer = self.config.randomizer
+      self.sampler = self.config.sampler
    
       self.variables = []
       for i in xrange(self.numVariables):
-         self.variables.append(self.variableGenerator(i))
+         self.variables.append(self.variableGenerator(i, self.config))
       self.decay = 1
       self.dirty = False
       self.acyclic = True
@@ -64,7 +62,7 @@ class BayesNet(Distribution):
       self.edgeTuples = None
       self.cacheKeys = dict([(v.index, v.cacheKey) for v in self.variables])
       self.edgeMap = {}
-      self.binary = TernaryString(0L, -1L, len(self.variables)**2)
+      self.binary = zeros(len(self.variables)**2)
       self.deferred = False
       self.deferredWeights = False
       self.edgeRep = None
@@ -184,18 +182,22 @@ class BayesNet(Distribution):
       return prod
    
    @checkDeferredWeights   
-   def likelihoodChanged(self, data):
+   def likelihoodChanged(self, data, storeChange=False):
       diff = 0.0
       olddiff = 0.0
       total = 0.0
       for v in self.variables:
          if self.changed.has_key(v.index) and self.changed[v.index]:
+            inner = 0.0
             for x in data:
                key = self.cacheKeys[v.index]
                key += str(x[v.index])
                if not BayesNet.densityCache.has_key(key):
                   BayesNet.densityCache[key] = v.density(x)
-               total += log(BayesNet.densityCache[key])
+               inner += log(BayesNet.densityCache[key])
+            total += inner
+            if storeChange:
+               self.last[v.index] = inner 
          else:
             total += self.last[v.index]
       return total
@@ -242,9 +244,13 @@ class BayesNet(Distribution):
       return prod
       
    @checkDeferredWeights   
-   def sample(self):
+   def __call__(self):
       """sample the network"""
       return self.sampler(self)
+
+   @checkDeferredWeights
+   def sample(self):
+      return self.__call__()
 
    @checkDeferredWeights   
    def batch(self, num):
@@ -425,10 +431,11 @@ class BayesNet(Distribution):
          del self.edgeMap
       self.edgeMap = {}
          
-      ret = TernaryString(0L, -1L, len(self.variables)**2)
-      for frm,t in self.edges:
-         idx = frm.index + len(self.variables) * t.index
-         ret[idx] = True
+      ret = self
+      #ret = zeros(len(self.variables)**2)
+      #for frm,t in self.edges:
+      #   idx = frm.index + len(self.variables) * t.index
+      #   ret[idx] = 1
       self.binary = ret
       return ret
             
@@ -483,17 +490,16 @@ class BayesNet(Distribution):
    
    @checkDeferred
    def estimate(net):
-      cfg = BayesNet.__dict__['cfg']
       for variable in net.variables:
-         net.updateVar(variable, cfg.data) 
+         net.updateVar(variable, net.config.data) 
       net.deferredWeights = False
             
    @classmethod
    def parse(cls, rep):
       io = StringIO(rep)
       numVars = cPickle.load(io)
-      cfg = BayesNet.__dict__['cfg']
-      net = cls(cfg)
+      cfg = BayesNet.config
+      net = cls(**cfg.__properties__)
       edges = cPickle.load(io)
       net.edgeRep = edges
       net.deferred = True

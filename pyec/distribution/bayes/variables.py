@@ -13,7 +13,7 @@ import numpy.linalg
 from pyec.util.TernaryString import TernaryString
 
 class BayesVariable(object):
-   def __init__(self, index):
+   def __init__(self, index, config):
       self.index = index
       self.parents = {}
       self.children_ = None
@@ -116,8 +116,8 @@ class BayesVariable(object):
       
 
 class BinaryVariable(BayesVariable):
-   def __init__(self, index):
-      super(BinaryVariable, self).__init__(index)
+   def __init__(self, index, config):
+      super(BinaryVariable, self).__init__(index ,config)
       self.tables = {} # for each configuration, probability this variable is 1
       self.known = 0L
       self.epsilon = 1e-2
@@ -237,9 +237,9 @@ class BinaryVariable(BayesVariable):
          return
       
       counts = {}
+      mask = 1L << self.index
       for x in data:
          xp = self.project(x)
-         mask = 1L << self.index
          if x.known & mask == 0 or x.known & self.known != self.known:
             continue
          
@@ -280,8 +280,8 @@ class BinaryVariable(BayesVariable):
       
 
 class MultinomialVariable(BayesVariable):
-   def __init__(self, index, categories):
-      super(MultinomialVariable, self).__init__(index)
+   def __init__(self, index, categories, config):
+      super(MultinomialVariable, self).__init__(index, config)
       self.categories = categories # a list of lists of categories
       self.tables = {} # for each configuration, probability this variable is 1
       self.depth = len(self.categories[self.index]) - 1
@@ -534,20 +534,20 @@ class MultinomialVariableGenerator(object):
    def __init__(self, categories):
       self.categories = categories
 
-   def __call__(self, index):
-      return MultinomialVariable(index, self.categories)
+   def __call__(self, index, config):
+      return MultinomialVariable(index, self.categories, config)
 
 class RealVariable(BayesVariable):
    pass
 
 class GaussianVariable(RealVariable):
-   def __init__(self, index, dim, scale):
-      super(GaussianVariable, self).__init__(index)
+   def __init__(self, index, config):
+      super(GaussianVariable, self).__init__(index, config)
       self.mu = zeros(1)
       self.sd = zeros((1,1))
       self.sdinv = zeros((1,1))
-      self.dim = dim
-      self.scale = scale
+      self.dim = config.space.dim
+      self.scale = config.space.scale[index]
       
    def _getExtraState(self):
       return {

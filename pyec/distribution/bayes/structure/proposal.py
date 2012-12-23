@@ -120,11 +120,12 @@ class StructureProposal(StructureSearch):
                   if len(self.network.variables[indexTo].parents) > self.config.branchFactor:
                      exists = True
                      
-                  if hasattr(self.config, 'cmpIdx'):
+                  if self.config.cmpIdx is not None:
                      if self.network.variables[indexFrom].index != self.config.cmpIdx and self.network.variables[indexTo].index != self.config.cmpIdx:
                         exists = True
                 
                   attempts += 1
+                  
                if attempts >= maxAttempts or exists: 
                   return False
                changer(self.network.variables[indexTo], self.network.variables[indexFrom], self.data)
