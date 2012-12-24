@@ -45,7 +45,7 @@ class Boa(PopulationDistribution):
       super(Boa, self).__init__(**kwargs)
       self.network = BayesNet(numVariables=self.config.space.dim,
                               **self.config.__properties__)
-      self.network = StructureProposal(**self.config.__properties__)(self.network)
+      self.network = StructureProposal(**self.config.__properties__).search(self.network)
       self.trained = False
 
    def compatible(self, history):
