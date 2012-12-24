@@ -20,7 +20,7 @@ class GreedyStructureSearch(StructureSearch):
       self.branchFactor = branchFactor
       self.scorer = scorer
 
-   def __call__(self, network, data):
+   def search(self, network, data):
       self.network = network
       stats = RunStats()
       addDeltas = {}

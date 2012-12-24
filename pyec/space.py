@@ -438,36 +438,6 @@ class BinaryRectangle(Binary):
         return test 
 
 
-class BayesianNetworks(Space):
-    """Space for Bayesian network structure search.
-    
-    """
-    def __init__(self,
-                 numVariables,
-                 variableGenerator,
-                 structureGenerator,
-                 randomizer,
-                 sampler):
-        from pyec.distribution.bayes.net import BayesNet
-        from pyec.distribution.bayes.structure.proposal import StructureProposal
-        super(BayesianNetworks, self).__init__(BayesNet)
-        self.config = Config(numVariables=numVariables,
-                             variableGenerator=variableGenerator,
-                             structureGenerator = structureGenerator,
-                             randomizer=randomizer,
-                             sampler=sampler)
-        self.proposal = StructureProposal(self.config)
-        
-    def area(self, **kwargs):
-        return 1.0
-    
-    def random(self):
-        return self.proposal()
-    
-    def extent(self):
-        return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
-    
-
 class Product(Space):
     """A topological product space formed from the Cartesian product
     of multiple spaces.
@@ -479,7 +449,19 @@ class Product(Space):
     def __init__(self, *spaces):
         super(Product, self).__init__(list)
         self.spaces = spaces
-        
+     
+    @property
+    def dim(self):
+        dim = 0
+        for space in self.spaces:
+            if hasattr(space, 'dim'):
+                dim += space.dim
+            else:
+                raise ValueError("Requested dimension of product space, but "
+                                 "one or more subordinate spaces does not "
+                                 "have property 'dim' used to look up the "
+                                 "space's dimension.")
+       
     def random(self):
         return [space.random() for space in self.spaces]
     

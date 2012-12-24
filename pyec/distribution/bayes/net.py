@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 import cPickle
 from cStringIO import StringIO
+import numpy as np
 from .sample import *
 from .structure.greedy import *
 from .variables import *
@@ -33,7 +34,7 @@ def checkDeferredWeights(handler):
       return handle
 
 class BayesNet(Distribution):
-   config = Config(numVariables=0,
+   config = Config(numVariables=None,
                    branchFactor=10,
                    variableGenerator=BayesVariable,
                    structureGenerator=GreedyStructureSearch(10, BayesianInformationCriterion()),
@@ -44,7 +45,8 @@ class BayesNet(Distribution):
    likelihoodCache = LRUCache()
 
    def __init__(self, **kwargs):
-      super(BayesNet, self).__init__(**kwargs)
+      config = BayesNet.config.merge(Config(**kwargs))
+      super(BayesNet, self).__init__(**config.__properties__)
       self.numVariables = self.config.numVariables
       self.variableGenerator = self.config.variableGenerator
       self.structureGenerator = self.config.structureGenerator
@@ -176,6 +178,8 @@ class BayesNet(Distribution):
             if not BayesNet.densityCache.has_key(key):
                   BayesNet.densityCache[key] = v.density(x)
             vprod += log(BayesNet.densityCache[key])
+         if isinstance(vprod, np.ndarray):
+            vprod = vprod[0]
          self.last[v.index] = vprod
          prod += vprod
       self.densityStored = prod
@@ -342,7 +346,7 @@ class BayesNet(Distribution):
 
    @checkDeferred   
    def structureSearch(self, data):
-      return self.structureGenerator(self, data)
+      return self.structureGenerator.search(self, data)
    
    @checkDeferredWeights
    def getComputedState(self):

@@ -109,11 +109,12 @@ BinarySimulatedAnnealing = (
    #Bernoulli[_(p=.01)] << SimulatedAnnealingAcceptance
 )
 
-# Structure search in a Bayes net
-#BayesNetSimulatedAnnealing = (
-#   StructureProposal[_(branchFactor=5)] <<
-#   SimulatedAnnealingAcceptance[_(learningRate=0.1,
-#                                  temp0=100.,
-#                                  discount=0.95,
-#                                  divisor=400.)]
-#)[_(minimize=False)]
+# Structure search in a Bayes net, use a
+# pyec.distribution.bayes.space.BayesNetStructure space for searching.
+BayesNetSimulatedAnnealing = (
+   SimulatedAnnealingAcceptance[_(learningRate=0.1,
+                                  temp0=100.,
+                                  discount=0.95,
+                                  divisor=400.)] <<
+   StructureProposal[_(branchFactor=5)] 
+)[_(minimize=False)]
