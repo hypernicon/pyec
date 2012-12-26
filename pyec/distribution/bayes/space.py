@@ -58,8 +58,11 @@ class BayesNetStructure(Space):
                              sampler=self.sample)
         self.proposal = StructureProposal(**self.config.__properties__)
         self.config.structureGenerator = self.proposal
+        
+        self.edges = []
+        self.nedges = []
     
-    def in_bounds(self, network):
+    def in_bounds(self, network, **kwargs):
         c = network.config
         return (isinstance(network, BayesNet) and
                 len(network.variables) == self.numVariables and
@@ -116,6 +119,10 @@ class BayesNetStructure(Space):
                          "for space {0}".format(self.space))
             
         
+    def proportion(self, smaller, larger, index):
+        return  2.0 ** ((len(smaller.edges) + len(smaller.nedges)) -
+                        (len(larger.edges) + len(larger.nedges)))
+    
     def area(self, **kwargs):
         return 1.0
     
@@ -124,9 +131,72 @@ class BayesNetStructure(Space):
         return self.proposal.search(network)
     
     def extent(self):
-        raise NotImplementedError("Bayesian networks do not have a "
-                                  "well-defined notion of spatial extent; "
-                                  "If you have something in mind, please "
-                                  "subclass the space or submit a pull "
-                                  "request.")
+        return self.nedges, self.edges
+        #raise NotImplementedError("Bayesian networks do not have a "
+        #                          "well-defined notion of spatial extent; "
+        #                          "If you have something in mind, please "
+        #                          "subclass the space or submit a pull "
+        #                          "request.")
+
+    def hash(self, point):
+        point.computeEdgeStatistics()
+        return str(point.edges)
+
+
+class BayesNetFixedEdges(BayesNetStructure):
+    """A subset of :class:`BayesNetStructure` defined by requiring that
+    one or more edges be present.
+    
+    :param space: The probability space for the Bayesian network. Passed to
+                  the parent constructor.
+    :type space: :class:`Space`
+    :param edges: A list of edges as found in ``BayesNet.edges`` which must be
+                  present for all networks in this set.
+    :type edges: List of tuples
+    :param edges: A list of edges NOT found in ``BayesNet.edges`` for all
+                  networks in this set
+    
+    """
+    def __init__(self, space, edges, nedges):
+        super(BayesNetFixedEdges, self).__init__(space)
+        self.edges = edges
+        self.nedges = nedges
+        self._area = None
+    
+    def in_bounds(self, x, **kwargs):
+        """Checks ``BayesNetStructure.in_bounds`` and then checks for all
+        edges in the set.
+        
+        """
+        if "index" in kwargs:
+            index = kwargs["index"]
+            if index in self.edges:
+                return x.hasEdge(*index)
+            elif index in self.nedges:
+                return not x.hasEdge(*index)
+        
+        return (super(BayesNetFixedEdges, self).in_bounds(x) and
+                np.all([x.hasEdge(*edge) for edge in self.edges]) and
+                np.all([not x.hasEdge(*edge) for edge in self.nedges]))
+
+    def area(self, **kwargs):
+        if self._area is not None:
+            return self._area
+        
+        if (self.parent is not None and
+            self.owner is not None):
+            self._area = (self.parent.area() *
+                          self.owner.proportion(self, self.parent, None))
+        else:
+            self._area = 1.0
+            
+        return self._area
+    
+    def random(self):
+        network = BayesNet(**self.config.__properties__)
+        network.edgeRep = self.edges
+        network.initialize()
+        network = self.proposal.search(network)
+        while not self.in_bounds(network):
+           network = self.proposal.search(network)
     

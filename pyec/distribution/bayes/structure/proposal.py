@@ -85,6 +85,7 @@ class StructureProposal(StructureSearch,
       self.prev = self.config.reverse_edge_prob
       self.network = None
       self.data = None
+      self.history = None
 
    def compatible(self, history):
       return hasattr(history, 'lastPopulation')
@@ -175,19 +176,16 @@ class StructureProposal(StructureSearch,
       if networks is None:
          if (self.history is not None and
              self.history.lastPopulation() is not None):
-            networks = [x for x,s in self.history.lastPopulation()]
-         networks = [None for i in xrange(size)]
+            networks = [self.config.space.copy(x)
+                        for x,s in self.history.lastPopulation()]
+         else:
+            networks = [None for i in xrange(size)]
       
-      return [self.search(networks[i], data, **kwargs) for i in xrange(size)]
+      return [self.search(net, data, **kwargs) for net in networks]
 
    def sample(self):
       return self.search()
 
-   # big problem -- call here is sample ... but the
-   # interface now uses __call__ for something else.
-   # so the StructureSearch parent wants __call__
-   # to mean one thing, and the Population Distribution
-   # wants it to mean something else -- probably should create a wrapper
    def search(self, network=None, data=None, **kwargs):
       if network:
          self.network = network
@@ -199,6 +197,11 @@ class StructureProposal(StructureSearch,
       else:
          self.data = self.config.data
       self.network.computeEdgeStatistics()
+      
+      if self.history:
+         x,s = self.history.best()
+         if x is self.network:
+            raise ValueError(repr(network) + "," + repr(self.network))
       
       total = 0
       changes = 1
@@ -220,7 +223,6 @@ class StructureProposal(StructureSearch,
          total += changes
       
       self.network.sort()
-      
       return self.network
       
                      

@@ -229,11 +229,12 @@ class BinaryVariable(BayesVariable):
       if data is None:
          # randomize the tables
          for cfg in self.configurations():
-            if cfg.known == 0L and cfg.base == 0L:
-               self.tables[self.project(cfg)] = random.random_sample()
-            else:
-               self.tables[self.project(cfg)] = random.binomial(1,.5,1) 
-               #self.tables[self.project(cfg)] = random.beta(.5,.5) 
+            self.tables[self.project(cfg)] = random.random_sample()
+            #if cfg.known == 0L and cfg.base == 0L:
+            #   self.tables[self.project(cfg)] = random.random_sample()
+            #else:
+            #   self.tables[self.project(cfg)] = random.binomial(1,.5,1) 
+            #   #self.tables[self.project(cfg)] = random.beta(.5,.5) 
          return
       
       counts = {}

@@ -8,6 +8,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import copy as scopy
 from numpy import *
 from scipy.special import erf
 from pyec.space import Hyperrectangle, BinaryRectangle
@@ -579,15 +580,54 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       return down, up, downPoint, upPoint
 
 
-class BayesSeparationAlgorithm(BinarySeparationAlgorithm):
+class BayesSeparationAlgorithm(VectorSeparationAlgorithm):
    """Separation algorithm for Bayesian networks based on structure."""
    def compatible(self, space):
       from pyec.distribution.bayes.net import BayesNet
       return space.type == BayesNet
    
-   def cast(self, point):
-      return point.point.edgeBinary()
+   def rectify(self, pointrep, otherrep):
+      return pointrep, otherrep
+   
+   def chooseIndex(self, pointrep, otherrep, lower, upper):
+      pointrep.computeEdgeStatistics()
+      otherrep.computeEdgeStatistics()
+      for edge in pointrep.edges:
+         if edge not in otherrep.edges:
+            if edge not in lower and edge not in upper:
+               return edge, 1.0
+         
+      for edge in otherrep.edges:
+         if edge not in pointrep.edges:
+            if edge not in lower and edge not in upper:
+               return edge, 1.0
+      
+      raise SeparationException("No difference in points")
 
+   def makeParts(self, point, pointrep, other, otherrep, newIndex, lower, upper):
+      from pyec.distribution.bayes.space import BayesNetFixedEdges
+      pointrep.computeEdgeStatistics()
+      otherrep.computeEdgeStatistics()
+      
+      if newIndex in pointrep.edges:
+         upPoint = point
+         downPoint = other
+      else:
+         upPoint = other
+         downPoint = point
+      
+      downEdges = scopy.copy(upper)
+      downNedges = scopy.copy(lower) + [newIndex]
+      down = BayesNetFixedEdges(self.config.space.space, downEdges, downNedges)
+      down.parent = other.partition_node.bounds
+      
+      upEdges = scopy.copy(upper) + [newIndex]
+      upNedges = scopy.copy(lower)
+      up = BayesNetFixedEdges(self.config.space.space, upEdges, upNedges)
+      up.parent = other.partition_node.bounds
+      
+      return down, up, downPoint, upPoint
+   
 
 class PartitionTreeNode(object):
    idgen = 1

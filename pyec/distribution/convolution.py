@@ -153,6 +153,8 @@ class SelfConvolution(PopulationDistribution):
                 self.history.update(pop, fitness, self.opt.config.space)
             self.opt.update(self.history.history, self.fitness)
             pop = self.opt()
+            #x,s = self.history.best()
+            #print s, repr(x), x.edges
            
         if self.checkpoint:
             self.history.rollback()

@@ -84,11 +84,15 @@ def initStandard(cls, init=None):
      if init is None:
          def __init__(self, **kwargs):
              config = cls.config.merge(Config(**kwargs))
-             super(cls, self).__init__(**config.__properties__) 
+             super(cls, self).__init__(**config.__properties__)
+             self.history = None
+             self.fitness = None
     
      else:
          def __init__(self, *args, **kwargs):
              config = cls.config.merge(Config(**kwargs))
+             self.history = None
+             self.fitness = None
              init(self, *args, **config.__properties__)
     
      return __init__

@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 import numpy as np
 
 from .basic import PopulationDistribution, GaussianProposal
+from pyec.distribution.bayes.mutators import StructureMutator
 from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.ec.mutators import Gaussian, Bernoulli
 
@@ -112,9 +113,9 @@ BinarySimulatedAnnealing = (
 # Structure search in a Bayes net, use a
 # pyec.distribution.bayes.space.BayesNetStructure space for searching.
 BayesNetSimulatedAnnealing = (
-   SimulatedAnnealingAcceptance[_(learningRate=0.1,
-                                  temp0=100.,
+   SimulatedAnnealingAcceptance[_(schedule="discount",
+                                  temp0=0.1,
                                   discount=0.95,
                                   divisor=400.)] <<
-   StructureProposal[_(branchFactor=5)] 
+   StructureMutator[_(branchFactor=5)] 
 )[_(minimize=False)]

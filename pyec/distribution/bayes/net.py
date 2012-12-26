@@ -74,6 +74,9 @@ class BayesNet(Distribution):
       self.changed = {}
       self.last = {}
    
+   def __copy__(self):
+      return self.__class__.parse(str(self), self.config)
+   
    @checkDeferred
    def get(self, index):
       for var in self.variables:
@@ -293,18 +296,17 @@ class BayesNet(Distribution):
 
    @checkDeferred   
    def hasEdge(self, frm, t):
-      """has an edge from the parent with index 'from'
+      """Whether the network has an edge from the parent with index 'from'
          to the child with index 'to'
          
-         TODO: improve efficiency; current implementation N^2
-         can be made constant
       """
-      try:
-         toNode = [variable for variable in self.variables if variable.index == t][0]
-         fromNode = [parent for l,parent in fromNode.parents.iteritems() if parent.index == frm][0]
-         return True
-      except:
-         return False
+      return (frm,t) in self.edges
+      #try:
+      #   toNode = [variable for variable in self.variables if variable.index == t][0]
+      #   fromNode = [parent for l,parent in fromNode.parents.iteritems() if parent.index == frm][0]
+      #   return True
+      #except Exception:
+      #   return False
 
    @checkDeferred   
    def isAcyclic(self):
@@ -499,10 +501,11 @@ class BayesNet(Distribution):
       net.deferredWeights = False
             
    @classmethod
-   def parse(cls, rep):
+   def parse(cls, rep, cfg):
       io = StringIO(rep)
       numVars = cPickle.load(io)
-      cfg = BayesNet.config
+      if cfg is None:
+         cfg = BayesNet.config
       net = cls(**cfg.__properties__)
       edges = cPickle.load(io)
       net.edgeRep = edges

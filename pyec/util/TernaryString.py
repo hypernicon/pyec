@@ -293,4 +293,7 @@ class TernaryString(object):
             
       base = long(binascii.hexlify(random.bytes(numBytes)), 16)
       known = long(binascii.hexlify(initial + '\xff'*numFull), 16)
-      return TernaryString(base, known, length)   
+      return TernaryString(base, known, length)
+   
+   def __copy__(self):
+      return TernaryString(self.base, self.known, self.length)

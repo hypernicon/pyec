@@ -8,6 +8,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import copy
 import numpy as np
 from pyec.config import Config
 from pyec.util.TernaryString import TernaryString
@@ -94,6 +95,16 @@ class Space(Region):
         
         """
         return hash(point)
+
+    def copy(self, point):
+        """Make a safe copy of a point in the space.
+        
+        :params point: A point in the space
+        :type point: ``space.type``
+        :returns: A copy of the point
+        
+        """
+        return copy.copy(point)
 
 
 class Euclidean(Space):
@@ -184,6 +195,9 @@ class Euclidean(Space):
     
     def in_bounds(self, point, **kwargs):
         return isinstance(point, self.type) and np.shape(point) == (self.dim,)
+
+    def copy(self, point):
+        return np.copy(point)
 
 
 class Hyperrectangle(Euclidean):

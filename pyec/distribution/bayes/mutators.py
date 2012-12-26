@@ -9,11 +9,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 from numpy import *
+from pyec.config import Config
+from pyec.distribution.bayes.net import BayesNet
 from pyec.distribution.ec.mutators import Crosser, Mutation
 
 class Merger(Crosser):
    def __call__(self, nets, prob):
-      net = nets[0]
+      net = self.config.space.copy(nets[0])
       if random.random_sample() < prob:
          for net2 in nets[1:]:
             net.merge(net2, net.structureGenerator.config.data)
@@ -21,27 +23,36 @@ class Merger(Crosser):
 
 class UniformBayesCrosser(Crosser):
    def __call__(self, nets, prob):
-      net = nets[0]
+      net = self.config.space.copy(nets[0])
       if random.random_sample() < prob:
          for net2 in nets[1:]:
             net.cross(net2, net.structureGenerator.config.data)
       return net
          
 class StructureMutator(Mutation):
-   def __init__(self, config):
-      super(StructureMutator, self).__init__(config)
+   config = Config(varDecay=1.0,
+                   varExp=0.25)
+   
+   def __init__(self, **kwargs):
+      super(StructureMutator, self).__init__(**kwargs)
       self.decay = 1.0
 
    def mutate(self, net):
+      net = self.config.space.copy(net)
       net.decay = self.decay
       return net.structureSearch(net.structureGenerator.config.data)
 
-   def update(self, n, population):
-      super(StructureMutator, self).update(n, population)
-      self.decay = exp(-n * self.config.varDecay) ** self.config.varExp
+   def update(self, history, fitness):
+      super(StructureMutator, self).update(history, fitness)
+      self.decay = exp(-self.history.updates *
+                       self.config.varDecay) ** self.config.varExp
 
 class AreaSensitiveStructureMutator(Mutation):
+   config = Config(sd=1.0)
+   
    def mutate(self, x):
       net, area = x
-      net.decay = self.config.varInit * log(1 + -log2(area))
+      net = self.config.space.copy(net)
+      area = area.area
+      net.decay = self.config.sd * log(1 + -log2(area))
       return net.structureSearch(net.structureGenerator.config.data)

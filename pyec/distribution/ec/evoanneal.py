@@ -13,7 +13,6 @@ from pyec.config import Config
 from pyec.distribution.convolution import Convolution
 from pyec.distribution.bayes.mutators import *
 from pyec.distribution.bayes.structure.proposal import StructureProposal
-from pyec.distribution.bayes.sample import DAGSampler
 from pyec.distribution.ec.selectors import Selection
 from pyec.distribution.ec.mutators import (Mutation,
                                            Bernoulli,
@@ -221,8 +220,7 @@ class AreaStripper(Mutation):
    
    """
    def mutate(self, x):
-      return x[0].point
-   
+      return self.config.space.copy(x[0].point)
 
 AnnealingCrossover = (
    ((TournamentAnnealing << AreaStripper) <<
@@ -252,9 +250,14 @@ CrossedBinaryEvolutionaryAnnealing = (
    AnnealingCrossover << Bernoulli
 )[Config(separator=BinarySeparationAlgorithm)]
 
-#BayesEvolutionaryAnnealing = (
-#   TournamentAnnealing << StructureMutator
-#)[Config(separator=BayesSeparationAlgorithm)]
+BayesEvolutionaryAnnealing = (
+   AnnealingCrossover << StructureProposal
+)[Config(separator=BayesSeparationAlgorithm,
+         crosser=Merger, #UniformBayesCrosser,
+         schedule="log",
+         learningRate=0.1,
+         temp0=1.0,
+         discount=0.95)]
 
 """
 class BayesEAConfigurator(REAConfigurator):
