@@ -128,7 +128,9 @@ class BayesNetStructure(Space):
     
     def random(self):
         network = BayesNet(**self.config.__properties__)
-        return self.proposal.search(network)
+        for i in xrange(5):
+            self.proposal.search(network)
+        return network
     
     def extent(self):
         return self.nedges, self.edges

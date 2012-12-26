@@ -170,13 +170,17 @@ class History(object):
         if population is None:
             return
         
+        #self.config.stats.start(repr(self) + "history.update.all")
         self._empty = False
         self.evals += len(population)
         self.updates += 1
         
+        #self.config.stats.start(repr(self) + "history.update.scoreall")
         # score the sample
         pop  = population
         scored = [(x, self.score(x, fitness, space)) for x in pop]
+        #self.config.stats.stop(repr(self) + "history.update.scoreall")
+        #self.config.stats.start(repr(self) + "history.update.findbest")
         
         for x,s in scored:
             if s > self.maxScore:
@@ -186,16 +190,19 @@ class History(object):
             if s < self.minScore:
                  self.minScore = s
                  self.minSolution = x
+        #self.config.stats.stop(repr(self) + "history.update.findbest")
         
         if not (self.updates % self.printEvery):
-           genmin = min([s for x,s in scored])
-           genmax = max([s for x,s in scored])
-           genavg = np.average([s for x,s in scored])
-           print self.updates, ": min", self.minScore, " max", self.maxScore,
-           print " this generation (min, avg, max): ", genmin, genavg, genmax    
-               
-        self.internalUpdate(scored)
+            genmin = min([s for x,s in scored])
+            genmax = max([s for x,s in scored])
+            genavg = np.average([s for x,s in scored])
+            print self.updates, ": min", self.minScore, " max", self.maxScore,
+            print " this generation (min, avg, max): ", genmin, genavg, genmax
         
+        #self.config.stats.start(repr(self) + "history.update.internal")       
+        self.internalUpdate(scored)
+        #self.config.stats.stop(repr(self) + "history.update.internal")
+        #self.config.stats.stop(repr(self) + "history.update.all")
         return self
         
     def internalUpdate(self, population):
@@ -223,15 +230,18 @@ class History(object):
          :returns: The fitness value, cached if possible
          
         """
-   
         if fitness is None: 
             return None
+        
+        #self.config.stats.start("history.score")
             
         if self.useCache: 
             try:
                 hashed = space.hash(point)
                 if self.cache.has_key(hashed):
-                    return self.cache[hashed]
+                    ret = self.cache[hashed]
+                    #self.config.stats.stop("history.score")
+                    return ret
             except Exception:
                 pass
         
@@ -248,8 +258,11 @@ class History(object):
                 self.cache[hashed] = s
             except Exception:
                 pass
-        
+        #self.config.stats.stop("history.score")
         return s
+    
+    def setCache(self, cache):
+        self.cache = cache
 
 
 class MarkovHistory(History):
@@ -403,7 +416,10 @@ class CheckpointedHistory(History):
         self.useCache = self.history.useCache
         self.states = []
         self.attrs |= set(["states"])
-        
+     
+    def setCache(self, cache):
+        self.cache = cache
+        self.history.cache = cache
         
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
@@ -460,9 +476,14 @@ class MultipleHistory(History):
         useCache = False
         for h in self.histories: 
             h.printEvery = 1000000000L
-            h.cache = self.cache
+            h.setCache(self.cache)
             useCache = useCache or h.useCache
         self.useCache = useCache
+        
+    def setCache(self, cache):
+        self.cache = cache
+        for h in self.histories:
+            h.setCache(self.cache)
     
     def update(self, population, fitness, space):
         """Overrides ``internalUpdate`` in :class:`History`"""
@@ -548,6 +569,10 @@ class DelayedHistory(History):
         self.cache = self.history.cache
         self.useCache = self.history.useCache
         self.queue = []
+    
+    def setCache(self, cache):
+        self.cache = cache
+        self.history.cache = cache
         
     def update(self, population, fitness, space):
         """Stack up the new population, and push the delayed 

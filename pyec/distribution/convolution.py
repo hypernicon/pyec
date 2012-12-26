@@ -149,12 +149,18 @@ class SelfConvolution(PopulationDistribution):
         
         fitness = self.opt.needsScores() and self.fitness or None
         for i in xrange(times):
+            #self.config.stats.start("self-convolve.loop")
+            #self.config.stats.start("history.update")
             if pop is not None:
                 self.history.update(pop, fitness, self.opt.config.space)
+            #self.config.stats.stop("history.update")
+            #self.config.stats.start("opt.update")
             self.opt.update(self.history.history, self.fitness)
+            #self.config.stats.stop("opt.update")
+            #self.config.stats.start("opt.call")
             pop = self.opt()
-            #x,s = self.history.best()
-            #print s, repr(x), x.edges
+            #self.config.stats.stop("opt.call")
+            #self.config.stats.stop("self-convolve.loop")
            
         if self.checkpoint:
             self.history.rollback()

@@ -16,6 +16,7 @@ from pyec.config import Config, ConfigBuilder
 from pyec.history import History, MarkovHistory, SortedMarkovHistory, DoubleMarkovHistory
 from pyec.space import Euclidean, Binary
 from pyec.util.registry import BENCHMARKS
+from pyec.util.RunStats import RunStats
 from pyec.util.TernaryString import TernaryString
 
 class Distribution(object):
@@ -367,7 +368,8 @@ class PopulationDistribution(Distribution):
    config = Config(populationSize=1, # The size of each population
                    history=SortedMarkovHistory, # The class for the history
                    space=None, # The search space
-                   minimize=True
+                   minimize=True,
+                   stats = RunStats()
                   )
    
    def run(self, fitness=None, history=None, extraArgs=None, **kwargs):
