@@ -40,7 +40,7 @@ class History(object):
         self.printEvery = config.printEvery or 1000000000000L 
         self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
                           "minSolution", "maxSolution","_empty","cache",
-                          "update","printEvery", "useCache"])
+                          "updates","printEvery", "useCache"])
     
     def __getstate__(self):
         """Used by :class:`CheckpointedHistory`
@@ -57,20 +57,16 @@ class History(object):
       
         for attr in self.attrs:
             val = getattr(self, attr)
-            if isinstance(val, np.ndarray):
-                val = val.copy()
+            if isinstance(val, list):
+                val = [x for x in val]
             state[attr] = val
          
         state['cfg'] = self.config.__properties__
         return state
 
     def __setstate__(self, state):
-        state = copy.copy(state)
-      
         for attr in self.attrs:
-            val = state.pop(attr)
-            if isinstance(val, np.ndarray):
-                val = val.copy()
+            val = state[attr]
             setattr(self, attr, val)
          
         import pyec.config
@@ -448,11 +444,11 @@ class CheckpointedHistory(History):
 
     def __getstate__(self):
         start = super(CheckpointedHistory, self).__getstate__()
-        start.update({"states":self.states, "history":history.__getstate__()})
+        start.update({"states":self.states,
+                      "history":self.history.__getstate__()})
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
         self.history.__setstate__(state["history"])
         del state["history"]
         super(CheckpointedHistory, self).__setstate__(state)
@@ -504,8 +500,7 @@ class MultipleHistory(History):
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
-        for st,h in zip(state.pop("histories"), self.histories):
+        for st,h in zip(state["histories"], self.histories):
             h.__setstate__(st)
         super(MultipleHistory, self).__setstate__(state)
     
@@ -529,6 +524,7 @@ class CheckpointedMultipleHistory(MultipleHistory):
     
     def checkpoint(self):
         self.states.append([h.__getstate__() for h in self.histories])
+        #assert len(self.states) <= 2
         
     def rollback(self):
         if not len(self.states):
@@ -541,10 +537,6 @@ class CheckpointedMultipleHistory(MultipleHistory):
         self.updates = self.histories[0].updates
         self.states = self.states[:-1]
         
-    def __getstate__(self):
-        start = super(CheckpointedMultipleHistory, self).__getstate__()
-        start.update({"states":self.states})
-        return start
         
         
 class DelayedHistory(History):
@@ -606,10 +598,9 @@ class DelayedHistory(History):
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
-        self.history.__setstate__(state.pop("history"))
-        self.delay = state.pop("delay")
-        self.queue = state.pop("queue")
+        self.history.__setstate__(state["history"])
+        self.delay = state["delay"]
+        self.queue = state["queue"]
         super(DelayedHistory, self).__setstate__(state)
 
     

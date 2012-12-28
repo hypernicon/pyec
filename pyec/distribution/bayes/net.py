@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 import cPickle
 from cStringIO import StringIO
 import numpy as np
+import sys
 from .sample import *
 from .structure.greedy import *
 from .variables import *
@@ -34,6 +35,8 @@ def checkDeferredWeights(handler):
       return handle
 
 class BayesNet(Distribution):
+   counter = 0
+   created = 0
    config = Config(numVariables=None,
                    branchFactor=10,
                    variableGenerator=BayesVariable,
@@ -73,6 +76,13 @@ class BayesNet(Distribution):
       self.cacheTries = 0
       self.changed = {}
       self.last = {}
+      self.__class__.counter += 1
+      self.__class__.created += 1
+   
+   def __del__(self):
+      for variable in self.variables:
+         del variable
+      self.__class__.counter -= 1
    
    def __copy__(self):
       return self.__class__.parse(str(self), self.config)
@@ -384,7 +394,6 @@ class BayesNet(Distribution):
    @checkDeferred   
    def computeEdgeStatistics(self):
       if not self.dirty: return
-      
       self.acyclic = self.sort()
       if self.edges is not None: del self.edges
       self.edges = []
@@ -393,7 +402,6 @@ class BayesNet(Distribution):
             self.edges.append((variable2, variable))
       self.edges = sorted(self.edges, key=lambda e: (e[0].index,e[1].index))
       self.edgeRatio = len(self.edges) / (1e-10 + (len(self.variables) ** 2))
-      self.edgeBinary()
       self.edgeTuples = [(frm.index, to.index) for frm,to in self.edges]
       self.cacheKeys = dict([(v.index, v.cacheKey) for v in self.variables])
       self.dirty = False
@@ -429,21 +437,6 @@ class BayesNet(Distribution):
       
    def __len__(self):
       return self.numVariables ** 2
-   
-   @checkDeferred   
-   def edgeBinary(self):
-      if not self.dirty: return self.binary
-      if self.edgeMap is not None:
-         del self.edgeMap
-      self.edgeMap = {}
-         
-      ret = self
-      #ret = zeros(len(self.variables)**2)
-      #for frm,t in self.edges:
-      #   idx = frm.index + len(self.variables) * t.index
-      #   ret[idx] = 1
-      self.binary = ret
-      return ret
             
    def __getstate__(self):
       return {

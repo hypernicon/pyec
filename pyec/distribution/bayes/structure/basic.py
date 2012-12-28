@@ -9,6 +9,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 from numpy import *
+import sys
+import weakref
 
 class CyclicException(Exception):
    pass
@@ -66,6 +68,7 @@ class StructureSearch(object):
          except Exception, msg:
             pass
       
+      self.network = None
       return undo
    
    def cross(self, net, other, data, allowCyclic=False):
@@ -102,6 +105,8 @@ class StructureSearch(object):
                except Exception, msg:
                   pass
       net.computeEdgeStatistics()
+      
+      self.network = None
       return undo
    
    def removeEdge(self, i, variable, data=None):
@@ -111,11 +116,18 @@ class StructureSearch(object):
       variable.removeParent(toRemove)
       toRemove.children = None
       self.network.dirty = True
-            
+      
+      netref = weakref.ref(self.network)
+      varref = weakref.ref(variable)
+      remref = weakref.ref(toRemove)
       def undo(update=True):
-         variable.addParent(toRemove)
-         toRemove.children = None
-         self.network.restoreComputedState(oldstate)
+         var = varref()
+         rem = remref()
+         net = netref()
+         if var is not None and rem is not None and net is not None:
+            var.addParent(rem)
+            rem.children = None
+            net.restoreComputedState(oldstate)
             
       try:
          self.network.updateVar(variable, data)
@@ -135,20 +147,27 @@ class StructureSearch(object):
       parent.children = None
       self.network.dirty = True
       
+      parentref = weakref.ref(parent)
+      childref = weakref.ref(child)
+      netref = weakref.ref(self.network)
       def undo(update=True):
-         parent.children = None
-         child.removeParent(parent)
-         self.network.restoreComputedState(oldstate)
+         parent = parentref()
+         child = childref()
+         network = netref()
+         if parent is not None and child is not None and network is not None:
+            parent.children = None
+            child.removeParent(parent)
+            network.restoreComputedState(oldstate)
       
       if (not allowCyclic) and not self.network.isAcyclic():
          undo()
          raise CyclicException, "Adding an edge makes network cyclic"
-                  
+      
       try:
          self.network.updateVar(child, data)
       except:
          undo()
-         raise            
+         raise
       return undo 
       
    def reverseEdge(self, i, variable, data=None, allowCyclic = False):
@@ -164,10 +183,19 @@ class StructureSearch(object):
       toReverse.children = None
       self.network.dirty = True
       
+      varref = weakref.ref(variable)
+      revref = weakref.ref(toReverse)
+      netref = weakref.ref(self.network)
       def undo(update=True):
-         variable.addParent(toReverse)
-         toReverse.removeParent(variable)
-         self.network.restoreComputedState(oldstate)
+         variable = varref()
+         toReverse = revref()
+         network = netref()
+         if (variable is not None and
+             toReverse is not None and
+             network is not None):
+            variable.addParent(toReverse)
+            toReverse.removeParent(variable)
+            network.restoreComputedState(oldstate)
             
       if (not allowCyclic) and not self.network.isAcyclic():
          undo()

@@ -37,7 +37,7 @@ class SimulatedAnnealingAcceptance(PopulationDistribution):
                  That is, ``schedule(n)`` should converge to zero as n goes to
                  infinity.
    * learningRate -- A divisor for the cooling schedule, used for built-in 
-                     schedules "log" and "inear". As a divisor, it divides the
+                     schedules "log" and "linear". As a divisor, it divides the
                      temperature but multiplies the exponent.
    * temp0 -- An initial temperature for the temperature decay in "discount"
    * restart -- A probability of restarting, tested at each update

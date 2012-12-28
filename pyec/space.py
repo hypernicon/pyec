@@ -105,6 +105,15 @@ class Space(Region):
         
         """
         return copy.copy(point)
+    
+    def discard(self, point):
+        """Allow any type-specific deletion or cleanup.
+        
+        :params point: A point in the space
+        :type point: ``space.type``
+        
+        """
+        pass
 
 
 class Euclidean(Space):

@@ -143,6 +143,9 @@ class BayesNetStructure(Space):
     def hash(self, point):
         point.computeEdgeStatistics()
         return str(point.edges)
+    
+    def copy(self, point):
+        return BayesNet.parse(str(point), self.config)
 
 
 class BayesNetFixedEdges(BayesNetStructure):
@@ -201,4 +204,5 @@ class BayesNetFixedEdges(BayesNetStructure):
         network = self.proposal.search(network)
         while not self.in_bounds(network):
            network = self.proposal.search(network)
+        return network
     

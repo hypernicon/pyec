@@ -49,12 +49,12 @@ class GeneratingSetSearchHistory(History):
 
    def accept(self, x, score):
       if self.center is None:
-         self.center = x
+         self.center = self.config.space.copy(x)
          self._score = score
          return True
       
       if self.better(score + self.penalty(self.step), self._score):
-         self.center = x
+         self.center = self.config.space.copy(x)
          self._score = score 
          return True
       

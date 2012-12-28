@@ -69,6 +69,7 @@ def test_evoanneal_dim1():
    assert abs(f) < 1e-5
    
    x,f = pyec.optimize.evoanneal("sphere",dimension=1,generations=100, learningRate=10.0)
+   print "evoanneal dim 1: ", x, f
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5   
    
@@ -147,6 +148,7 @@ def test_evoanneal_dim5():
    assert abs(f) < 1e-5
    
    x,f = pyec.optimize.evoanneal("sphere",dimension=5, learning_rate=1000., generations=250)
+   print "evoanneal dim 5: ", x, f
    assert sqrt((x**2).sum()) < 1e-1
    assert abs(f) < 1e-5   
 

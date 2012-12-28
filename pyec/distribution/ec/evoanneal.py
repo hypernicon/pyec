@@ -87,7 +87,8 @@ class PartitionHistory(History):
          # again, skip intermediate
          return
       
-      pts = [Point(self.segment, x, None, s) for x,s in population]
+      pts = [Point(self.segment, x, None, s)
+             for x,s in population]
       self.config.stats.start("save")
       Point.bulkSave(self.segment, pts, self.stats)
       self.config.stats.stop("save")
@@ -220,7 +221,7 @@ class AreaStripper(Mutation):
    
    """
    def mutate(self, x):
-      return self.config.space.copy(x[0].point)
+      return x[0].point
 
 AnnealingCrossover = (
    ((TournamentAnnealing << AreaStripper) <<

@@ -68,6 +68,6 @@ ElitistGeneticAlgorithm = (.1 * Elitist) | (.9 * GeneticAlgorithm)
 
 
 BayesGeneticAlgorithm = (
-  Tournament << ((Tournament >> 1) << Crossover[_(crosser=UniformBayesCrosser)]) <<
-  StructureMutator
+  Tournament << ((Tournament >> 1) << Crossover[_(crosser=UniformBayesCrosser)])
+  << StructureMutator
 )[_(space=BayesNetStructure(space=Binary(dim=25)))]

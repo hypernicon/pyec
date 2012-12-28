@@ -173,6 +173,7 @@ class StructureProposal(StructureSearch,
       return changed
 
    def batch(self, size, networks = None, data = None, **kwargs):
+      self.network = None
       if networks is None:
          if (self.history is not None and
              self.history.lastPopulation() is not None):
@@ -181,7 +182,8 @@ class StructureProposal(StructureSearch,
          else:
             networks = [None for i in xrange(size)]
       
-      return [self.search(net, data, **kwargs) for net in networks]
+      ret = [self.search(net, data, **kwargs) for net in networks]
+      self.network = None
 
    def sample(self):
       return self.search()
@@ -197,11 +199,6 @@ class StructureProposal(StructureSearch,
       else:
          self.data = self.config.data
       self.network.computeEdgeStatistics()
-      
-      if self.history:
-         x,s = self.history.best()
-         if x is self.network:
-            raise ValueError(repr(network) + "," + repr(self.network))
       
       total = 0
       changes = 1
@@ -219,11 +216,11 @@ class StructureProposal(StructureSearch,
          # add an edge
          if self.maybeChange(self.padd, self.addEdge, False):
             changes += 1
-         
          total += changes
-      
       self.network.sort()
-      return self.network
+      network = self.network
+      self.network = None
+      return network
       
                      
    def adjust(self, acceptanceRatio):
