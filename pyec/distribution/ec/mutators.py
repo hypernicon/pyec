@@ -499,46 +499,9 @@ class Bernoulli(Mutation):
       with resolution of ``1e-16``.
       
       """
-      numBytes = int(np.ceil(self.config.space.dim / 8.0))
-      numFull  = self.config.space.dim / 8
-      initial = ''
-      if numBytes != numFull:
-         extra = self.config.space.dim % 8
-         initMask = 0
-         for i in xrange(extra):
-            initMask <<= 1
-            initMask |= 1
-         initial = struct.pack('B',initMask)
-      
-      start = (1L << (self.config.space.dim + 1)) - 1
-      p = self.p()
-      base = 0L
-      active = TernaryString(x.known,x.known)
-      while ((isinstance(p, np.ndarray) and (p > 1e-16).any()) or
-             (not isinstance(p, np.ndarray) and p > 1e-16)):
-         reps = np.minimum(100, -np.floor(np.log2(p)))
-         q = 2.0 ** -reps
-         next = start
-         activeReps = TernaryString(active.base, active.known)
-         if isinstance(p, np.ndarray):
-            for j, pj in enumerate(p):
-               if pj < 1e-16:
-                  active[j] = False
-            for i in xrange(int(max(reps))):
-               for j,r in enumerate(reps):
-                  if i >= r:
-                     activeReps[j] = False
-               next &= (activeReps.base &
-                        long(binascii.hexlify(np.random.bytes(numBytes)), 16))
-         else:
-            for i in xrange(int(reps)):
-               next &= long(binascii.hexlify(np.random.bytes(numBytes)), 16) 
-         base |= next & active.base
-         p = (p - q) / (1.0 - q)
-            
-      
-      base = x.base & ~base | ~x.base & base
-      known = x.known
+      flipped = TernaryString.bernoulli(self.p(), self.config.space.dim)
+      base = x.base & ~flipped.base | ~x.base & flipped.base
+      known = x.known & flipped.known
       return TernaryString(base, known, self.config.space.dim)
 
 

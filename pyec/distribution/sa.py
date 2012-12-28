@@ -113,9 +113,7 @@ BinarySimulatedAnnealing = (
 # Structure search in a Bayes net, use a
 # pyec.distribution.bayes.space.BayesNetStructure space for searching.
 BayesNetSimulatedAnnealing = (
-   SimulatedAnnealingAcceptance[_(schedule="discount",
-                                  temp0=0.1,
-                                  discount=0.95,
-                                  divisor=400.)] <<
+   SimulatedAnnealingAcceptance[_(schedule="linear",
+                                  divisor=100.)] <<
    StructureMutator[_(branchFactor=5)] 
 )[_(minimize=False)]

@@ -242,11 +242,14 @@ class History(object):
                 pass
         
         if not space.in_bounds(point):
-           # use NaN so that the result is less than nor greater than
-           # any other score, and therefore NEVER optimal
-           s = np.inf - np.inf
+            # use NaN so that the result is less than nor greater than
+            # any other score, and therefore NEVER optimal
+            s = np.inf - np.inf
         else:
-           s = fitness(space.convert(point))
+            try:
+                s = fitness(space.convert(point))
+            except ValueError:
+                s = np.inf - np.inf
         
         if self.useCache:
             try:
@@ -524,7 +527,6 @@ class CheckpointedMultipleHistory(MultipleHistory):
     
     def checkpoint(self):
         self.states.append([h.__getstate__() for h in self.histories])
-        #assert len(self.states) <= 2
         
     def rollback(self):
         if not len(self.states):

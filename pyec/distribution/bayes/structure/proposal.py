@@ -184,6 +184,7 @@ class StructureProposal(StructureSearch,
       
       ret = [self.search(net, data, **kwargs) for net in networks]
       self.network = None
+      return ret
 
    def sample(self):
       return self.search()

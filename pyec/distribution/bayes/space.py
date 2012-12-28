@@ -9,66 +9,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 import numpy as np
+import sys
+import traceback
+
 from pyec.config import Config
 from pyec.distribution.bayes.net import BayesNet
+from pyec.distribution.bayes.structure.basic import CyclicException
 from pyec.distribution.bayes.structure.proposal import StructureProposal        
-from pyec.space import Space, Product
+from pyec.space import Space, Product, Binary
 from pyec.util.TernaryString import TernaryString
 
 from .variables import GaussianVariable, BinaryVariable
 from .sample import DAGSampler
 
-class BayesNetStructure(Space):
-    """Space for Bayesian network structure search.
-    
-    Built on top of a variable space that determines the variables of the
-    Bayes net. For example, a Euclidean space, say $\mathbb{R}^d$, would have
-    $d$ :class:`GaussianVariable`s. Or, a Binary space would have
-    :class:`BinaryVariable`s.
-    
-    The default choice of variable is controlled by the ``_mapping`` class
-    variable based on the ``type`` field of the variable space. To have mixed
-    networks, use a :class:`Product` space.
-    
-    :param space: The space of variables
-    :type space: :class:`Space`
-    
-    """
-    _mappings = {  # map space types to bayesian variables
-        np.ndarray: GaussianVariable,
-        TernaryString: BinaryVariable,
-    }
-    
-    def __init__(self, space):
-        super(BayesNetStructure, self).__init__(BayesNet)
-        self.space = space
-        self.sampler = DAGSampler()
-        
-        if hasattr(space, 'dim'):
-            self.numVariables = space.dim
-        else:
-            raise ValueError("Cannot determine the number of dimensions "
-                             "for BayseNetStructure space based on given "
-                             "space; expected space to have property dim "
-                             "indicating the number of required variables. ")
-        
-        self.config = Config(numVariables=self.numVariables,
-                             variableGenerator=self.variable,
-                             randomizer=self.randomize,
-                             sampler=self.sample)
-        self.proposal = StructureProposal(**self.config.__properties__)
-        self.config.structureGenerator = self.proposal
-        
-        self.edges = []
-        self.nedges = []
-    
-    def in_bounds(self, network, **kwargs):
-        c = network.config
-        return (isinstance(network, BayesNet) and
-                len(network.variables) == self.numVariables and
-                np.all([v.__class__ == self.variable(v.index,c).__class__
-                        for v in network.variables]))
-    
+class PreBayesSpace(object):
     def randomize(self, network=None):
         """Retrieve an initial random state for a BayesNetwork in this space.
         
@@ -117,7 +71,57 @@ class BayesNetStructure(Space):
         
         raise ValueError("Failed to locate variable mapping "
                          "for space {0}".format(self.space))
-            
+
+class BayesNetStructure(Space, PreBayesSpace):
+    """Space for Bayesian network structure search.
+    
+    Built on top of a variable space that determines the variables of the
+    Bayes net. For example, a Euclidean space, say $\mathbb{R}^d$, would have
+    $d$ :class:`GaussianVariable`s. Or, a Binary space would have
+    :class:`BinaryVariable`s.
+    
+    The default choice of variable is controlled by the ``_mapping`` class
+    variable based on the ``type`` field of the variable space. To have mixed
+    networks, use a :class:`Product` space.
+    
+    :param space: The space of variables
+    :type space: :class:`Space`
+    
+    """
+    _mappings = {  # map space types to bayesian variables
+        np.ndarray: GaussianVariable,
+        TernaryString: BinaryVariable,
+    }
+    
+    def __init__(self, space):
+        super(BayesNetStructure, self).__init__(BayesNet)
+        self.space = space
+        self.sampler = DAGSampler()
+        
+        if hasattr(space, 'dim'):
+            self.numVariables = space.dim
+        else:
+            raise ValueError("Cannot determine the number of dimensions "
+                             "for BayesNetStructure space based on given "
+                             "space; expected space to have property dim "
+                             "indicating the number of required variables. ")
+        
+        self.config = Config(numVariables=self.numVariables,
+                             variableGenerator=self.variable,
+                             randomizer=self.randomize,
+                             sampler=self.sample)
+        self.proposal = StructureProposal(**self.config.__properties__)
+        self.config.structureGenerator = self.proposal
+        
+        self.edges = []
+        self.nedges = []
+    
+    def in_bounds(self, network, **kwargs):
+        c = network.config
+        return (isinstance(network, BayesNet) and
+                len(network.variables) == self.numVariables and
+                np.all([v.__class__ == self.variable(v.index,c).__class__
+                        for v in network.variables]))
         
     def proportion(self, smaller, larger, index):
         return  2.0 ** ((len(smaller.edges) + len(smaller.nedges)) -
@@ -143,9 +147,6 @@ class BayesNetStructure(Space):
     def hash(self, point):
         point.computeEdgeStatistics()
         return str(point.edges)
-    
-    def copy(self, point):
-        return BayesNet.parse(str(point), self.config)
 
 
 class BayesNetFixedEdges(BayesNetStructure):
@@ -205,4 +206,76 @@ class BayesNetFixedEdges(BayesNetStructure):
         while not self.in_bounds(network):
            network = self.proposal.search(network)
         return network
+ 
+
+class BinaryBayesStructure(Binary, PreBayesSpace):
+    """A binary genotype with a Bayesian network structure phenotype.
     
+    Bits indicate the presence or absence of an edge.
+    
+    Built on top of a variable space that determines the variables of the
+    Bayes net. For example, a Euclidean space, say $\mathbb{R}^d$, would have
+    $d$ :class:`GaussianVariable`s. Or, a Binary space would have
+    :class:`BinaryVariable`s.
+    
+    The default choice of variable is controlled by the ``_mapping`` class
+    variable based on the ``type`` field of the variable space. To have mixed
+    networks, use a :class:`Product` space.
+    
+    :param space: The space of variables
+    :type space: :class:`Space`
+    
+    """
+    _mappings = {  # map space types to bayesian variables
+        np.ndarray: GaussianVariable,
+        TernaryString: BinaryVariable,
+    }
+    
+    def __init__(self, space):
+        self.space = space
+        self.sampler = DAGSampler()
+        
+        if hasattr(space, 'dim'):
+            self.numVariables = space.dim
+        else:
+            raise ValueError("Cannot determine the number of dimensions "
+                             "for BinaryBayesStructure space based on given "
+                             "space; expected space to have property dim "
+                             "indicating the number of required variables. ")
+        
+        super(BinaryBayesStructure, self).__init__(self.numVariables**2)
+        
+        self.config = Config(numVariables=self.numVariables,
+                             variableGenerator=self.variable,
+                             randomizer=self.randomize,
+                             sampler=self.sample)
+        self.proposal = StructureProposal(**self.config.__properties__)
+        self.config.structureGenerator = self.proposal
+        
+       
+    def convert(self, x):
+        if not isinstance(x, self.type):
+            cname = self.__class__.__name__
+            raise ValueError("Type mismatch in {0}.convert".format(cname))
+        
+        try:
+            net = BayesNet(**self.config.__properties__)
+            edges = []
+            indexMap = {}
+            for var in net.variables:
+                indexMap[var.index] = var
+            self.proposal.network = net
+            for i in xrange(x.length):
+                if x[i]:
+                    frm, to = i % self.numVariables, i // self.numVariables
+                    child = indexMap[frm]
+                    parent = indexMap[to]
+                    try:
+                        self.proposal.addEdge(child, parent, self.config.data)
+                    except CyclicException:
+                        pass
+            self.proposal.network = None
+            return net
+        except Exception:
+            traceback.print_exc()
+            raise ValueError("Unable to convert point due to exception")
