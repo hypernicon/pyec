@@ -527,6 +527,7 @@ class CheckpointedMultipleHistory(MultipleHistory):
     
     def checkpoint(self):
         self.states.append([h.__getstate__() for h in self.histories])
+        assert len(self.states) <= 2
         
     def rollback(self):
         if not len(self.states):
