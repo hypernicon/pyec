@@ -418,7 +418,7 @@ class CheckpointedHistory(History):
      
     def setCache(self, cache):
         self.cache = cache
-        self.history.cache = cache
+        self.history.setCache(cache)
         
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
@@ -567,8 +567,8 @@ class DelayedHistory(History):
     
     def setCache(self, cache):
         self.cache = cache
-        self.history.cache = cache
-        
+        self.history.setCache(cache)
+
     def update(self, population, fitness, space):
         """Stack up the new population, and push the delayed 
         populations to the subordinate history.

@@ -20,6 +20,16 @@ from pyec.distribution.ec.mutators import (Mutation,
                                            Gaussian,
                                            AreaSensitiveGaussian,
                                            AreaSensitiveBernoulli)
+from pyec.distribution.nn.mutators import (AddChainLayerMutation,
+                                           RemoveLayerMutation,
+                                           AddNodeMutation,
+                                           RemoveNodeMutation,
+                                           AddLinkMutation,
+                                           RemoveLinkMutation,
+                                           NetAreaStripper,
+                                           AreaSensitiveGaussianWeightMutation,
+                                           UniformRnnCrosser,
+                                           UniformRnnLinkCrosser)
 from pyec.history import History
 from pyec.space import Euclidean, Binary
 from pyec.util.combinatorics import factorial
@@ -32,13 +42,15 @@ from pyec.util.partitions import (Segment,
                                   VectorSeparationAlgorithm,
                                   LongestSideVectorSeparationAlgorithm,
                                   BinarySeparationAlgorithm,
-                                  BayesSeparationAlgorithm)
+                                  BayesSeparationAlgorithm,
+                                  LayeredSeparationAlgorithm)
 from pyec.util.RunStats import RunStats
 
 from scipy.special import erf
 
 import logging
 log = logging.getLogger(__file__)  
+
 
 class PartitionHistory(History):
    """A :class:`History` that records all points and uses those points
@@ -79,6 +91,7 @@ class PartitionHistory(History):
       """Insert all new points into the partition.
       
       """
+      
       if population[0][1] is None:
          # skip unscored updates inside convolution
          return
@@ -89,6 +102,7 @@ class PartitionHistory(History):
       
       pts = [Point(self.segment, x, None, s)
              for x,s in population]
+      
       self.config.stats.start("save")
       Point.bulkSave(self.segment, pts, self.stats)
       self.config.stats.stop("save")
@@ -225,8 +239,8 @@ class AreaStripper(Mutation):
 
 AnnealingCrossover = (
    ((TournamentAnnealing << AreaStripper) <<
-    ((TournamentAnnealing >> 1) << AreaStripper) <<
-    Crossover)
+    (((TournamentAnnealing >> 1) << AreaStripper) <<
+     Crossover))
 )
 
 RealEvolutionaryAnnealing = (
@@ -259,3 +273,18 @@ BayesEvolutionaryAnnealing = (
          learningRate=0.1,
          crossoverProb=.25)]
 
+NeuroannealingCrossover = (
+   ((TournamentAnnealing << NetAreaStripper) <<
+    (((TournamentAnnealing >> 1) << NetAreaStripper) <<
+      Crossover[Config(crosser=UniformRnnCrosser, crossoverProb=.25)]))
+)[Config(learningRate=.1)]
+
+Neuroannealing = (
+   TournamentAnnealing << NetAreaStripper << 
+   #NeuroannealingCrossover <<
+   AddChainLayerMutation << RemoveLayerMutation <<
+   AddNodeMutation << RemoveNodeMutation <<
+   AddLinkMutation << RemoveLinkMutation <<
+   AreaSensitiveGaussianWeightMutation
+)[Config(separator=LayeredSeparationAlgorithm,
+         secondary_separator=LongestSideVectorSeparationAlgorithm)]
