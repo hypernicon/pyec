@@ -87,7 +87,7 @@ def optimize(optimizer, func, dimension=5, population=25, generations=100,**kwar
    config = Config(**config)
    alg = (optimizer[config] << generations)()
    pop = alg[None, optfunc]()
-   alg.history.update(pop, optfunc, space)
+   alg.history.update(pop, optfunc, space, alg)
    return alg.history.best()
 
 def differential_evolution(func, **kwargs):

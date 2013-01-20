@@ -23,6 +23,8 @@ class History(object):
     useCache = True
     attrs = set()
     sorted = False
+    root = True # whether the current history is the top level root for
+                # all histories of this algorithm
     
     def __init__(self, config):
         super(History, self).__init__()
@@ -134,7 +136,7 @@ class History(object):
         """
         return self.evals
         
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         """
          Update the state of the :class:`History` with the latest population 
          and its fitness scores. Subclasses should probably override
@@ -149,10 +151,11 @@ class History(object):
          p = None
          f = lambda x: 
          t = History()
-         s = some_optimizer.config.space
+         o = some_optimizer
+         s = o.config.space
          for i in xrange(generations):
-             p = some_optimizer[t.update(p,f,s), f]()
-         t.update(p,f,s)
+             p = some_optimizer[t.update(p,f,s,0), f]()
+         t.update(p,f,s,o)
           
          :params population: The previous population.
          :type population: list of points in the search domain
@@ -160,6 +163,8 @@ class History(object):
          :type fitness: Any callable object
          :params space: The search domain
          :type space: :class:`Space`
+         :params opt: The optimizer reporting this population
+         :type opt: :class:`PopulationDistribution`
          :returns: The history (``self``), for continuations
          
         """
@@ -177,6 +182,9 @@ class History(object):
         scored = [(x, self.score(x, fitness, space)) for x in pop]
         #self.config.stats.stop(repr(self) + "history.update.scoreall")
         #self.config.stats.start(repr(self) + "history.update.findbest")
+        
+        if self.root and self.config.observer is not None:
+            self.config.observer.report(opt, scored)
         
         for x,s in scored:
             if s > self.maxScore:
@@ -410,6 +418,7 @@ class CheckpointedHistory(History):
     def __init__(self, config, historyClass):
         super(CheckpointedHistory, self).__init__(config)
         self.history = historyClass(self.config)
+        self.history.root = False
         self.history.printEvery = 100000000L
         self.cache = self.history.cache
         self.useCache = self.history.useCache
@@ -424,11 +433,11 @@ class CheckpointedHistory(History):
         """Overrides ``internalUpdate`` in :class:`History`"""
         pass
         
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         if population is None:
             return self
-        super(CheckpointedHistory, self).update(population, fitness, space)
-        self.history.update(population, fitness, space)
+        super(CheckpointedHistory, self).update(population, fitness, space, opt)
+        self.history.update(population, fitness, space, opt)
         return self
     
     def checkpoint(self):
@@ -473,7 +482,8 @@ class MultipleHistory(History):
             raise ValueError(err)
         self.histories = [h(self.config) for h in set(historyClasses)]
         useCache = False
-        for h in self.histories: 
+        for h in self.histories:
+            h.root = False
             h.printEvery = 1000000000L
             h.setCache(self.cache)
             useCache = useCache or h.useCache
@@ -484,13 +494,13 @@ class MultipleHistory(History):
         for h in self.histories:
             h.setCache(self.cache)
     
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         """Overrides ``internalUpdate`` in :class:`History`"""
         if population is None:
             return self
-        super(MultipleHistory, self).update(population, fitness, space)
+        super(MultipleHistory, self).update(population, fitness, space, opt)
         for h in self.histories:
-            h.update(population, fitness, space)
+            h.update(population, fitness, space, opt)
         return self
 
     def internalUpdate(self, population):
@@ -541,7 +551,6 @@ class CheckpointedMultipleHistory(MultipleHistory):
         self.states = self.states[:-1]
         
         
-        
 class DelayedHistory(History):
     """A :class:`History` for trajectory truncation.
     
@@ -556,6 +565,7 @@ class DelayedHistory(History):
     def __init__(self, config, history, delay=1):
         super(DelayedHistory, self).__init__(config)
         self.history = history
+        self.history.root = False
         self.history.printEvery = 100000000L
         if delay < 1:
             err = "Delay must be a positive integer, not {0}".format(delay)
@@ -569,7 +579,7 @@ class DelayedHistory(History):
         self.cache = cache
         self.history.setCache(cache)
 
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         """Stack up the new population, and push the delayed 
         populations to the subordinate history.
         
@@ -581,7 +591,7 @@ class DelayedHistory(History):
             self.evals += len(self.queue[-1])
             self.updates += 1
             self._empty = False
-            self.history.update(self.queue[-1], fitness, space)
+            self.history.update(self.queue[-1], fitness, space, opt)
             self.queue = self.queue[:-1]
     
         self.queue.append(population)

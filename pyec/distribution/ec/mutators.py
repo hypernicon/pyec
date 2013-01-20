@@ -225,7 +225,6 @@ class Crossover(PopulationDistribution):
       super(Crossover, self).__init__(**kwargs)
       self.dual = (hasattr(self.config.crosser, 'dual')
                    and self.config.crosser.dual)
-      self.crosser = self.config.crosser(self.config)
    
    def compatible(self, history):
       return (hasattr(history, 'populations') and hasattr(history, 'order')
@@ -239,6 +238,7 @@ class Crossover(PopulationDistribution):
       crossoverProb = self.config.crossoverProb
       if crossoverProb < 1e-16:
          return [x for x,s in self.history.populations[0]]
+      self.crosser = self.config.crosser(self.config)
       pops = self.history.populations
       newpop = [self.crosser([org for org, s in orgs], crossoverProb)
                 for orgs in zip(*pops)]

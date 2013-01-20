@@ -110,6 +110,7 @@ class Point(object):
             stats.stop("separate")
             stats.start("insert")
             segment.scoreTree.insert(gp, segment.config, stats)
+            #segment.scoreTree.checkBalance()
             stats.stop("insert")
          except SeparationException:
             logg.debug("Exception when separating or inserting points")
@@ -279,7 +280,7 @@ class SeparationAlgorithm(object):
       """
       self.config.stats.start("separate.traverse")
       lr = self.config.learningRate
-      node, path = tree.traverse(tree, point)
+      node, path = tree.traverse(point)
       self.config.stats.stop("separate.traverse")
       if node.point is None and node.bounds is self.config.space:
          self.firstPoint(tree, node, point)
@@ -341,6 +342,7 @@ class SeparationAlgorithm(object):
       
       """
       raise NotImplementedError("Abstract Separation Algorithm; use a subclass")
+
 
 class VectorSeparationAlgorithm(SeparationAlgorithm):
    def compatible(self, space):
@@ -798,7 +800,7 @@ class Partition(object):
    def save(self):
       pass
 
-   def traverse(self, tree, point):
+   def traverse(self, point):
       """
          Traverse the partition tree to find the partition within which "point" is located.
          
@@ -811,9 +813,12 @@ class Partition(object):
                    the list of tree nodes traversed
 
       """
+      if isinstance(point, Point):
+         point = point.point
+      
       # get the top parent
-      current = tree.root
-      region = tree.root.bounds
+      current = self.root
+      region = self.root.bounds
       path = [current]
       
       last = None
@@ -827,7 +832,7 @@ class Partition(object):
          last = current
          
          for child in children:
-            if child.bounds.in_bounds(point.point, index=child.index):
+            if child.bounds.in_bounds(point, index=child.index):
                current = child
                path.append(current)
                children = current.children
@@ -929,6 +934,24 @@ class ScoreTree(object):
       if len(children) > 0:
          for child in sorted(children, key=lambda c: not c.left):
             self.printTree(segment, child, indent + '\t')
+
+   def checkBalance(self, node=None):
+      if node is None:
+         node = self.root
+      
+      try:
+         children = node.children
+         if len(children) > 0:
+            children = sorted(children, key=lambda c: not c.left)
+            assert (node.balance == (children[0].height - children[1].height))
+            for child in children:
+               self.checkBalance(child)
+      except AssertionError:
+         print "NODE: ", node.id, node.balance, children[0].height, children[1].height
+         self.printTree(self.segment)
+         raise RuntimeError("Boo")
+      except:
+         raise
 
    def rotateLeft(self, node, config):
       """

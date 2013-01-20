@@ -73,7 +73,6 @@ class CmaesHistory(SortedMarkovHistory):
         super(CmaesHistory,self).internalUpdate(population)
         base = np.array([x for x, s in self.population[:self.mu]])
         if self.mean is None:
-           print self.population
            oldMean = np.average([x for x,s in self.population])
         else:
            oldMean = self.mean

@@ -28,7 +28,7 @@ from pyec.distribution.nn.mutators import (AddChainLayerMutation,
                                            RemoveLinkMutation,
                                            NetAreaStripper,
                                            AreaSensitiveGaussianWeightMutation,
-                                           UniformRnnCrosser,
+                                           UniformOrIntermediateRnnCrosser,
                                            UniformRnnLinkCrosser)
 from pyec.history import History
 from pyec.space import Euclidean, Binary
@@ -276,12 +276,12 @@ BayesEvolutionaryAnnealing = (
 NeuroannealingCrossover = (
    ((TournamentAnnealing << NetAreaStripper) <<
     (((TournamentAnnealing >> 1) << NetAreaStripper) <<
-      Crossover[Config(crosser=UniformRnnCrosser, crossoverProb=.25)]))
+      Crossover[Config(crosser=UniformOrIntermediateRnnCrosser, crossoverProb=.5)]))
 )[Config(learningRate=.1)]
 
 Neuroannealing = (
-   TournamentAnnealing << NetAreaStripper << 
-   #NeuroannealingCrossover <<
+   #TournamentAnnealing << NetAreaStripper << 
+   NeuroannealingCrossover <<
    AddChainLayerMutation << RemoveLayerMutation <<
    AddNodeMutation << RemoveNodeMutation <<
    AddLinkMutation << RemoveLinkMutation <<

@@ -1,4 +1,16 @@
+"""
+Copyright (C) 2012 Alan J Lockett
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
 import numpy as np
+from scipy.special import erf
+
 from pyec.config import Config
 from pyec.distribution.ec.mutators import Crosser, Mutation
 from .genotypes import *
@@ -28,73 +40,85 @@ class UniformRnnCrosser(Crosser):
             return orgs[0]
         
         net1, net2 = orgs
-        layerMap = {}
-        for layer in net1.layers:
-            layerMap[layer.id] = [layer, None]
-        for layer in net2.layers:
-            if layer.id in layerMap:
-                layerMap[layer.id][1] = layer
-            else:
-                layerMap[layer.id] = [None, layer, None]
-        #delete = [id for id, layers in layerMap.iteritems() if layers[1] is None]
-        #for id in delete:
-        #    del layerMap[id]
-        
         net = self.config.space.copy(net1)
-        if len(layerMap) == 0:
-            return net
         
-        #print "crossing over ..."
-        #TODO handle layers of same id but different sizes,
-        #possibly give nodes ids within layers
-        for layer in net.layers:
-            if layer.id in layerMap:
-               layerMap[layer.id].append(layer)
-               
-        for id, layers in layerMap.iteritems():
-            layer1, layer2, layer3 = layers
-            if layer1 is None:
-                if np.random.random_sample() < 0.5:
-                    layer3 = layer2.__class__(layer.size, layer.activator)
-                    layer3.id = layer2.id
-                    net.addLayer(layer3)
-                    layerMap[id] = (layer1, layer2, layer3)
-            elif layer2 is None:
-                if np.random.random_sample() < 0.5:
-                    net.removeLayer(layer3)
-                    layerMap[id] = (layer1, layer2, None)
-        ids = dict([(layer.id,layer) for layer in net.layers])
-        for id, layers in layerMap.iteritems():
-            layer1, layer2, layer3 = layers
-            if layer3 is not None:
-                if layer1 is None:
-                    inLinks = [frm.id for frm in layer2.inLinks if frm.id in ids]
-                    for id2 in inLinks:
-                        w = net2.links[(layerMap[id2][1], layer2)]
-                        net.connect(ids[id2], layer3, w)
-                elif layer2 is not None:
-                    # layer1 and layer2 are aligned, layer3 is the target in the new net
-                    inLinks1 = dict([(frm.id,None)
-                                     for frm in layer1.inLinks
-                                     if frm.id in ids])
-                    inLinks2 = dict([(frm.id, None)
-                                     for frm in layer2.inLinks
-                                     if frm.id in ids])
-                    for layer in net.layers:
-                        if layer.id in inLinks1 and layer.id in inLinks2:
-                            w1 = net1.links[(layerMap[layer.id][0], layer1)]
-                            w2 = net2.links[(layerMap[layer.id][1], layer2)]
-                            w = self.crossLink(w1, w2)
-                            net.connect(layer, layer3, w)
-                        #elif layer.id in inLinks1: # do nothing
-                        elif layer.id in inLinks2:
-                            w = net2.links[(layerMap[layer.id][1],layer2)]
-                            net.connect(layer, layer3, w.copy())
+        # rectify the sizes
+        for i in enumerate(net.layers):
+            if i < len(net2.layers):
+                layer = net.layers[i]
+                layer2 = net2.layers[i]
+                if layer.size > layer2.size:
+                    toRem = np.random.randint(0,len(net1.layers) - len(net2.layers))
+                    layer.size -= toRem
+                    for source in layer.inLinks:
+                        w = net.links[(source, layer)]
+                        net.connect(source, layer, w[:-(toRem+1)])
+                    for target in layer.outLinks:
+                        w = net.links[(layer, target)]
+                        net.connect(layer, target, w[:,:-(toRem+1)])
+                elif layer.size < layer2.size:
+                    diff = layer2.size - layer.size
+                    toAdd = np.random.randint(0, diff)
+                    layer.size += toAdd
+                    for source in layer.inLinks:
+                        w = net.links[(source, layer)]
+                        w = np.append(w, np.zeros((toAdd, source.size)), axis=0)
+                        net.connect(source, layer, w)
+                    for target in layer.outLinks:
+                        w = net.links[(layer, target)]
+                        w = np.append(w, np.zeros((target.size, toAdd)), axis=1)
+                        net.connect(layer, target, w)
         
-        #print net1.links
-        #print net2.links
-        #print net.links
-        net.changed = True
+        if len(net1.layers) > len(net2.layers):
+            toRem = np.random.randint(0,len(net1.layers) - len(net2.layers))
+            for i in xrange(toRem):
+                net.removeLayer(net.layers[-(i+1)])
+        elif len(net2.layers) > len(net1.layers):
+            diff = len(net2.layers) - len(net1.layers)
+            toAdd = np.random.randint(0,diff)
+            for i in xrange(toAdd):
+                layer2 = net2.layers[-diff+i]
+                layer = layer2.__class__(size=layer2.size, activator=layer2.activator)
+                net.addLayer(layer)
+                for target2 in layer2.outLinks:
+                    targetIdx = net2.layers.index(target2)
+                    if targetIdx < len(net.layers):
+                        target = net.layers[targetIdx]
+                        net.connect(layer, target, net2.links[(layer2, target2)].copy())
+                for source2 in layer2.inLinks:
+                    sourceIdx = net2.layers.index(source2)
+                    if sourceIdx < len(net.layers):
+                        source = net.layers[sourceIdx]
+                        net.connect(source, layer, net2.links[(source2, layer2)].copy())
+                net.changed = True
+        
+        
+        for i,layer in enumerate(net.layers):
+            if i >= len(net1.layers) or i >= len(net2.layers):
+                break
+            for j,layer in enumerate(net.layers):
+                if j >= len(net1.layers) or j >= len(net2.layers):
+                    break
+                c = (net.layers[i],net.layers[j])
+                if c in net.links:
+                    c2 = (net2.layers[i],net2.layers[j])
+                    if c2 in net2.links:
+                        w1 = net.links[c]
+                        w2 = net2.links[c2]
+                        s1 = np.shape(w1)
+                        s2 = np.shape(w2)
+                        if s1 != s2:
+                            if s1[0] > s2[0]:
+                                w2 = np.append(w2, np.zeros((s1[0]-s2[0], s2[1])), axis=0)
+                            if s1[0] < s2[0]:
+                                w2 = w2[:s1[0]]
+                            if s1[1] > s2[1]:
+                                w2 = np.append(w2, np.zeros((shape(w2)[0],s1[1]-s2[1])), axis=1)
+                            if s1[1] < s2[1]:
+                                w2 = w2[:,:s1[1]]
+                        w = self.crossLink(w1, w2)
+                        net.connect(net.layers[i], net.layers[j], w)
+                        net.changed = True
         return net
 
 
@@ -108,6 +132,30 @@ class UniformRnnLinkCrosser(UniformRnnCrosser):
             return w1.copy()
         return w2.copy()
 
+
+class IntermediateRnnCrosser(UniformRnnCrosser):
+    """Crossover for RNNs with matrices averaged
+    
+    """
+    def crossLink(self, w1, w2):
+        """Just picks one of the two links; no crossover within matrices."""
+        return .5 * (w1 + w2)
+ 
+
+class UniformOrIntermediateRnnCrosser(UniformRnnCrosser):
+    def __init__(self, *args, **kwargs):
+        super(UniformOrIntermediateRnnCrosser, self).__init__(*args, **kwargs)
+        self._intermediate = np.random.random_sample() < .4
+        
+    def intermediate(self, w1, w2):
+        return .5 * (w1+w2)
+    
+    def crossLink(self, w1, w2):
+        if self._intermediate:
+            return self.intermediate(w1, w2)
+        else:
+            return super(UniformOrIntermediateRnnCrosser, self).crossLink(w1, w2)
+
  
 class AddNodeMutation(Mutation):
    """Add a node to a neural network.
@@ -120,7 +168,7 @@ class AddNodeMutation(Mutation):
    
    """
    config = Config(node_creation_prob=.01,
-                   node_sd=1.0)
+                   node_sd=0.1)
    
    def mutate(self, net):
       if net.changed:
@@ -210,7 +258,7 @@ class AddLinkMutation(Mutation):
    
    """
    config = Config(link_creation_prob=0.025,
-                   link_sd=10.0)
+                   link_sd=0.1)
    
    def mutate(self, net):
       if net.changed:
@@ -282,7 +330,7 @@ class AddChainLayerMutation(Mutation):
       
     """
     config = Config(layer_creation_prob=.01,
-                    layer_sd=10.0)
+                    layer_sd=0.1)
    
     def mutate(self, net):
         if net.changed:
@@ -347,8 +395,8 @@ class WeightMutation(Mutation):
 
 
 class GaussianWeightMutation(WeightMutation):
-    config = Config(link_mutation_prob = 0.33,
-                    sd=1.0)
+    config = Config(link_mutation_prob = 0.5,
+                    sd=.1)
 
     def sd(self, net):
         return self.config.sd
@@ -371,16 +419,22 @@ class AreaSensitiveGaussianWeightMutation(GaussianWeightMutation):
                  optimum. Default is ``((1/generations))``
     
     """
-    config = Config(decay=lambda n,cfg: (1./n))
+    config = Config(decay=lambda n,cfg: (1./(2*np.log(n))))
+    
+    def gaussInt(self, z):
+        # x is std normal from zero to abs(z)
+        x = .5 * erf(np.abs(z)/np.sqrt(2))
+        return .5 + np.sign(z) * x
     
     def sd(self, net):
-        if net.partition_node:
-            area = net.partition_node
+        try:
+            area, path = self.config.segment.partitionTree.traverse(net)
             lower, upper = area.bounds.extent()
             sd = .5 * (upper - lower)
-            sd = np.minimum(sd, self.config.space.scale)
+            scale = self.config.space.scale
+            sd = self.gaussInt(upper/scale) - self.gaussInt(lower/scale)
             sd *= self.config.decay(self.history.updates, self.config)
-        else:
+        except Exception:
             n = self.history.updates
             return self.config.sd * self.config.decay(n, self.config)
 
@@ -389,6 +443,5 @@ class NetAreaStripper(Mutation):
     def mutate(self, x):
         point, node = x
         net = self.config.space.copy(point.point)
-        net.partition_node = node
         net.changed = False
         return net

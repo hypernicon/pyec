@@ -359,6 +359,12 @@ class PopulationDistribution(Distribution):
       * initial -- The initial distribution; a :class:`Distribution`, 
                    a callable object that returns a single solution,
                    or ``None`` to use the space's randomizer
+      * observer -- A view or listener; should have a method ``report()``
+                    which will be called with this instance and the next
+                    population when updated, e.g.
+                    ``self.config.report(self, pop)``. In this case, ``pop``
+                    is a scored population, consisting of a list of
+                    ``(solution, score)`` tuples.
       
       :params config: The configuration parameters.
       :type config: :class:`Config`
@@ -369,7 +375,8 @@ class PopulationDistribution(Distribution):
                    history=SortedMarkovHistory, # The class for the history
                    space=None, # The search space
                    minimize=True,
-                   stats = RunStats()
+                   stats = RunStats(),
+                   observer = None,
                   )
    
    def run(self, fitness=None, history=None, extraArgs=None, **kwargs):

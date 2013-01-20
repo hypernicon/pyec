@@ -216,7 +216,7 @@ class LayeredRnnGenotype(object):
         """
         connections = []
         for edge in self.links.keys():
-            connections.append((edge[0].id, edge[1].id))
+            connections.append((self.layers.index(edge[0]), self.layers.index(edge[1])))
         return sorted(connections)
       
     def weights(self):
@@ -296,7 +296,6 @@ class LayeredRnnGenotype(object):
         for edge, w in self.links.iteritems():
             genotype.links[(layerMap[edge[0]],layerMap[edge[1]])] = w.copy()
         genotype._weights = self._weights.copy()
-        genotype.partition_node = self.partition_node
         return genotype
 
     @classmethod
@@ -336,7 +335,7 @@ class LayeredRnnGenotype(object):
                     if col != 0:
                         frm = genotype.layers[i]
                         to = genotype.layers[j]
-                        w = 10.0 * np.random.randn(to.size, frm.size)
+                        w = 0.1 * np.random.randn(to.size, frm.size)
                         genotype.connect(frm, to, w)
                         
         else:

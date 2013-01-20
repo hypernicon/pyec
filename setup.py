@@ -43,12 +43,14 @@ setup(name='PyEC',
       version='0.3.0',
       description='Evolutionary computation package',
       author='Alan J Lockett',
-      install_requires=[
-         'numpy >= 1.5.1',
-         'scipy >= 0.8.0'
+      requires=[
+         'numpy (>=1.5.1)',
+         'scipy (>=0.8.0)'
       ],
-      packages=['pyec'],
-      include_package_data=True,
+      packages=['pyec', 'pyec.distribution', 'pyec.distribution.bayes',
+                'pyec.distribution.bayes.structure',
+                'pyec.distribution.nn', 'pyec.distribution.ec', 'pyec.optimize',
+                'pyec.observers', 'pyec.tests', 'pyec.util'],
       url='http://www.alockett.com/pyec/docs/0.3/index.html',
       cmdclass = cmdclass,
       ext_modules = extensions,

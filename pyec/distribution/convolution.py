@@ -63,7 +63,7 @@ class Convolution(PopulationDistribution, HistoryMapper):
        for sub in self.subs:
            if pop is not None:
                fitness = sub.needsScores() and self.fitness or None
-               self.history.update(pop, fitness, sub.config.space)
+               self.history.update(pop, fitness, sub.config.space, sub)
            sub.update(self.mapHistory(sub), self.fitness)
            pop = sub()
              
@@ -154,7 +154,8 @@ class SelfConvolution(PopulationDistribution):
             #self.config.stats.start("self-convolve.loop")
             #self.config.stats.start("history.update")
             if pop is not None:
-                self.history.update(pop, fitness, self.opt.config.space)
+                self.history.update(pop, fitness,
+                                    self.opt.config.space, self.opt)
             #self.config.stats.stop("history.update")
             #self.config.stats.start("opt.update")
             self.opt.update(self.history.history, self.fitness)

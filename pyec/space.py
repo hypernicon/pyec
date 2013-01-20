@@ -61,9 +61,10 @@ class Space(Region):
         :returns: The converted point, ready to be passed to the fitness
         
         """
-        if not self.in_bounds(x):
-            cname = self.__class__.__name__
-            raise ValueError("Type mismatch in {0}.convert".format(cname))
+        # checking in bounds may be expensive
+        #if not self.in_bounds(x):
+        #    cname = self.__class__.__name__
+        #    raise ValueError("Type mismatch in {0}.convert".format(cname))
         return x
    
     def extent(self):
