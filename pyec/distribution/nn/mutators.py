@@ -113,7 +113,7 @@ class UniformRnnCrosser(Crosser):
                             if s1[0] < s2[0]:
                                 w2 = w2[:s1[0]]
                             if s1[1] > s2[1]:
-                                w2 = np.append(w2, np.zeros((shape(w2)[0],s1[1]-s2[1])), axis=1)
+                                w2 = np.append(w2, np.zeros((np.shape(w2)[0],s1[1]-s2[1])), axis=1)
                             if s1[1] < s2[1]:
                                 w2 = w2[:,:s1[1]]
                         w = self.crossLink(w1, w2)
