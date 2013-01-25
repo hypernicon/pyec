@@ -94,8 +94,11 @@ class RnnEvaluator(object):
             next[idxs] = act(next[idxs])
         self.state = next
 
-    def __call__(self, inputs, times=5):
+    def call(self, inputs, times=5):
         self.setInputs(inputs)
         for i in xrange(times):
             self.activate()
         return self.getOutputs()
+    
+    def __call__(self, inputs, times=5):
+        return self.call(inputs, times)

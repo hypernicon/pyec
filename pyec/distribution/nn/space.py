@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 import numpy as np
-from pyec.distribution.nn.genotypes import LayeredRnnGenotype, SIGMOID
+from pyec.distribution.nn.genotypes import LayeredRnnGenotype, LOGISTIC
 from pyec.space import Space, LayeredSpace, LayerWrapper, Euclidean
 from scipy.misc import comb
 
@@ -29,7 +29,7 @@ class LayeredRnnSpace(LayeredSpace):
     :type outputs: A list (or tuple) of ``int``
     
     """
-    def __init__(self, inputs, outputs, bias=True, activator=SIGMOID, scale=1.0):
+    def __init__(self, inputs, outputs, bias=True, activator=LOGISTIC, scale=1.0):
         super(LayeredRnnSpace, self).__init__(LayeredRnnGenotype)
         self.inputs = inputs
         self.outputs = outputs
@@ -98,7 +98,7 @@ class LayeredRnnSpaceFixedLayers(LayeredRnnSpace):
     
     """
     def __init__(self, inputs, outputs, numLayers,
-                 bias=True, activator=SIGMOID, scale=1.0):
+                 bias=True, activator=LOGISTIC, scale=1.0):
         super(LayeredRnnSpaceFixedLayers, self).__init__(inputs,
                                                          outputs,
                                                          bias=bias,
@@ -135,7 +135,7 @@ class LayeredRnnSpaceFixedSizes(LayeredRnnSpaceFixedLayers):
     
     """
     def __init__(self, inputs, outputs, layers,
-                 bias=True, activator=SIGMOID, scale=1.0):
+                 bias=True, activator=LOGISTIC, scale=1.0):
         numLayers = len(layers)
         super(LayeredRnnSpaceFixedSizes, self).__init__(inputs,
                                                         outputs,
@@ -190,7 +190,7 @@ class LayeredRnnSpaceFixedConnectivity(LayeredRnnSpaceFixedSizes):
     
     """
     def __init__(self, inputs, outputs, layers, connections,
-                 bias=True, activator=SIGMOID, scale=10.0):
+                 bias=True, activator=LOGISTIC, scale=10.0):
         super(LayeredRnnSpaceFixedConnectivity, self).__init__(inputs,
                                                         outputs,
                                                         layers,

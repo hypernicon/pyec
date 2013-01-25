@@ -9,11 +9,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 import numpy as np
 
-IDENTITY = lambda x: x
-SIGMOID = lambda x: 1. / (1. + np.exp(-x))
+def IDENTITY(x):
+    return x
+
+def LOGISTIC(x):
+    return 1. / (1. + np.exp(-x))
+
 HYPERBOLIC = np.tanh
+
 THRESHOLD = np.sign
-BIAS = lambda x: 1.0
+
+def BIAS(x):
+    return 1.0
+
 
 
 class RnnLayer(object):
@@ -112,7 +120,7 @@ class RnnLayerOutput(RnnLayer):
     """
     def __init__(self, size, activator=None, **kwargs):
         if activator is None:
-            activator = SIGMOID
+            activator = LOGISTIC
         super(RnnLayerOutput, self).__init__(size, activator, **kwargs)
 
 
@@ -171,6 +179,16 @@ class LayeredRnnGenotype(object):
                del self.links[(layer, layer2)]
             if (layer2, layer) in self.links:
                del self.links[(layer2, layer)]
+        self._weights = None
+    
+    def checkLinks(self):
+        """Verify the shape of the weight matrices for the network"""
+        for layer in self.layers:
+            assert layer.size >= 1
+        for edge, w in self.links.iteritems():
+            assert edge[0] in self.layers
+            assert edge[1] in self.layers
+            assert np.shape(w) == (edge[1].size, edge[0].size)
     
     def connect(self, fromLayer, toLayer, weights):
         """Connect two layers with a link. If the two layers are already
@@ -184,6 +202,12 @@ class LayeredRnnGenotype(object):
                         size of ``toLayer`` and M is the size of ``fromLayer``
         
         """
+        if fromLayer not in self.layers or toLayer not in self.layers:
+            raise ValueError("Tried to connect layers not in this network")
+        if np.shape(weights) != (toLayer.size, fromLayer.size):
+            raise ValueError("Tried to connect layers of shape "
+                             "{0} using weights shaped as {1}".format(np.shape(weights),
+                                                                      (toLayer.size, fromLayer.size)))
         edge = (fromLayer, toLayer)
         if edge in self.links:
             self.links[edge] = weights
@@ -245,6 +269,10 @@ class LayeredRnnGenotype(object):
         :returns: A :class:`RnnEvaluator` that can be used to run the network
         
         """
+        #try:
+        #    from .cnet import RnnEvaluator
+        #except:
+        #    print "Fallback on pure python"
         from .net import RnnEvaluator
         slices = {}
         weightStack = []
@@ -300,7 +328,7 @@ class LayeredRnnGenotype(object):
 
     @classmethod
     def random(cls, inputs, outputs, bias=True,
-               hiddenSizes=None, connections=None, activator=SIGMOID):
+               hiddenSizes=None, connections=None, activator=LOGISTIC):
         genotype = cls()
         inputLayers = []
         idx = 0L

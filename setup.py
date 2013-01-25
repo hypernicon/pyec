@@ -34,6 +34,14 @@ else:
             ['pyec/util/net_benchmarks.pyx'],
             extra_compile_args = ["-O3", "-Wall"],
             include_dirs = include_dirs,
+            language = "c++"
+        ),
+        Extension(
+            'pyec.distribution.nn.cnet',
+            ['pyec/distribution/nn/cnet.pyx'],
+            extra_compile_args = ["-O3", "-Wall"],
+            include_dirs = include_dirs,
+            language="c++"
         )
     ]
     cmdclass = {'build_ext': build_ext}

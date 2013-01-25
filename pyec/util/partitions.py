@@ -104,6 +104,9 @@ class Point(object):
       
       sep = segment.config.separator(segment.config)
       for gp in points:
+         if gp.score != gp.score:
+            # don't insert NaN
+            continue
          try:
             stats.start("separate")
             sep.separate(segment.partitionTree, gp)
@@ -115,6 +118,8 @@ class Point(object):
          except SeparationException:
             logg.debug("Exception when separating or inserting points")
             gp.alive = False
+         except IndexError:
+            segment.scoreTree.printTree(segment)
             
       #segment.scoreTree.printTree(segment)
 

@@ -10,12 +10,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
-cimport cython
-import numpy as np
 cimport numpy as np
 from libcpp.vector cimport vector
-
-ctypedef np.float_t FLOAT_t
 
 cdef class RnnEvaluator:
     """A compiled RNN as a computable object. Takes a network in a form that
@@ -57,104 +53,22 @@ cdef class RnnEvaluator:
                             used to activate that portion of the state array.
     
     """
+    cdef int numNeurons
+    cdef list inputs
+    cdef list outputs
+    cdef list stepWeights
+    cdef list stepFrm
+    cdef list stepTo
+    cdef np.ndarray state
+    cdef object activationStack
     
-    def __init__(self, numNeurons, inputs, outputs, weightStack, activationStack):
-        cdef list stepW
-        cdef list frm
-        cdef list to
-        self.numNeurons = numNeurons
-        self.inputs = inputs
-        self.outputs = outputs
-        self.stepWeights = []
-        self.stepFrm = []
-        self.stepTo = []
-        for step in weightStack:
-            stepW = []
-            frm = []
-            to = []
-            for weights, frmIdxs, toIdxs in step:
-                stepW.append(weights)
-                frm.append(frmIdxs)
-                to.append(toIdxs)
-            self.stepWeights.append(stepW)
-            self.stepFrm.append(frm)
-            self.stepTo.append(to)
-            
-        self.activationStack = activationStack
-        self.clear()
+    cpdef int clear(self)
     
-    @cython.boundscheck(False)    
-    cpdef int clear(self) except? -1:
-        """Reset the state of the network."""
-        self.state = np.zeros(self.numNeurons, dtype=float)
-        return 0
+    cpdef int setInputs(self, list inputs)
     
-    @cython.boundscheck(False)    
-    cpdef int setInputs(self, list inputs) except? -1:
-        """Takes an array of arrays of floats and writes
-        it into the state at the inputs
-        
-        :param inputs: a list of arrays of floats, with each nested array matching
-                       the size of the input layer as specified in ``self.inputs``
-        :type inputs: a list of arrays/lists of floats
-        
-        """
-        cdef int size = len(self.inputs)
-        cdef int i,j,idx
-        #cdef pair[int,int] slc
-        for i in xrange(size):
-            slc = self.inputs[i]
-            idx = slc.start
-            for j in xrange(slc.stop - slc.start):
-                self.state[idx] = inputs[i][j]
-                idx += 1
-        return 0
-    
-    @cython.boundscheck(False)
-    cpdef list getOutputs(self):
-        """Produces an array of floats corresponding to the outputs.
-        
-        :returns: a list of arrays of floats, with each nested array matching
-                  the size of the input layer as specified in ``self.outputs``
-        
-        """
-        cdef list ret = []
-        cdef int size = len(self.outputs)
-        cdef int i
-        cdef object slc
-        for i in xrange(size):
-            slc = self.outputs[i]
-            ret.append(self.state[slc])
-        return ret
+    cpdef list getOutputs(self)
      
-    @cython.boundscheck(False)
-    cpdef int activate(self) except? -1:
-        """Advance the network to the next state based on the current state."""
-        cdef np.ndarray[FLOAT_t, ndim=1] next = np.zeros(self.numNeurons, dtype=np.float)
-        cdef int size = len(self.stepWeights)
-        cdef int i,j, size2
-        cdef object frm, to, idxs, act
-        for i in xrange(size):
-            size2 = len(self.stepWeights[i])
-            
-            for j in xrange(size2):
-               frm = self.stepFrm[i][j]
-               to = self.stepTo[i][j]
-               next[to] += np.dot(self.stepWeights[i][j], self.state[frm])
-        
-        for idxs, act in self.activationStack:
-            next[idxs] = act(next[idxs])
-        self.state = next
-        return 0
+    cpdef int activate(self)
 
-    @cython.boundscheck(False)
-    cpdef list call(self, list inputs, int times):
-        cdef int i
-        self.setInputs(inputs)
-        for i in xrange(times):
-            if self.activate() < 0:
-                return None
-        return self.getOutputs()
-    
-    def __call__(self, inputs, times=5):
-        return self.call(inputs, times)
+    cpdef list call(self,list inputs,int times)
+
