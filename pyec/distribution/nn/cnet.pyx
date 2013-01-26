@@ -1,5 +1,4 @@
-# cython: profile=True
-# distutils: language = c++
+# cython: profile=False
 """
 Copyright (C) 2012 Alan J Lockett
 
@@ -16,6 +15,11 @@ cimport numpy as np
 from libcpp.vector cimport vector
 
 ctypedef np.float_t FLOAT_t
+
+cdef unsigned int CLOGISTIC = 1
+cdef unsigned int CHYPERBOLIC = 2
+cdef unsigned int CBIAS = 3
+cdef unsigned int CTHRESHOLD = 4
 
 cdef class RnnEvaluator:
     """A compiled RNN as a computable object. Takes a network in a form that
@@ -74,11 +78,11 @@ cdef class RnnEvaluator:
             to = []
             for weights, frmIdxs, toIdxs in step:
                 stepW.append(weights)
-                frm.append(frmIdxs)
-                to.append(toIdxs)
-            self.stepWeights.append(stepW)
-            self.stepFrm.append(frm)
-            self.stepTo.append(to)
+                frm.append((frmIdxs.start,frmIdxs.stop))
+                to.append((toIdxs.start,toIdxs.stop))
+        self.stepWeights = stepW
+        self.stepFrm = frm
+        self.stepTo = to
             
         self.activationStack = activationStack
         self.clear()
@@ -90,7 +94,7 @@ cdef class RnnEvaluator:
         return 0
     
     @cython.boundscheck(False)    
-    cpdef int setInputs(self, list inputs) except? -1:
+    cdef inline int setInputs(self, list inputs) except? -1:
         """Takes an array of arrays of floats and writes
         it into the state at the inputs
         
@@ -100,7 +104,7 @@ cdef class RnnEvaluator:
         
         """
         cdef int size = len(self.inputs)
-        cdef int i,j,idx
+        cdef unsigned int i,j,idx
         #cdef pair[int,int] slc
         for i in xrange(size):
             slc = self.inputs[i]
@@ -111,7 +115,7 @@ cdef class RnnEvaluator:
         return 0
     
     @cython.boundscheck(False)
-    cpdef list getOutputs(self):
+    cdef inline list getOutputs(self):
         """Produces an array of floats corresponding to the outputs.
         
         :returns: a list of arrays of floats, with each nested array matching
@@ -119,8 +123,8 @@ cdef class RnnEvaluator:
         
         """
         cdef list ret = []
-        cdef int size = len(self.outputs)
-        cdef int i
+        cdef unsigned int size = len(self.outputs)
+        cdef unsigned int i
         cdef object slc
         for i in xrange(size):
             slc = self.outputs[i]
@@ -128,32 +132,55 @@ cdef class RnnEvaluator:
         return ret
      
     @cython.boundscheck(False)
-    cpdef int activate(self) except? -1:
+    cdef inline float activate(self) except? -1.0:
         """Advance the network to the next state based on the current state."""
         cdef np.ndarray[FLOAT_t, ndim=1] next = np.zeros(self.numNeurons, dtype=np.float)
-        cdef int size = len(self.stepWeights)
-        cdef int i,j, size2
-        cdef object frm, to, idxs, act
+        cdef np.ndarray[FLOAT_t, ndim=2] weight
+        cdef np.ndarray[FLOAT_t, ndim=1] state = self.state
+        cdef unsigned int size = len(self.stepWeights)
+        cdef unsigned int i, k, w, low, high
+        cdef unsigned int act
+        cdef unsigned int frm1, frm2, to1, to2
+        cdef float change
         for i in xrange(size):
-            size2 = len(self.stepWeights[i])
-            
-            for j in xrange(size2):
-               frm = self.stepFrm[i][j]
-               to = self.stepTo[i][j]
-               next[to] += np.dot(self.stepWeights[i][j], self.state[frm])
+            weight = self.stepWeights[i]
+            frm1,frm2 = self.stepFrm[i]
+            to1,to2 = self.stepTo[i]
+            for k in xrange(to1, to2):
+                for w in xrange(frm1, frm2):
+                    next[k] += weight[<unsigned int>(k-to1),<unsigned int>(w-frm1)] * state[w]
         
-        for idxs, act in self.activationStack:
-            next[idxs] = act(next[idxs])
+        for i in xrange(len(self.activationStack)):
+            low, high, act = self.activationStack[i]
+            if act == CLOGISTIC:
+                for k in xrange(low,high):
+                    next[k] = 1. / (1. + np.exp(-next[k]))
+            elif act == CHYPERBOLIC:
+                for k in xrange(low,high):
+                    next[k] = np.tanh(next[k])
+            elif act == CBIAS:
+                for k in xrange(low, high):
+                    next[k] = 1.0
+            elif act == CTHRESHOLD:
+                for k in xrange(low, high):
+                    next[k] = np.sign(next[k])
+        
+        change = np.abs(self.state - next).max()
         self.state = next
-        return 0
+        return change
 
     @cython.boundscheck(False)
     cpdef list call(self, list inputs, int times):
         cdef int i
+        cdef float diff
+        cdef float tol = 1e-5
         self.setInputs(inputs)
         for i in xrange(times):
-            if self.activate() < 0:
+            diff = self.activate()
+            if diff < 0.0:
                 return None
+            elif diff < tol: # break if net has converged
+                break
         return self.getOutputs()
     
     def __call__(self, inputs, times=5):

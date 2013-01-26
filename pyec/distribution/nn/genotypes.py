@@ -179,6 +179,8 @@ class LayeredRnnGenotype(object):
                del self.links[(layer, layer2)]
             if (layer2, layer) in self.links:
                del self.links[(layer2, layer)]
+        if (layer,layer) in self.links:
+            del self.links[(layer,layer)]
         self._weights = None
     
     def checkLinks(self):
@@ -269,11 +271,14 @@ class LayeredRnnGenotype(object):
         :returns: A :class:`RnnEvaluator` that can be used to run the network
         
         """
-        #try:
-        #    from .cnet import RnnEvaluator
-        #except:
-        #    print "Fallback on pure python"
-        from .net import RnnEvaluator
+        convert = False
+        try:
+            from .cnet import RnnEvaluator
+            convert = True
+        except:
+            raise
+            print "Fallback on pure python"
+            from .net import RnnEvaluator
         slices = {}
         weightStack = []
         current = 0
@@ -291,10 +296,26 @@ class LayeredRnnGenotype(object):
         for layer in self.layers:
             idxs = slices[layer]
             if isinstance(layer, RnnLayerInput):
-               inputs.append(idxs)
+                inputs.append(idxs)
             if isinstance(layer, RnnLayerOutput):
-               outputs.append(idxs)
-            activationStack.append((idxs,layer.activator))
+                outputs.append(idxs)
+            if convert:
+                activator = 0
+                if layer.activator is LOGISTIC:
+                    activator = 1
+                elif layer.activator is HYPERBOLIC:
+                    activator = 2
+                elif layer.activator is BIAS:
+                    activator = 3
+                elif layer.activator is THRESHOLD:
+                    activator = 4
+                elif layer.activator is not IDENTITY:
+                    raise ValueError("Could not map activator to cython net")
+                if activator:
+                    stackItem = (idxs.start,idxs.stop, activator)
+                    activationStack.append(stackItem)
+            else:
+                activationStack.append((idxs,layer.activator))
             for i, frmLayer in enumerate(layer.inLinks):
                 w = self.links[(frmLayer, layer)]
                 sh = (layer.size, frmLayer.size)

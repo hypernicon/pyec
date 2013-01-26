@@ -1,5 +1,4 @@
-# cython: profile=True
-# distutils: language = c++
+# cython: profile=False
 """
 Copyright (C) 2012 Alan J Lockett
 
@@ -11,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 """
 cimport numpy as np
-from libcpp.vector cimport vector
+#from libcpp.vector cimport vector
 
 cdef class RnnEvaluator:
     """A compiled RNN as a computable object. Takes a network in a form that
@@ -64,11 +63,11 @@ cdef class RnnEvaluator:
     
     cpdef int clear(self)
     
-    cpdef int setInputs(self, list inputs)
+    cdef inline int setInputs(self, list inputs)
     
-    cpdef list getOutputs(self)
+    cdef inline list getOutputs(self)
      
-    cpdef int activate(self)
+    cdef inline float activate(self)
 
     cpdef list call(self,list inputs,int times)
 

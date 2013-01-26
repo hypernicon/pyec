@@ -1,5 +1,4 @@
-# cython: profile=True
-# distutils: language = c++
+# cython: profile=False
 """
 Copyright (C) 2012 Alan J Lockett
 
@@ -25,7 +24,7 @@ concentric, concentricCorr = load_concentric()
 cdef float best = 0.0
 
 @cython.boundscheck(False)
-cpdef float concentric_spirals(object net) except? -1:
+cpdef float concentric_spirals(RnnEvaluator net) except? -1:
     global best
     cdef float total = 0.0
     cdef float factor = (1./len(concentric))
@@ -49,7 +48,7 @@ cpdef float concentric_spirals(object net) except? -1:
     return total
 
 @cython.boundscheck(False)
-cpdef float concentric_spirals_approx(object net) except? -1:
+cpdef float concentric_spirals_approx(RnnEvaluator net) except? -1:
     cdef float total = 0.0
     cdef int samples = 1000
     cdef float factor = (1./samples)
@@ -69,7 +68,7 @@ cpdef float concentric_spirals_approx(object net) except? -1:
     return total
 
 @cython.boundscheck(False)
-cpdef float concentric_spirals_approx_100(object net) except? -1:
+cpdef float concentric_spirals_approx_100(RnnEvaluator net) except? -1:
     cdef float total = 0.0
     cdef int samples = 100
     cdef float factor = (1./samples)
