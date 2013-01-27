@@ -70,8 +70,12 @@ class UniformRnnCrosser(Crosser):
                         net.connect(layer, target, w)
         
         if len(net.layers) > len(net2.layers):
-            toRem = np.random.randint(0,len(net.layers) - len(net2.layers))
+            print "len net: ", len(net.layers), " len net2: ", len(net2.layers)
+            diff = len(net.layers) - len(net2.layers)
+            toRem = np.random.randint(0,diff)
+            print "removing ", toRem, " of ", diff, " extra layers"
             for i in xrange(toRem):
+                print i, " size of net.layers: ", len(net.layers)
                 net.removeLayer(net.layers[-i-1])
         elif len(net2.layers) > len(net.layers):
             diff = len(net2.layers) - len(net.layers)
