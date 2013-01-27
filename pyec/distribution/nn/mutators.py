@@ -48,7 +48,7 @@ class UniformRnnCrosser(Crosser):
                 layer = net.layers[i]
                 layer2 = net2.layers[i]
                 if layer.size > layer2.size:
-                    toRem = np.random.randint(0,len(net1.layers) - len(net2.layers))
+                    toRem = np.random.random_integers(0,layer.size - layer2.size)
                     layer.size -= toRem
                     for source in layer.inLinks:
                         w = net.links[(source, layer)]
@@ -58,7 +58,7 @@ class UniformRnnCrosser(Crosser):
                         net.connect(layer, target, w[:,:-(toRem+1)])
                 elif layer.size < layer2.size:
                     diff = layer2.size - layer.size
-                    toAdd = np.random.randint(0, diff)
+                    toAdd = np.random.random_integers(0, diff)
                     layer.size += toAdd
                     for source in layer.inLinks:
                         w = net.links[(source, layer)]
@@ -69,13 +69,13 @@ class UniformRnnCrosser(Crosser):
                         w = np.append(w, np.zeros((target.size, toAdd)), axis=1)
                         net.connect(layer, target, w)
         
-        if len(net1.layers) > len(net2.layers):
-            toRem = np.random.randint(0,len(net1.layers) - len(net2.layers))
+        if len(net.layers) > len(net2.layers):
+            toRem = np.random.random_integers(0,len(net.layers) - len(net2.layers))
             for i in xrange(toRem):
-                net.removeLayer(net.layers[-(i+1)])
-        elif len(net2.layers) > len(net1.layers):
-            diff = len(net2.layers) - len(net1.layers)
-            toAdd = np.random.randint(0,diff)
+                net.removeLayer(net.layers[len(net.layers)-i-1])
+        elif len(net2.layers) > len(net.layers):
+            diff = len(net2.layers) - len(net.layers)
+            toAdd = np.random.random_integers(0,diff)
             for i in xrange(toAdd):
                 layer2 = net2.layers[-diff+i]
                 layer = layer2.__class__(size=layer2.size, activator=layer2.activator)
