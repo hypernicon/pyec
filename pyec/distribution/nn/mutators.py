@@ -48,7 +48,7 @@ class UniformRnnCrosser(Crosser):
                 layer = net.layers[i]
                 layer2 = net2.layers[i]
                 if layer.size > layer2.size:
-                    toRem = np.random.random_integers(0,layer.size - layer2.size)
+                    toRem = np.random.randint(0,layer.size - layer2.size)
                     layer.size -= toRem
                     for source in layer.inLinks:
                         w = net.links[(source, layer)]
@@ -58,7 +58,7 @@ class UniformRnnCrosser(Crosser):
                         net.connect(layer, target, w[:,:-(toRem+1)])
                 elif layer.size < layer2.size:
                     diff = layer2.size - layer.size
-                    toAdd = np.random.random_integers(0, diff)
+                    toAdd = np.random.randint(0, diff)
                     layer.size += toAdd
                     for source in layer.inLinks:
                         w = net.links[(source, layer)]
@@ -70,12 +70,12 @@ class UniformRnnCrosser(Crosser):
                         net.connect(layer, target, w)
         
         if len(net.layers) > len(net2.layers):
-            toRem = np.random.random_integers(0,len(net.layers) - len(net2.layers))
+            toRem = np.random.randint(0,len(net.layers) - len(net2.layers))
             for i in xrange(toRem):
-                net.removeLayer(net.layers[len(net.layers)-i-1])
+                net.removeLayer(net.layers[-i-1])
         elif len(net2.layers) > len(net.layers):
             diff = len(net2.layers) - len(net.layers)
-            toAdd = np.random.random_integers(0,diff)
+            toAdd = np.random.randint(0,diff)
             for i in xrange(toAdd):
                 layer2 = net2.layers[-diff+i]
                 layer = layer2.__class__(size=layer2.size, activator=layer2.activator)
@@ -141,7 +141,7 @@ class UniformRnnCrosser(Crosser):
                         w = self.crossLink(w1, w2)
                         net.connect(net.layers[i], net.layers[j], w)
                         net.changed = True
-        net.checkLinks()
+        #net.checkLinks()
         return net
 
 
@@ -230,7 +230,7 @@ class AddNodeMutation(Mutation):
           net.connect(layer, outLayer, w)
       
       net.changed = True
-      net.checkLinks()
+      #net.checkLinks()
       return net
  
 
@@ -279,7 +279,7 @@ class RemoveNodeMutation(Mutation):
           net.connect(layer, outLayer, w)
       
       net.changed = True
-      net.checkLinks()
+      #net.checkLinks()
       return net
 
 
@@ -316,7 +316,7 @@ class AddLinkMutation(Mutation):
          w = self.config.link_sd * np.random.randn(target.size, source.size)
          net.connect(source, target, w)
          net.changed = True
-         net.checkLinks()
+         #net.checkLinks()
       
       return net
 
@@ -351,7 +351,7 @@ class RemoveLinkMutation(Mutation):
          target = [layer for layer in net.layers if layer.id == target.id][0]
          net.disconnect(source, target)
          net.changed = True
-         net.checkLinks()
+         #net.checkLinks()
       return net
 
 
@@ -389,7 +389,7 @@ class AddChainLayerMutation(Mutation):
         w = self.config.layer_sd * np.random.randn(target.size, source.size)
         net.connect(middle, target, w)
         net.changed = True
-        net.checkLinks()
+        #net.checkLinks()
         return net
 
 
@@ -415,7 +415,7 @@ class RemoveLayerMutation(Mutation):
         toRemove = hiddenLayers[np.random.randint(0,len(hiddenLayers))]
         net.removeLayer(toRemove)
         net.changed = True
-        net.checkLinks()
+        #net.checkLinks()
         return net
 
 
@@ -431,7 +431,7 @@ class WeightMutation(Mutation):
             if not isinstance(edge[1], RnnLayerInput):
                net.connect(edge[0], edge[1], self.mutateWeightMatrix(net, weights))
         net.changed = True
-        net.checkLinks()
+        #net.checkLinks()
         return net
 
 
