@@ -271,6 +271,7 @@ class LayeredRnnGenotype(object):
         :returns: A :class:`RnnEvaluator` that can be used to run the network
         
         """
+        #print self.links
         convert = False
         try:
             from .cnet import RnnEvaluator
