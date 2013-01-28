@@ -69,13 +69,10 @@ cdef class RnnEvaluator:
         self.numNeurons = numNeurons
         self.inputs = inputs
         self.outputs = outputs
-        self.stepWeights = []
-        self.stepFrm = []
-        self.stepTo = []
+        stepW = []
+        frm = []
+        to = []
         for step in weightStack:
-            stepW = []
-            frm = []
-            to = []
             for weights, frmIdxs, toIdxs in step:
                 stepW.append(weights)
                 frm.append((frmIdxs.start,frmIdxs.stop))

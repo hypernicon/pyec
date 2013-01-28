@@ -88,3 +88,84 @@ cpdef float concentric_spirals_approx_100(RnnEvaluator net) except? -1:
     if total > 0.5:
         return concentric_spirals_approx(net)
     return total
+
+
+cdef extern from "CartPole.h":
+    cdef cppclass CartPole:
+        CartPole(int,int)
+        void performAction(double, int)
+        int outsideBounds()
+        void init(int)
+        double state[6]
+        
+
+@cython.boundscheck(False)
+cpdef float cartDoublePoleMarkov(RnnEvaluator net):
+    """Adapted from code in Ken Stanley's C++ NEAT code, originally from Faustino Gomez"""
+    cdef int steps=0
+    cdef float nmarkov_fitness
+
+    cdef float jiggletotal # total jiggle in last 100
+    cdef int count  #step counter
+    
+    cdef list input, output
+
+    cdef CartPole *cartPole = new CartPole(0,1)
+  
+    cdef int nmarkovmax=100000
+
+    cartPole.init(0);
+
+    net.clear()
+    
+    while steps < nmarkovmax:
+        steps += 1
+        input = [[
+            cartPole.state[0] / 4.8,
+            cartPole.state[1] /2,
+            cartPole.state[2]  / 0.52,
+            cartPole.state[3] /2,
+            cartPole.state[4] / 0.52,
+            cartPole.state[5] /2,
+        ]]
+        output = net.call(input, 1)
+        cartPole.performAction(.5*(output[0][0]) + .5,steps);
+        if cartPole.outsideBounds():#// if failure
+            break		# // stop it now
+
+    return steps
+
+
+@cython.boundscheck(False)
+cpdef float cartDoublePole(RnnEvaluator net):
+    """Adapted from code in Ken Stanley's C++ NEAT code, originally from Faustino Gomez"""
+    cdef int steps=0
+    cdef float nmarkov_fitness
+
+    cdef float jiggletotal # total jiggle in last 100
+    cdef int count  #step counter
+
+    cdef list input, output
+
+    cdef CartPole *cartPole = new CartPole(0,0)
+  
+    cdef int nmarkovmax=100000
+
+    cartPole.init(0);
+
+    net.clear()
+
+    while steps < nmarkovmax:
+        steps += 1
+        input = [[
+            cartPole.state[0] / 4.8,
+            cartPole.state[2] / 0.52,
+            cartPole.state[4] / 0.52,
+        ]]
+        output = net.call(input, 1)
+        cartPole.performAction(.5*(output[0][0]) + .5,steps);
+        if cartPole.outsideBounds():#// if failure
+            break		# // stop it now
+
+    del cartPole
+    return steps

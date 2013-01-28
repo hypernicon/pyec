@@ -188,12 +188,12 @@ class AddNodeMutation(Mutation):
    Config parameters:
       
       * node_creation_prob - The probability of adding a node
-      * node_sd - The standard deviation for the Gaussian used to make weights
+      * sd - The standard deviation for the Gaussian used to make weights
                   for any new nodes
    
    """
    config = Config(node_creation_prob=.01,
-                   node_sd=0.1)
+                   sd=0.1)
    
    def mutate(self, net):
       if net.changed:
@@ -202,7 +202,7 @@ class AddNodeMutation(Mutation):
       if np.random.random_sample() > p:
          return net
       
-      sd = self.config.node_sd
+      sd = self.config.sd
       hiddenLayers = net.hiddenLayers()
       if len(hiddenLayers) == 0:
          return net
@@ -291,11 +291,11 @@ class AddLinkMutation(Mutation):
    Config parameters:
    
       * link_creation_prob - The probability of adding a random link
-      * link_sd - The std dev for the Gaussian used to create the weights
+      * sd - The std dev for the Gaussian used to create the weights
    
    """
    config = Config(link_creation_prob=0.025,
-                   link_sd=0.1)
+                   sd=0.1)
    
    def mutate(self, net):
       if net.changed:
@@ -315,7 +315,7 @@ class AddLinkMutation(Mutation):
          net = self.config.space.copy(net)
          source = [layer for layer in net.layers if layer.id == source.id][0]
          target = [layer for layer in net.layers if layer.id == target.id][0]
-         w = self.config.link_sd * np.random.randn(target.size, source.size)
+         w = self.config.sd * np.random.randn(target.size, source.size)
          net.connect(source, target, w)
          net.changed = True
          #net.checkLinks()
@@ -366,11 +366,11 @@ class AddChainLayerMutation(Mutation):
     Config parameters:
    
       * layer_creation_prob - The probability of adding a layer
-      * layer_sd - The std dev for the Gaussian to generate random weights
+      * sd - The std dev for the Gaussian to generate random weights
       
     """
     config = Config(layer_creation_prob=.01,
-                    layer_sd=0.1)
+                    sd=0.1)
    
     def mutate(self, net):
         if net.changed:
@@ -391,7 +391,7 @@ class AddChainLayerMutation(Mutation):
         #if (source, target) in net.links:
         #    net.connect(middle, target, net.links[(source, target)].copy())
         #else:
-        w = self.config.layer_sd * np.random.randn(target.size, middle.size)
+        w = self.config.sd * np.random.randn(target.size, middle.size)
         net.connect(middle, target, w)
         net.changed = True
         #net.checkLinks()
