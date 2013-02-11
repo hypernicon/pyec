@@ -13,7 +13,6 @@ from pyec.config import Config
 from pyec.distribution.convolution import Convolution
 from pyec.distribution.bayes.mutators import *
 from pyec.distribution.bayes.structure.proposal import StructureProposal
-from pyec.distribution.bayes.sample import DAGSampler
 from pyec.distribution.ec.selectors import Selection
 from pyec.distribution.ec.mutators import (Mutation,
                                            Bernoulli,
@@ -21,6 +20,16 @@ from pyec.distribution.ec.mutators import (Mutation,
                                            Gaussian,
                                            AreaSensitiveGaussian,
                                            AreaSensitiveBernoulli)
+from pyec.distribution.nn.mutators import (AddChainLayerMutation,
+                                           RemoveLayerMutation,
+                                           AddNodeMutation,
+                                           RemoveNodeMutation,
+                                           AddLinkMutation,
+                                           RemoveLinkMutation,
+                                           NetAreaStripper,
+                                           AreaSensitiveGaussianWeightMutation,
+                                           UniformOrIntermediateRnnCrosser,
+                                           UniformRnnLinkCrosser)
 from pyec.history import History
 from pyec.space import Euclidean, Binary
 from pyec.util.combinatorics import factorial
@@ -33,13 +42,15 @@ from pyec.util.partitions import (Segment,
                                   VectorSeparationAlgorithm,
                                   LongestSideVectorSeparationAlgorithm,
                                   BinarySeparationAlgorithm,
-                                  BayesSeparationAlgorithm)
+                                  BayesSeparationAlgorithm,
+                                  LayeredSeparationAlgorithm)
 from pyec.util.RunStats import RunStats
 
 from scipy.special import erf
 
 import logging
 log = logging.getLogger(__file__)  
+
 
 class PartitionHistory(History):
    """A :class:`History` that records all points and uses those points
@@ -80,6 +91,7 @@ class PartitionHistory(History):
       """Insert all new points into the partition.
       
       """
+      
       if population[0][1] is None:
          # skip unscored updates inside convolution
          return
@@ -88,7 +100,9 @@ class PartitionHistory(History):
          # again, skip intermediate
          return
       
-      pts = [Point(self.segment, x, None, s) for x,s in population]
+      pts = [Point(self.segment, x, None, s)
+             for x,s in population]
+      
       self.config.stats.start("save")
       Point.bulkSave(self.segment, pts, self.stats)
       self.config.stats.stop("save")
@@ -222,12 +236,11 @@ class AreaStripper(Mutation):
    """
    def mutate(self, x):
       return x[0].point
-   
 
 AnnealingCrossover = (
    ((TournamentAnnealing << AreaStripper) <<
-    ((TournamentAnnealing >> 1) << AreaStripper) <<
-    Crossover)
+    (((TournamentAnnealing >> 1) << AreaStripper) <<
+     Crossover))
 )
 
 RealEvolutionaryAnnealing = (
@@ -252,176 +265,26 @@ CrossedBinaryEvolutionaryAnnealing = (
    AnnealingCrossover << Bernoulli
 )[Config(separator=BinarySeparationAlgorithm)]
 
-#BayesEvolutionaryAnnealing = (
-#   TournamentAnnealing << StructureMutator
-#)[Config(separator=BayesSeparationAlgorithm)]
+BayesEvolutionaryAnnealing = (
+   AnnealingCrossover << StructureProposal
+)[Config(separator=BayesSeparationAlgorithm,
+         crosser=Merger, #UniformBayesCrosser,
+         schedule="log",
+         learningRate=0.1,
+         crossoverProb=.25)]
 
-"""
-class BayesEAConfigurator(REAConfigurator):
-   """"""
-      A :class:`ConfigBuilder` for an evolutionary annealing structure search for a Bayesian network. 
-      
-      See source for defaults (Tournament annealing, DAGs, area-sensitive structure proposals).
-   """"""
-   def __init__(self):
-      super(BayesEAConfigurator, self).__init__()
-      self.setTournament()
-      self.cfg.varInit = 1.0
-      self.cfg.varDecay = 1.0
-      self.cfg.varExp = 0.25
-      self.cfg.bounded = False
-      self.cfg.initialDistribution = None
-      self.cfg.data = None
-      self.cfg.randomizer = None
-      self.cfg.sampler = DAGSampler()
-      self.cfg.numVariables = None
-      self.cfg.variableGenerator = None
-      self.cfg.crossoverProb = 0.50
-      self.cfg.mutation = "structure"
-      self.cfg.crossover = "none"
-      self.cfg.activeField = "bayes"
-      self.cfg.passArea = True
-      self.cfg.learningRate = 0.005
-      self.cfg.branchFactor = 1000000
+NeuroannealingCrossover = (
+   ((TournamentAnnealing << NetAreaStripper) <<
+    (((TournamentAnnealing >> 1) << NetAreaStripper) <<
+      Crossover[Config(crosser=UniformOrIntermediateRnnCrosser, crossoverProb=.5)]))
+)[Config(learningRate=.1, schedule="log")]
 
-   def setCrossover(self, merge=True, enable=True):
-      if enable and merge:
-         self.cfg.crossover = "merge"
-      elif enable and not merge:
-         self.cfg.crossover = "crossbayes"
-      else:
-         self.cfg.crossover = "none"
-         
-         
-         
-      
-class EvolutionaryAnnealing(Convolution):
-   """"""
-      The evolutionary annealing algorithm as described in
-      
-      <http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf>
-      
-      Lockett, Alan. General-Purpose Optimization Through Information Maximization. Ph.D. Thesis (2011).
-      
-      Config parameters:
-      * learningRate -- A multiplier for the annealed cooling schedule
-      * selection -- One of (proportional, tournament), the type of annealed selection to use
-      * crossover -- One of (none, uniform, onePoint, twoPoint, intermediate, merge, crossbayes), the type of crossover to use.
-      * mutation -- One of (gauss, uniform, uniformBinary, cauchy, bernoulli, structure), the type of mutation to use. Must match the space being searched.
-      * passArea -- Whether to use area-sensitive mutation distributions.
-      * varInit -- Scaling factor for standard deviation in Gaussian spaces. Defaults to 1.0.
-      * initialDistribution -- The initial distribution to sample.
-      
-      
-      See :mod:`pyec.distribution.ec.selectors` for selection methods and :mod:`pyec.distribution.ec.mutators` for mutation distributions.
-   """"""
-   def __init__(self, config):
-      self.config = config
-      self.binary = False
-      if hasattr(config, 'varInit'):
-         config.stddev = config.varInit
-      self.selectors = []
-      if config.selection == "proportional":
-         self.selectors.append(ProportionalAnnealing(config))
-      elif config.selection == "tournament":
-         self.selectors.append(TournamentAnnealing(config))
-      else:
-         raise Exception, "Unknown Selection"
-      
-      if len(self.selectors) == 1:
-         self.selector = self.selectors[0]
-      else:
-         self.selector = Convolution(self.selectors, passScores = True)
-      self.mutators = []
-      
-      if hasattr(config, 'crossover') and config.crossover != "none":
-         selector = self.selector
-         if config.crossover == 'uniform':
-            crosser = UniformCrosser(config)
-         elif config.crossover == 'onePoint':
-            crosser = OnePointCrosser(config)
-         elif config.crossover == 'twoPoint':
-            crosser = TwoPointCrosser(config)
-         elif config.crossover == 'intermediate':
-            crosser = IntermediateCrosser(config)
-         elif config.crossover == 'merge':
-            crosser = Merger()
-         elif config.crossover == 'crossbayes':
-            crosser = UniformBayesCrosser(config)
-         else:
-            raise Exception, "Unknown crossover method"
-         order = 2
-         if hasattr(config, 'crossoverOrder'):
-            order = int(config.crossoverOrder)
-         else:
-            config.crossoverOrder = order
-         self.mutators.append(Crossover(selector, crosser, order))
-      
-      
-      
-      if config.mutation == "gauss":
-         if config.passArea:
-            self.mutators.append(AreaSensitiveGaussian(config))
-         else:
-            self.mutators.append(DecayedGaussian(config))
-      elif config.mutation == "uniform":
-         config.passArea = False
-         self.mutators.append(UniformArea(config))
-      elif config.mutation == "uniformBinary":
-         self.binary = not self.config.binaryPartition
-         config.passArea = True
-         self.mutators.append(UniformAreaBernoulli(config))
-      elif config.mutation == "cauchy":
-         self.mutators.append(DecayedCauchy(config))
-      elif config.mutation == "bernoulli":
-         self.binary = not self.config.binaryPartition
-         if config.passArea:
-            self.mutators.append(AreaSensitiveBernoulli(config))
-         else:
-            self.mutators.append(DecayedBernoulli(config))
-      elif config.mutation == "structure":
-         if config.passArea:
-            self.mutators.append(AreaSensitiveStructureMutator(config))
-         else:
-            self.mutators.append(StructureMutator(config))
-         config.initialDistribution = StructureProposal(config)
-         config.structureGenerator = config.initialDistribution
-            
-      self.mutator = Convolution(self.mutators)
-      passScores = len(self.selectors) > 1
-      super(EvolutionaryAnnealing, self).__init__(self.selectors + self.mutators, config.initialDistribution, passScores)
-      
-
-   
-   def convert(self, x):
-      if self.binary:
-         ns = array([i+1 for i in xrange(self.config.binaryDepth)] * self.config.rawdim)
-         ms = .5 ** ns
-         y = reshape(x.__mult__(ms), (self.config.binaryDepth, self.config.rawdim))
-         y = y.sum(axis=0).reshape(self.config.rawdim)
-         return y * self.config.rawscale + self.config.rawcenter
-      elif hasattr(self.config, 'convert') and self.config.convert:
-         return x[:self.config.dim]
-      return x
-   
-   @property
-   def var(self):
-      try:
-         return self.mutators[-1].sd   
-      except:
-         try:
-            return self.mutators[-1].bitFlipProbs
-         except:
-            try:
-               return self.mutators[-1].decay
-            except:
-               return 0.0
-                  
-   @classmethod
-   def configurator(cls):
-      return REAConfigurator(cls)
-      
-   
-
-         
-"""
+Neuroannealing = (
+   #TournamentAnnealing << NetAreaStripper << 
+   NeuroannealingCrossover <<
+   AddChainLayerMutation << RemoveLayerMutation <<
+   AddNodeMutation << RemoveNodeMutation <<
+   AddLinkMutation << RemoveLinkMutation <<
+   AreaSensitiveGaussianWeightMutation
+)[Config(separator=LayeredSeparationAlgorithm,
+         secondary_separator=LongestSideVectorSeparationAlgorithm)]

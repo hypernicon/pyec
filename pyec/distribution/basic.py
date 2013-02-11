@@ -16,6 +16,7 @@ from pyec.config import Config, ConfigBuilder
 from pyec.history import History, MarkovHistory, SortedMarkovHistory, DoubleMarkovHistory
 from pyec.space import Euclidean, Binary
 from pyec.util.registry import BENCHMARKS
+from pyec.util.RunStats import RunStats
 from pyec.util.TernaryString import TernaryString
 
 class Distribution(object):
@@ -30,6 +31,9 @@ class Distribution(object):
    def __init__(self, **kwargs):
       super(Distribution, self).__init__()
       self.config = Distribution.config.merge(Config(**kwargs))
+
+   def __call__(self):
+      return self.sample()
 
    def sample(self, **kwargs):
       """Get a single sample from the distribution."""
@@ -81,11 +85,15 @@ def initStandard(cls, init=None):
      if init is None:
          def __init__(self, **kwargs):
              config = cls.config.merge(Config(**kwargs))
-             super(cls, self).__init__(**config.__properties__) 
+             super(cls, self).__init__(**config.__properties__)
+             self.history = None
+             self.fitness = None
     
      else:
          def __init__(self, *args, **kwargs):
              config = cls.config.merge(Config(**kwargs))
+             self.history = None
+             self.fitness = None
              init(self, *args, **config.__properties__)
     
      return __init__
@@ -351,6 +359,12 @@ class PopulationDistribution(Distribution):
       * initial -- The initial distribution; a :class:`Distribution`, 
                    a callable object that returns a single solution,
                    or ``None`` to use the space's randomizer
+      * observer -- A view or listener; should have a method ``report()``
+                    which will be called with this instance and the next
+                    population when updated, e.g.
+                    ``self.config.report(self, pop)``. In this case, ``pop``
+                    is a scored population, consisting of a list of
+                    ``(solution, score)`` tuples.
       
       :params config: The configuration parameters.
       :type config: :class:`Config`
@@ -360,7 +374,9 @@ class PopulationDistribution(Distribution):
    config = Config(populationSize=1, # The size of each population
                    history=SortedMarkovHistory, # The class for the history
                    space=None, # The search space
-                   minimize=True
+                   minimize=True,
+                   stats = RunStats(),
+                   observer = None,
                   )
    
    def run(self, fitness=None, history=None, extraArgs=None, **kwargs):

@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 import numpy as np
 
 from .basic import PopulationDistribution, GaussianProposal
+from pyec.distribution.bayes.mutators import StructureMutator
 from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.ec.mutators import Gaussian, Bernoulli
 
@@ -36,7 +37,7 @@ class SimulatedAnnealingAcceptance(PopulationDistribution):
                  That is, ``schedule(n)`` should converge to zero as n goes to
                  infinity.
    * learningRate -- A divisor for the cooling schedule, used for built-in 
-                     schedules "log" and "inear". As a divisor, it divides the
+                     schedules "log" and "linear". As a divisor, it divides the
                      temperature but multiplies the exponent.
    * temp0 -- An initial temperature for the temperature decay in "discount"
    * restart -- A probability of restarting, tested at each update
@@ -109,11 +110,10 @@ BinarySimulatedAnnealing = (
    #Bernoulli[_(p=.01)] << SimulatedAnnealingAcceptance
 )
 
-# Structure search in a Bayes net
-#BayesNetSimulatedAnnealing = (
-#   StructureProposal[_(branchFactor=5)] <<
-#   SimulatedAnnealingAcceptance[_(learningRate=0.1,
-#                                  temp0=100.,
-#                                  discount=0.95,
-#                                  divisor=400.)]
-#)[_(minimize=False)]
+# Structure search in a Bayes net, use a
+# pyec.distribution.bayes.space.BayesNetStructure space for searching.
+BayesNetSimulatedAnnealing = (
+   SimulatedAnnealingAcceptance[_(schedule="linear",
+                                  divisor=100.)] <<
+   StructureMutator[_(branchFactor=5)] 
+)[_(minimize=False)]

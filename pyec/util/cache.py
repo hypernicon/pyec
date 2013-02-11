@@ -68,6 +68,9 @@ class LRUCache(object):
          
    def __getitem__(self, key):
       return self.objects[key]
+   
+   def __contains__(self, key):
+      return key in self.objects
 
    def __len__(self):
       return len(self.objects)

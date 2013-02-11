@@ -10,6 +10,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 from pyec.config import Config as _
 from pyec.space import BinaryReal, Binary, Euclidean
+from pyec.distribution.bayes.mutators import *
+from pyec.distribution.bayes.space import BayesNetStructure
+from pyec.distribution.bayes.structure.proposal import StructureProposal
 from pyec.distribution.ec.mutators import *
 from pyec.distribution.ec.selectors import *
 
@@ -62,3 +65,9 @@ RealGeneticAlgorithm = (
 
 """
 ElitistGeneticAlgorithm = (.1 * Elitist) | (.9 * GeneticAlgorithm)
+
+
+BayesGeneticAlgorithm = (
+  Tournament << ((Tournament >> 1) << Crossover[_(crosser=UniformBayesCrosser)])
+  << StructureMutator
+)[_(space=BayesNetStructure(space=Binary(dim=25)))]

@@ -23,6 +23,8 @@ class History(object):
     useCache = True
     attrs = set()
     sorted = False
+    root = True # whether the current history is the top level root for
+                # all histories of this algorithm
     
     def __init__(self, config):
         super(History, self).__init__()
@@ -40,7 +42,7 @@ class History(object):
         self.printEvery = config.printEvery or 1000000000000L 
         self.attrs = set(["evals","minSolution","minScore","maxScore","attrs",
                           "minSolution", "maxSolution","_empty","cache",
-                          "update","printEvery", "useCache"])
+                          "updates","printEvery", "useCache"])
     
     def __getstate__(self):
         """Used by :class:`CheckpointedHistory`
@@ -57,20 +59,16 @@ class History(object):
       
         for attr in self.attrs:
             val = getattr(self, attr)
-            if isinstance(val, np.ndarray):
-                val = val.copy()
+            if isinstance(val, list):
+                val = [x for x in val]
             state[attr] = val
          
         state['cfg'] = self.config.__properties__
         return state
 
     def __setstate__(self, state):
-        state = copy.copy(state)
-      
         for attr in self.attrs:
-            val = state.pop(attr)
-            if isinstance(val, np.ndarray):
-                val = val.copy()
+            val = state[attr]
             setattr(self, attr, val)
          
         import pyec.config
@@ -138,7 +136,7 @@ class History(object):
         """
         return self.evals
         
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         """
          Update the state of the :class:`History` with the latest population 
          and its fitness scores. Subclasses should probably override
@@ -153,10 +151,11 @@ class History(object):
          p = None
          f = lambda x: 
          t = History()
-         s = some_optimizer.config.space
+         o = some_optimizer
+         s = o.config.space
          for i in xrange(generations):
-             p = some_optimizer[t.update(p,f,s), f]()
-         t.update(p,f,s)
+             p = some_optimizer[t.update(p,f,s,0), f]()
+         t.update(p,f,s,o)
           
          :params population: The previous population.
          :type population: list of points in the search domain
@@ -164,19 +163,28 @@ class History(object):
          :type fitness: Any callable object
          :params space: The search domain
          :type space: :class:`Space`
+         :params opt: The optimizer reporting this population
+         :type opt: :class:`PopulationDistribution`
          :returns: The history (``self``), for continuations
          
         """
         if population is None:
             return
         
+        #self.config.stats.start(repr(self) + "history.update.all")
         self._empty = False
         self.evals += len(population)
         self.updates += 1
         
+        #self.config.stats.start(repr(self) + "history.update.scoreall")
         # score the sample
         pop  = population
         scored = [(x, self.score(x, fitness, space)) for x in pop]
+        #self.config.stats.stop(repr(self) + "history.update.scoreall")
+        #self.config.stats.start(repr(self) + "history.update.findbest")
+        
+        if self.root and self.config.observer is not None:
+            self.config.observer.report(opt, scored)
         
         for x,s in scored:
             if s > self.maxScore:
@@ -186,16 +194,19 @@ class History(object):
             if s < self.minScore:
                  self.minScore = s
                  self.minSolution = x
+        #self.config.stats.stop(repr(self) + "history.update.findbest")
         
         if not (self.updates % self.printEvery):
-           genmin = min([s for x,s in scored])
-           genmax = max([s for x,s in scored])
-           genavg = np.average([s for x,s in scored])
-           print self.updates, ": min", self.minScore, " max", self.maxScore,
-           print " this generation (min, avg, max): ", genmin, genavg, genmax    
-               
-        self.internalUpdate(scored)
+            genmin = min([s for x,s in scored])
+            genmax = max([s for x,s in scored])
+            genavg = np.average([s for x,s in scored])
+            print self.updates, ": min", self.minScore, " max", self.maxScore,
+            print " this generation (min, avg, max): ", genmin, genavg, genmax
         
+        #self.config.stats.start(repr(self) + "history.update.internal")       
+        self.internalUpdate(scored)
+        #self.config.stats.stop(repr(self) + "history.update.internal")
+        #self.config.stats.stop(repr(self) + "history.update.all")
         return self
         
     def internalUpdate(self, population):
@@ -223,24 +234,30 @@ class History(object):
          :returns: The fitness value, cached if possible
          
         """
-   
         if fitness is None: 
             return None
+        
+        #self.config.stats.start("history.score")
             
         if self.useCache: 
             try:
                 hashed = space.hash(point)
                 if self.cache.has_key(hashed):
-                    return self.cache[hashed]
+                    ret = self.cache[hashed]
+                    #self.config.stats.stop("history.score")
+                    return ret
             except Exception:
                 pass
         
         if not space.in_bounds(point):
-           # use NaN so that the result is less than nor greater than
-           # any other score, and therefore NEVER optimal
-           s = np.inf - np.inf
+            # use NaN so that the result is less than nor greater than
+            # any other score, and therefore NEVER optimal
+            s = np.inf - np.inf
         else:
-           s = fitness(space.convert(point))
+            try:
+                s = fitness(space.convert(point))
+            except ValueError:
+                s = np.inf - np.inf
         
         if self.useCache:
             try:
@@ -248,8 +265,11 @@ class History(object):
                 self.cache[hashed] = s
             except Exception:
                 pass
-        
+        #self.config.stats.stop("history.score")
         return s
+    
+    def setCache(self, cache):
+        self.cache = cache
 
 
 class MarkovHistory(History):
@@ -398,22 +418,26 @@ class CheckpointedHistory(History):
     def __init__(self, config, historyClass):
         super(CheckpointedHistory, self).__init__(config)
         self.history = historyClass(self.config)
+        self.history.root = False
         self.history.printEvery = 100000000L
         self.cache = self.history.cache
         self.useCache = self.history.useCache
         self.states = []
         self.attrs |= set(["states"])
-        
+     
+    def setCache(self, cache):
+        self.cache = cache
+        self.history.setCache(cache)
         
     def internalUpdate(self, population):
         """Overrides ``internalUpdate`` in :class:`History`"""
         pass
         
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         if population is None:
             return self
-        super(CheckpointedHistory, self).update(population, fitness, space)
-        self.history.update(population, fitness, space)
+        super(CheckpointedHistory, self).update(population, fitness, space, opt)
+        self.history.update(population, fitness, space, opt)
         return self
     
     def checkpoint(self):
@@ -432,11 +456,11 @@ class CheckpointedHistory(History):
 
     def __getstate__(self):
         start = super(CheckpointedHistory, self).__getstate__()
-        start.update({"states":self.states, "history":history.__getstate__()})
+        start.update({"states":self.states,
+                      "history":self.history.__getstate__()})
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
         self.history.__setstate__(state["history"])
         del state["history"]
         super(CheckpointedHistory, self).__setstate__(state)
@@ -458,19 +482,25 @@ class MultipleHistory(History):
             raise ValueError(err)
         self.histories = [h(self.config) for h in set(historyClasses)]
         useCache = False
-        for h in self.histories: 
+        for h in self.histories:
+            h.root = False
             h.printEvery = 1000000000L
-            h.cache = self.cache
+            h.setCache(self.cache)
             useCache = useCache or h.useCache
         self.useCache = useCache
+        
+    def setCache(self, cache):
+        self.cache = cache
+        for h in self.histories:
+            h.setCache(self.cache)
     
-    def update(self, population, fitness, space):
+    def update(self, population, fitness, space, opt):
         """Overrides ``internalUpdate`` in :class:`History`"""
         if population is None:
             return self
-        super(MultipleHistory, self).update(population, fitness, space)
+        super(MultipleHistory, self).update(population, fitness, space, opt)
         for h in self.histories:
-            h.update(population, fitness, space)
+            h.update(population, fitness, space, opt)
         return self
 
     def internalUpdate(self, population):
@@ -483,8 +513,7 @@ class MultipleHistory(History):
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
-        for st,h in zip(state.pop("histories"), self.histories):
+        for st,h in zip(state["histories"], self.histories):
             h.__setstate__(st)
         super(MultipleHistory, self).__setstate__(state)
     
@@ -508,6 +537,7 @@ class CheckpointedMultipleHistory(MultipleHistory):
     
     def checkpoint(self):
         self.states.append([h.__getstate__() for h in self.histories])
+        assert len(self.states) <= 2
         
     def rollback(self):
         if not len(self.states):
@@ -519,11 +549,6 @@ class CheckpointedMultipleHistory(MultipleHistory):
         self._empty = self.histories[0]._empty
         self.updates = self.histories[0].updates
         self.states = self.states[:-1]
-        
-    def __getstate__(self):
-        start = super(CheckpointedMultipleHistory, self).__getstate__()
-        start.update({"states":self.states})
-        return start
         
         
 class DelayedHistory(History):
@@ -540,6 +565,7 @@ class DelayedHistory(History):
     def __init__(self, config, history, delay=1):
         super(DelayedHistory, self).__init__(config)
         self.history = history
+        self.history.root = False
         self.history.printEvery = 100000000L
         if delay < 1:
             err = "Delay must be a positive integer, not {0}".format(delay)
@@ -548,8 +574,12 @@ class DelayedHistory(History):
         self.cache = self.history.cache
         self.useCache = self.history.useCache
         self.queue = []
-        
-    def update(self, population, fitness, space):
+    
+    def setCache(self, cache):
+        self.cache = cache
+        self.history.setCache(cache)
+
+    def update(self, population, fitness, space, opt):
         """Stack up the new population, and push the delayed 
         populations to the subordinate history.
         
@@ -561,7 +591,7 @@ class DelayedHistory(History):
             self.evals += len(self.queue[-1])
             self.updates += 1
             self._empty = False
-            self.history.update(self.queue[-1], fitness, space)
+            self.history.update(self.queue[-1], fitness, space, opt)
             self.queue = self.queue[:-1]
     
         self.queue.append(population)
@@ -581,10 +611,9 @@ class DelayedHistory(History):
         return start
         
     def __setstate__(self, state):
-        state = copy.copy(state)
-        self.history.__setstate__(state.pop("history"))
-        self.delay = state.pop("delay")
-        self.queue = state.pop("queue")
+        self.history.__setstate__(state["history"])
+        self.delay = state["delay"]
+        self.queue = state["queue"]
         super(DelayedHistory, self).__setstate__(state)
 
     

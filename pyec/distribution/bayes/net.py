@@ -10,13 +10,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 import cPickle
 from cStringIO import StringIO
-from sample import *
-from structure import *
-from variables import *
+import numpy as np
+import sys
+from .sample import *
+from .structure.greedy import *
+from .variables import *
+from .score import *
 from pyec.config import Config
 from pyec.distribution.basic import Distribution
 from pyec.util.cache import LinkedList, LRUCache
-from pyec.util.TernaryString import TernaryString
 
 def checkDeferred(handler):
       def handle(*args, **kwargs):
@@ -33,29 +35,30 @@ def checkDeferredWeights(handler):
       return handle
 
 class BayesNet(Distribution):
-   cfg = None
+   counter = 0
+   created = 0
+   config = Config(numVariables=None,
+                   branchFactor=10,
+                   variableGenerator=BayesVariable,
+                   structureGenerator=GreedyStructureSearch(10, BayesianInformationCriterion()),
+                   sampler=DAGSampler(),
+                   randomizer=lambda net: None)
    densityCache = LRUCache()
    weightCache = LRUCache()
    likelihoodCache = LRUCache()
-   config = Config(numVariables=0,
-                   variableGenerator=None,
-                   structureGenerator=None,
-                   randomizer=None,
-                   sampler=None)
-
 
    def __init__(self, **kwargs):
-      BayesNet.cfg = config
-      super(BayesNet, self).__init__(**kwargs)
-      self.numVariables = config.numVariables
-      self.variableGenerator = config.variableGenerator
-      self.structureGenerator = config.structureGenerator
-      self.randomizer = config.randomizer
-      self.sampler = config.sampler
+      config = BayesNet.config.merge(Config(**kwargs))
+      super(BayesNet, self).__init__(**config.__properties__)
+      self.numVariables = self.config.numVariables
+      self.variableGenerator = self.config.variableGenerator
+      self.structureGenerator = self.config.structureGenerator
+      self.randomizer = self.config.randomizer
+      self.sampler = self.config.sampler
    
       self.variables = []
       for i in xrange(self.numVariables):
-         self.variables.append(self.variableGenerator(i))
+         self.variables.append(self.variableGenerator(i, self.config))
       self.decay = 1
       self.dirty = False
       self.acyclic = True
@@ -64,7 +67,7 @@ class BayesNet(Distribution):
       self.edgeTuples = None
       self.cacheKeys = dict([(v.index, v.cacheKey) for v in self.variables])
       self.edgeMap = {}
-      self.binary = TernaryString(0L, -1L, len(self.variables)**2)
+      self.binary = zeros(len(self.variables)**2)
       self.deferred = False
       self.deferredWeights = False
       self.edgeRep = None
@@ -73,6 +76,16 @@ class BayesNet(Distribution):
       self.cacheTries = 0
       self.changed = {}
       self.last = {}
+      self.__class__.counter += 1
+      self.__class__.created += 1
+   
+   def __del__(self):
+      for variable in self.variables:
+         del variable
+      self.__class__.counter -= 1
+   
+   def __copy__(self):
+      return self.__class__.parse(str(self), self.config)
    
    @checkDeferred
    def get(self, index):
@@ -178,24 +191,30 @@ class BayesNet(Distribution):
             if not BayesNet.densityCache.has_key(key):
                   BayesNet.densityCache[key] = v.density(x)
             vprod += log(BayesNet.densityCache[key])
+         if isinstance(vprod, np.ndarray):
+            vprod = vprod[0]
          self.last[v.index] = vprod
          prod += vprod
       self.densityStored = prod
       return prod
    
    @checkDeferredWeights   
-   def likelihoodChanged(self, data):
+   def likelihoodChanged(self, data, storeChange=False):
       diff = 0.0
       olddiff = 0.0
       total = 0.0
       for v in self.variables:
          if self.changed.has_key(v.index) and self.changed[v.index]:
+            inner = 0.0
             for x in data:
                key = self.cacheKeys[v.index]
                key += str(x[v.index])
                if not BayesNet.densityCache.has_key(key):
                   BayesNet.densityCache[key] = v.density(x)
-               total += log(BayesNet.densityCache[key])
+               inner += log(BayesNet.densityCache[key])
+            total += inner
+            if storeChange:
+               self.last[v.index] = inner 
          else:
             total += self.last[v.index]
       return total
@@ -242,9 +261,13 @@ class BayesNet(Distribution):
       return prod
       
    @checkDeferredWeights   
-   def sample(self):
+   def __call__(self):
       """sample the network"""
       return self.sampler(self)
+
+   @checkDeferredWeights
+   def sample(self):
+      return self.__call__()
 
    @checkDeferredWeights   
    def batch(self, num):
@@ -283,18 +306,17 @@ class BayesNet(Distribution):
 
    @checkDeferred   
    def hasEdge(self, frm, t):
-      """has an edge from the parent with index 'from'
+      """Whether the network has an edge from the parent with index 'from'
          to the child with index 'to'
          
-         TODO: improve efficiency; current implementation N^2
-         can be made constant
       """
-      try:
-         toNode = [variable for variable in self.variables if variable.index == t][0]
-         fromNode = [parent for l,parent in fromNode.parents.iteritems() if parent.index == frm][0]
-         return True
-      except:
-         return False
+      return (frm,t) in self.edges
+      #try:
+      #   toNode = [variable for variable in self.variables if variable.index == t][0]
+      #   fromNode = [parent for l,parent in fromNode.parents.iteritems() if parent.index == frm][0]
+      #   return True
+      #except Exception:
+      #   return False
 
    @checkDeferred   
    def isAcyclic(self):
@@ -336,7 +358,7 @@ class BayesNet(Distribution):
 
    @checkDeferred   
    def structureSearch(self, data):
-      return self.structureGenerator(self, data)
+      return self.structureGenerator.search(self, data)
    
    @checkDeferredWeights
    def getComputedState(self):
@@ -372,7 +394,6 @@ class BayesNet(Distribution):
    @checkDeferred   
    def computeEdgeStatistics(self):
       if not self.dirty: return
-      
       self.acyclic = self.sort()
       if self.edges is not None: del self.edges
       self.edges = []
@@ -381,7 +402,6 @@ class BayesNet(Distribution):
             self.edges.append((variable2, variable))
       self.edges = sorted(self.edges, key=lambda e: (e[0].index,e[1].index))
       self.edgeRatio = len(self.edges) / (1e-10 + (len(self.variables) ** 2))
-      self.edgeBinary()
       self.edgeTuples = [(frm.index, to.index) for frm,to in self.edges]
       self.cacheKeys = dict([(v.index, v.cacheKey) for v in self.variables])
       self.dirty = False
@@ -417,20 +437,6 @@ class BayesNet(Distribution):
       
    def __len__(self):
       return self.numVariables ** 2
-   
-   @checkDeferred   
-   def edgeBinary(self):
-      if not self.dirty: return self.binary
-      if self.edgeMap is not None:
-         del self.edgeMap
-      self.edgeMap = {}
-         
-      ret = TernaryString(0L, -1L, len(self.variables)**2)
-      for frm,t in self.edges:
-         idx = frm.index + len(self.variables) * t.index
-         ret[idx] = True
-      self.binary = ret
-      return ret
             
    def __getstate__(self):
       return {
@@ -483,17 +489,17 @@ class BayesNet(Distribution):
    
    @checkDeferred
    def estimate(net):
-      cfg = BayesNet.__dict__['cfg']
       for variable in net.variables:
-         net.updateVar(variable, cfg.data) 
+         net.updateVar(variable, net.config.data) 
       net.deferredWeights = False
             
    @classmethod
-   def parse(cls, rep):
+   def parse(cls, rep, cfg):
       io = StringIO(rep)
       numVars = cPickle.load(io)
-      cfg = BayesNet.__dict__['cfg']
-      net = cls(cfg)
+      if cfg is None:
+         cfg = BayesNet.config
+      net = cls(**cfg.__properties__)
       edges = cPickle.load(io)
       net.edgeRep = edges
       net.deferred = True

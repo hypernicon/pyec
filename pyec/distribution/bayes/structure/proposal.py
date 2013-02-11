@@ -12,8 +12,11 @@ import traceback, sys
 
 from numpy import *
 
-from basic import StructureSearch, CyclicException, DuplicateEdgeException, IrreversibleEdgeException
+from .basic import StructureSearch, CyclicException, DuplicateEdgeException, IrreversibleEdgeException
+from pyec.config import Config
+from pyec.distribution.basic import ProposalDistribution, PopulationDistribution
 from pyec.distribution.bayes.net import BayesNet
+from pyec.history import MarkovHistory
 
 
 class StaticDecayProb(object):
@@ -50,27 +53,54 @@ class ProbDecayEdgeRatio(object):
          return 0.0
       return (num / denom) ** decay 
 
-class StructureProposal(StructureSearch):
-   def __init__(
-      self, 
-      config,
-      prem= ProbDecayInvEdgeRatio(), 
-      padd= ProbDecayEdgeRatio(), 
-      prev= ProbDecayEdgeRatio()
-   ):
-      """
-         params:
-         
-         prem - function to prob of removing node given network
-         padd - function to prob of adding node given network
-         prev - function to prob of reversing an edge given network
-      """
-      self.prem = prem
-      self.padd = padd
-      self.prev = prev
-      self.config = config
+class StructureProposal(StructureSearch,
+                        ProposalDistribution,
+                        PopulationDistribution):
+   """A proposal distribution for structure searching with a heuristic
+   algorithm such as simulated annealing.
+   
+   Config params:
+   
+   * branchFactor The maximum number of parents per variable
+   * remove_edge_prob A callable object that takes a network and returns a
+                      probability of removing a random edge.
+   * add_edge_prob A callable object that takes a network and returns a
+                   probability of adding a random edge
+   * reverse_edge_prob A callable object that takes a network and
+                       returns a probability of reversing a random edges
+   
+   """
+   config = Config(
+      branchFactor = 5,
+      remove_edge_prob = ProbDecayInvEdgeRatio(), 
+      add_edge_prob = ProbDecayEdgeRatio(), 
+      reverse_edge_prob = ProbDecayEdgeRatio(),
+      history = MarkovHistory,
+   )
+   
+   def __init__(self, **kwargs): 
+      PopulationDistribution.__init__(self,**kwargs)
+      self.prem = self.config.remove_edge_prob
+      self.padd = self.config.add_edge_prob
+      self.prev = self.config.reverse_edge_prob
       self.network = None
       self.data = None
+      self.history = None
+
+   def compatible(self, history):
+      return hasattr(history, 'lastPopulation')
+
+   """ # obsolete? Doesn't make sense...
+   def __getstate__(self):
+      self.data = None
+      self.network = None
+      return self.__dict__
+      
+   def __setstate__(self,state):
+      state['network'] = None
+      state['data'] = None
+      self.__dict__.update(state)
+   """
 
    def __getstate__(self):
       return {'prem':self.prem,'padd':self.padd,'prev':self.prev}
@@ -120,11 +150,12 @@ class StructureProposal(StructureSearch):
                   if len(self.network.variables[indexTo].parents) > self.config.branchFactor:
                      exists = True
                      
-                  if hasattr(self.config, 'cmpIdx'):
+                  if self.config.cmpIdx is not None:
                      if self.network.variables[indexFrom].index != self.config.cmpIdx and self.network.variables[indexTo].index != self.config.cmpIdx:
                         exists = True
                 
                   attempts += 1
+                  
                if attempts >= maxAttempts or exists: 
                   return False
                changer(self.network.variables[indexTo], self.network.variables[indexFrom], self.data)
@@ -142,18 +173,27 @@ class StructureProposal(StructureSearch):
       return changed
 
    def batch(self, size, networks = None, data = None, **kwargs):
+      self.network = None
       if networks is None:
-         networks = [None for i in xrange(size)]
+         if (self.history is not None and
+             self.history.lastPopulation() is not None):
+            networks = [self.config.space.copy(x)
+                        for x,s in self.history.lastPopulation()]
+         else:
+            networks = [None for i in xrange(size)]
       
-      return [self.__call__(networks[i], data, **kwargs) for i in xrange(size)]
+      ret = [self.search(net, data, **kwargs) for net in networks]
+      self.network = None
+      return ret
 
-   def __call__(self, network=None, data=None, **kwargs):
+   def sample(self):
+      return self.search()
+
+   def search(self, network=None, data=None, **kwargs):
       if network:
          self.network = network
-      elif kwargs.has_key('prior'):
-         self.network = kwargs['prior']
       else:
-         self.network = BayesNet(self.config)
+         self.network = BayesNet(**self.config.space.config.__properties__)
          self.network.updateVariables(self.config.data)
       if data:
          self.data = data
@@ -177,22 +217,11 @@ class StructureProposal(StructureSearch):
          # add an edge
          if self.maybeChange(self.padd, self.addEdge, False):
             changes += 1
-         
          total += changes
-      
       self.network.sort()
-      
-      return self.network
-            
-   def __getstate__(self):
-      self.data = None
+      network = self.network
       self.network = None
-      return self.__dict__
-      
-   def __setstate__(self,state):
-      state['network'] = None
-      state['data'] = None
-      self.__dict__.update(state)
+      return network
       
                      
    def adjust(self, acceptanceRatio):
@@ -204,5 +233,3 @@ class StructureProposal(StructureSearch):
          Still need to check this claim
       """
       return 1.0
-         
-         

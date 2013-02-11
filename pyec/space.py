@@ -8,6 +8,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import copy
 import numpy as np
 from pyec.config import Config
 from pyec.util.TernaryString import TernaryString
@@ -37,6 +38,9 @@ class Space(Region):
         self.type = cls
         self.parent = None # An immediate supercontainer, if needed
         self.owner = None # The space this subspace/region is in, if any
+    
+    def __str__(self):
+        return "{0}".format(self.__class__.__name__)
         
     def area(self, **kwargs):
         """Return the area of the space.
@@ -57,9 +61,10 @@ class Space(Region):
         :returns: The converted point, ready to be passed to the fitness
         
         """
-        if not self.in_bounds(x):
-            cname = self.__class__.__name__
-            raise ValueError("Type mismatch in {0}.convert".format(cname))
+        # checking in bounds may be expensive
+        #if not self.in_bounds(x):
+        #    cname = self.__class__.__name__
+        #    raise ValueError("Type mismatch in {0}.convert".format(cname))
         return x
    
     def extent(self):
@@ -94,6 +99,25 @@ class Space(Region):
         
         """
         return hash(point)
+
+    def copy(self, point):
+        """Make a safe copy of a point in the space.
+        
+        :params point: A point in the space
+        :type point: ``space.type``
+        :returns: A copy of the point
+        
+        """
+        return copy.copy(point)
+    
+    def discard(self, point):
+        """Allow any type-specific deletion or cleanup.
+        
+        :params point: A point in the space
+        :type point: ``space.type``
+        
+        """
+        pass
 
 
 class Euclidean(Space):
@@ -184,6 +208,9 @@ class Euclidean(Space):
     
     def in_bounds(self, point, **kwargs):
         return isinstance(point, self.type) and np.shape(point) == (self.dim,)
+
+    def copy(self, point):
+        return np.copy(point)
 
 
 class Hyperrectangle(Euclidean):
@@ -437,35 +464,92 @@ class BinaryRectangle(Binary):
         test.base = base
         return test 
 
-
-class BayesianNetworks(Space):
-    """Space for Bayesian network structure search.
+class Union(Space):
+    """A union of multiple regions. Represents the space $\bigcup_i spaces_i$.
+    
+    :param spaces: A list of spaces for which the union is to be taken.
+    :type spaces: A ``list`` of :class:`Space` instances
     
     """
-    def __init__(self,
-                 numVariables,
-                 variableGenerator,
-                 structureGenerator,
-                 randomizer,
-                 sampler):
-        from pyec.distribution.bayes.net import BayesNet
-        from pyec.distribution.bayes.structure.proposal import StructureProposal
-        super(BayesianNetworks, self).__init__(BayesNet)
-        self.config = Config(numVariables=numVariables,
-                             variableGenerator=variableGenerator,
-                             structureGenerator = structureGenerator,
-                             randomizer=randomizer,
-                             sampler=sampler)
-        self.proposal = StructureProposal(self.config)
-        
-    def area(self, **kwargs):
-        return 1.0
+    def __init__(self, spaces):
+        if np.any([isinstance(space, Space) for space in spaces]):
+            raise ValueError("Union space takes a list of instances of Space.")
+        self.spaces = spaces
+    
+    @property
+    def dim(self):
+        for space in self.spaces:
+            if hasattr(space, 'dim'):
+                return space.dim
+        raise ValueError("Asked for dimension of union space, but no member of"
+                         "the union has a dimension.")
     
     def random(self):
-        return self.proposal()
+        idx = np.random.randint(0,len(self.spaces))
+        return self.spaces[idx].random()
     
-    def extent(self):
-        return TernaryString(0L, 0L, self.dim), TernaryString(-1L, 0L, self.dim)
+    def area(self):
+        return 1.0
+    
+    def in_bounds(self, x):
+        for space in self.spaces:
+            if space.in_bounds(x):
+                return True
+        return False
+    
+    def hash(self, x):
+        return self.spaces[0].hash(x)
+
+
+class Complement(Space):
+    """A complement of one region within another. Represents the space
+    $base\setminus subtrahend$.
+    
+    :param base: The space within which the complement is to be taken.
+    :type base: :class:`Space`
+    :param subtrahend: The space to be removed from ``base``.
+    :type subtrahend: :class:`Space`
+    
+    """
+    def __init__(self, base, subtrahend):
+        if not isinstance(base, Space) or not isinstance(subtrahend, Space):
+            raise ValueError("Both base and subtrahend for Complement must"
+                             " be instances of Space.")
+        self.base = base
+        self.subtrahend = subtrahend
+        
+    @property
+    def dim(self):
+        if hasattr(self.base, 'dim'):
+            return self.base.dim
+        else:
+            raise ValueError("Requested dimension of complement space, but "
+                             "the base space does not have property 'dim'")
+    
+    def random(self):
+        """Use rejection sampling to sample the complement"""
+        attempts = 0
+        while attempts < 1000:
+            rnd = self.base.random()
+            if not self.subtrahend.in_bounds():
+                return rnd
+            attempts += 1
+        raise RuntimeError("Failed to sample Complement afer 1000 attempts.")
+            
+
+    def area(self):
+        return self.base.area() - self.subtrahend.area()
+    
+    def in_bounds(self, x, **kwargs):
+        """A point is in the complement if it is in the ``base`` but not in
+        the ``subtrahend``.
+        
+        """
+        return (self.base.in_bounds(x, **kwargs) and
+                not self.subtrahend.in_bounds(x, **kwargs))
+    
+    def hash(self, x):
+        return self.base.hash(x)
     
 
 class Product(Space):
@@ -479,7 +563,19 @@ class Product(Space):
     def __init__(self, *spaces):
         super(Product, self).__init__(list)
         self.spaces = spaces
-        
+     
+    @property
+    def dim(self):
+        dim = 0
+        for space in self.spaces:
+            if hasattr(space, 'dim'):
+                dim += space.dim
+            else:
+                raise ValueError("Requested dimension of product space, but "
+                                 "one or more subordinate spaces does not "
+                                 "have property 'dim' used to look up the "
+                                 "space's dimension.")
+       
     def random(self):
         return [space.random() for space in self.spaces]
     
@@ -514,3 +610,105 @@ class EndogeneousProduct(Product):
         
         """
         return x[0]
+
+class LayeredSpace(Space):
+    """A Mixin for layered spaces, that is, hierarchical product spaces. This is
+    used for Neural Network spaces within Evolutionary Annealing.
+    
+    """
+    def extractLayers(self, x):
+        raise NotImplementedError("Subclasses must implement this.")
+    
+    def layerFactor(self):
+        """A proportional weight for this layer. Two regions in the same
+        layer of a layered space may be compared for proportional weight
+        using the ratio of their output on this function.
+        
+        :returns: a ``float`` indicating the weight in this region
+        
+        """
+        return 1.0
+    
+    def layers(self, x):
+        """Pull out the layer features for comparison from the argument.
+        
+        :param x: An instance of ``self.type``
+        :type x: ``self.type``
+        :returns: A ``list`` of objects
+        
+        """
+        return x
+    
+    def wrapLayer(self, region):
+        """Wrap a region with a wrapper that will unpack the point
+        for comparison within that region.
+        
+        :param region: An instance of :class:`Space`
+        :type region: :class:`Space`
+        :returns: a :class:`LayerWrapper` that wraps region if necessary, the
+                  region itself if no wrapping is needed.
+        
+        """
+        return region
+    
+    
+class LayerWrapper(Space):
+    """Wrap a region so that an object can be converted with a call to
+    ``unwrap`` before calling the region's methods.
+    
+    :param space: The space to wrap
+    :type space: :class:`Space`
+    
+    """
+    def __init__(self, space):
+        self.wrapped = space
+    
+    def __str__(self):
+        return "{0} for {1}".format(self.__class__.__name__, self.wrapped)
+    
+    def __repr__(self):
+        return str(self)
+    
+    def unwrap(x):
+        raise NotImplementedException("LayerWrapper.unwrap() is abstract")
+    
+    def random(self):
+        raise NotImplementedException("LayerWrapper.random() is not allowed")
+    
+    def extent(self):
+        return self.wrapped.extent()
+    
+    def copy(self, x):
+        raise NotImplementedException("LayerWrapper.copy() is not allowed")
+    
+    def hash(self, x):
+        raise NotImplementedException("LayerWrapper.hash() is not allowed")
+    
+    def in_bounds(self, x, **kwargs):
+        return self.wrapped.in_bounds(self.unwrap(x), **kwargs)
+    
+    def area(self, **kwargs):
+        return self.wrapped.area(**kwargs)
+    
+    def proportion(self, smaller, larger, index):
+        return self.wrapped.proportion(smaller, larger, index)
+    
+    @property
+    def type(self):
+        return self.wrapped.type
+    
+    def get_owner(self):
+        return self.wrapped.owner
+    
+    def set_owner(self, owner):
+        self.wrapped.owner = owner
+    
+    owner = property(get_owner, set_owner)
+    
+    def get_parent(self):
+        return self.wrapped.parent
+    
+    def set_parent(self, parent):
+        self.wrapped.parent = parent
+    
+    parent = property(get_parent, set_parent)

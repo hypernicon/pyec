@@ -8,6 +8,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 import numpy as np
+import pprint
+import gc
+import sys
 
 from pyec.distribution.basic import PopulationDistribution, HistoryMapper
 from pyec.config import Config
@@ -60,14 +63,12 @@ class Convolution(PopulationDistribution, HistoryMapper):
        for sub in self.subs:
            if pop is not None:
                fitness = sub.needsScores() and self.fitness or None
-               self.history.update(pop, fitness, sub.config.space)
+               self.history.update(pop, fitness, sub.config.space, sub)
            sub.update(self.mapHistory(sub), self.fitness)
            pop = sub()
              
        self.history.rollback()
        return pop
-         
-       return self.fitness(self.config.space.convert(point))
    
    def update(self, history, fitness):
       super(Convolution, self).update(history, fitness)
@@ -135,6 +136,7 @@ class SelfConvolution(PopulationDistribution):
     def batch(self, popSize):
         if self.checkpoint:
            self.history.checkpoint()
+        from pyec.distribution.bayes.net import BayesNet
         
         times = self.times
         pop = None
@@ -146,13 +148,23 @@ class SelfConvolution(PopulationDistribution):
             else:
                 pop = [self.config.initial() for i in xrange(popSize)]
             times -= 1
-        
+            
         fitness = self.opt.needsScores() and self.fitness or None
         for i in xrange(times):
+            #self.config.stats.start("self-convolve.loop")
+            #self.config.stats.start("history.update")
             if pop is not None:
-                self.history.update(pop, fitness, self.opt.config.space)
+                self.history.update(pop, fitness,
+                                    self.opt.config.space, self.opt)
+            #self.config.stats.stop("history.update")
+            #self.config.stats.start("opt.update")
             self.opt.update(self.history.history, self.fitness)
+            #self.config.stats.stop("opt.update")
+            #self.config.stats.start("opt.call")
             pop = self.opt()
+            #self.config.stats.stop("opt.call")
+            gc.collect()
+            #self.config.stats.stop("self-convolve.loop")
            
         if self.checkpoint:
             self.history.rollback()

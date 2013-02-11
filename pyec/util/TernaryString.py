@@ -293,4 +293,64 @@ class TernaryString(object):
             
       base = long(binascii.hexlify(random.bytes(numBytes)), 16)
       known = long(binascii.hexlify(initial + '\xff'*numFull), 16)
-      return TernaryString(base, known, length)   
+      return TernaryString(base, known, length)
+   
+   def __copy__(self):
+      return TernaryString(self.base, self.known, self.length)
+
+   @classmethod
+   def bernoulli(cls, p=.5, length=1):
+      """This method uses an iterative algorithm to flip bits in
+      a TernaryString with a given probability. The algorithm essentially
+      uses the binary representation of the bit-flipping probability in order
+      to convert random byte sampling (``p=.5``) to account for any probability,
+      with resolution of ``1e-16``.
+      
+      :param p: The probability of flipping bits. May be an array with length
+                equal to ``length`` so that different positions have different
+                bit flipping probabilities.
+      :type p: ``float`` or ``numpy.ndarray`` with length ``length``
+      :param length: The number of bits to produce
+      :type length: ``int``
+      :returns: A :class:`TernaryString` with the specified length
+                that is 1 in each position with
+                probability ``p``
+      
+      """
+      numBytes = int(ceil(length/ 8.0))
+      numFull  = length / 8
+      initial = ''
+      if numBytes != numFull:
+         extra = length % 8
+         initMask = 0
+         for i in xrange(extra):
+            initMask <<= 1
+            initMask |= 1
+         initial = struct.pack('B',initMask)
+      
+      start = (1L << (length)) - 1L
+      base = 0L
+      active = TernaryString(-1L,-1L,length)
+      while ((isinstance(p, ndarray) and (p > 1e-16).any()) or
+             (not isinstance(p, ndarray) and p > 1e-16)):
+         reps = minimum(100, -floor(log2(p)))
+         q = 2.0 ** -reps
+         next = start
+         activeReps = TernaryString(active.base, active.known)
+         if isinstance(p, ndarray):
+            for j, pj in enumerate(p):
+               if pj < 1e-16:
+                  active[j] = False
+            for i in xrange(int(max(reps))):
+               for j,r in enumerate(reps):
+                  if i >= r:
+                     activeReps[j] = False
+               next &= (activeReps.base &
+                        long(binascii.hexlify(random.bytes(numBytes)), 16))
+         else:
+            for i in xrange(int(reps)):
+               next &= long(binascii.hexlify(random.bytes(numBytes)), 16) 
+         base |= next & active.base
+         p = (p - q) / (1.0 - q)
+            
+      return TernaryString(base, (1L << length) - 1L, length)

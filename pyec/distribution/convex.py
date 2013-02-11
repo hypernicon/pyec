@@ -61,8 +61,18 @@ class Convex(PopulationDistribution, HistoryMapper):
         return self.useScores
         
     def batch(self, popSize):
-        sub = self.chooseSub()
-        return sub()
+        pops = [sub() for sub in self.subs]
+        pop = []
+        for i in xrange(popSize):
+            while len(pops) > 0:
+                idx = np.random.randint(0, len(pops))
+                if i < len(pops[idx]):
+                    pop.append(pops[idx][i])
+                    break
+                else:
+                    pops.remove(pop)
+        
+        return pop
             
     def update(self, history, fitness):
         super(Convex, self).update(history, fitness)

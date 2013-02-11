@@ -8,9 +8,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import copy as scopy
 from numpy import *
 from scipy.special import erf
-from pyec.space import Hyperrectangle, BinaryRectangle
+from pyec.config import Config
+from pyec.space import Hyperrectangle, BinaryRectangle, Complement, LayeredSpace
 from pyec.util.TernaryString import TernaryString
 
 import traceback
@@ -102,16 +104,24 @@ class Point(object):
       
       sep = segment.config.separator(segment.config)
       for gp in points:
+         if gp.score != gp.score:
+            # don't insert NaN
+            continue
          try:
             stats.start("separate")
             sep.separate(segment.partitionTree, gp)
             stats.stop("separate")
             stats.start("insert")
             segment.scoreTree.insert(gp, segment.config, stats)
+            #segment.scoreTree.checkBalance()
             stats.stop("insert")
          except SeparationException:
             logg.debug("Exception when separating or inserting points")
             gp.alive = False
+         except IndexError:
+            segment.scoreTree.printTree(segment)
+            
+      #segment.scoreTree.printTree(segment)
 
    @classmethod
    def sampleTournament(cls, segment, temp, config):
@@ -254,6 +264,11 @@ class SeparationAlgorithm(object):
       """
       return True
    
+   def firstPoint(self, tree, node, point):
+      node.point = point
+      point.partition_node = node
+      tree.areaTree.insert(node)
+   
    def separate(self, tree, point):
       """Insert the point into the partition tree,
          separating the current partition that contains it.
@@ -270,12 +285,10 @@ class SeparationAlgorithm(object):
       """
       self.config.stats.start("separate.traverse")
       lr = self.config.learningRate
-      node, path = tree.traverse(tree, point)
+      node, path = tree.traverse(point)
       self.config.stats.stop("separate.traverse")
-      if node.point is None:
-         node.point = point
-         point.partition_node = node
-         tree.areaTree.insert(node)
+      if node.point is None and node.bounds is self.config.space:
+         self.firstPoint(tree, node, point)
          return
       
       self.config.stats.start("separate.main")
@@ -286,10 +299,11 @@ class SeparationAlgorithm(object):
          
       # update the best score
       if path is not None:
-         if self.config.minimize and point.score < other.score:
+         if self.config.minimize and (other is None or
+                                      point.score < other.score):
             for n in path:
                n.best_score = min([point.score,n.best_score])
-         elif point.score > other.score:
+         elif other is None or point.score > other.score:
             for n in path:
                n.best_score = max([point.score,n.best_score])
       
@@ -299,10 +313,13 @@ class SeparationAlgorithm(object):
       self.config.stats.start("separate.areaTree")
       
       try:
-         tree.areaTree.insert(n1)
-         tree.areaTree.insert(n2)
-         tree.areaTree.remove(node)
-      except:
+         if n1.point is not None:
+             tree.areaTree.insert(n1)
+         if n2.point is not None:
+             tree.areaTree.insert(n2)
+         if not isinstance(node.bounds, Complement):
+             tree.areaTree.remove(node)
+      except AreaException:
          traceback.print_exc()
          raise
       
@@ -310,7 +327,7 @@ class SeparationAlgorithm(object):
       self.config.stats.start("separate.propagate")
       
       # correct area in score tree
-      if other.score_node is not None:
+      if other is not None and other.score_node is not None:
          sn = other.score_node
          diff = sn.area - other.partition_node.area
          sn.segment.scoreTree.propagateAreaOnly(sn, self.config, diff)
@@ -330,6 +347,7 @@ class SeparationAlgorithm(object):
       
       """
       raise NotImplementedError("Abstract Separation Algorithm; use a subclass")
+
 
 class VectorSeparationAlgorithm(SeparationAlgorithm):
    def compatible(self, space):
@@ -479,9 +497,12 @@ class LongestSideVectorSeparationAlgorithm(VectorSeparationAlgorithm):
    
    """
    def chooseIndex(self, pointrep, otherrep, lower, upper):
+      newIndex = None
       newDiff = 0.0
       infinity = False
       for i in xrange(len(pointrep)):
+         if pointrep[i] == otherrep[i]:
+            continue
          if upper[i] == inf and lower[i] == -inf:
             return i, inf
          elif upper[i] == inf:
@@ -511,6 +532,8 @@ class LongestSideVectorSeparationAlgorithm(VectorSeparationAlgorithm):
       if infinity:
          return newIndex, inf
       
+      if newIndex is None:
+         raise SeparationException("No difference between points")
       return newIndex, newDiff
 
 
@@ -579,14 +602,159 @@ class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
       return down, up, downPoint, upPoint
 
 
-class BayesSeparationAlgorithm(BinarySeparationAlgorithm):
+class BayesSeparationAlgorithm(VectorSeparationAlgorithm):
    """Separation algorithm for Bayesian networks based on structure."""
    def compatible(self, space):
       from pyec.distribution.bayes.net import BayesNet
       return space.type == BayesNet
    
-   def cast(self, point):
-      return point.point.edgeBinary()
+   def rectify(self, pointrep, otherrep):
+      return pointrep, otherrep
+   
+   def chooseIndex(self, pointrep, otherrep, lower, upper):
+      pointrep.computeEdgeStatistics()
+      otherrep.computeEdgeStatistics()
+      for edge in pointrep.edges:
+         if edge not in otherrep.edges:
+            if edge not in lower and edge not in upper:
+               return edge, 1.0
+         
+      for edge in otherrep.edges:
+         if edge not in pointrep.edges:
+            if edge not in lower and edge not in upper:
+               return edge, 1.0
+      
+      raise SeparationException("No difference in points")
+
+   def makeParts(self, point, pointrep, other, otherrep, newIndex, lower, upper):
+      from pyec.distribution.bayes.space import BayesNetFixedEdges
+      pointrep.computeEdgeStatistics()
+      otherrep.computeEdgeStatistics()
+      
+      if newIndex in pointrep.edges:
+         upPoint = point
+         downPoint = other
+      else:
+         upPoint = other
+         downPoint = point
+      
+      downEdges = scopy.copy(upper)
+      downNedges = scopy.copy(lower) + [newIndex]
+      down = BayesNetFixedEdges(self.config.space.space, downEdges, downNedges)
+      down.parent = other.partition_node.bounds
+      
+      upEdges = scopy.copy(upper) + [newIndex]
+      upNedges = scopy.copy(lower)
+      up = BayesNetFixedEdges(self.config.space.space, upEdges, upNedges)
+      up.parent = other.partition_node.bounds
+      
+      return down, up, downPoint, upPoint
+
+
+class LayeredSeparationAlgorithm(SeparationAlgorithm):
+   """Used to separate spaces defined by a layer hierarchy; written
+   for neural networks initially. Assumes that the space is divided
+   into layered strata; see :class:`LayeredSpace`. The bottom layer
+   is separated differently from the higher layers, and so the config
+   should contain a property named "secondary_separator"
+   that can be used to separate points in the lowest rung of the
+   hierarchy.
+   
+   """
+   def compatible(self, space):
+      return isinstance(space, LayeredSpace)
+   
+   def firstPoint(self, tree, node, point):
+      layers = self.config.space.extractLayers(point.point)
+      other = None
+      segment = node.segment
+      parent = node.parent
+      area = 1.0
+      for layer in layers:
+         area *= hasattr(layer, 'layerFactor') and layer.layerFactor() or 1.0
+         node.bounds = layer
+         node.best_score = point.score
+         node.score_sum = point.score
+         if other is not None:
+            other.bounds = Complement(node.parent.bounds, layer)
+         if parent is not None:
+            parent.children = [node, other]
+         next = PartitionTreeNode(segment, 0, node, None, None, 1.0, None)
+         other = PartitionTreeNode(segment, 0, node, None, None, 0.0, None)
+         parent = node
+         node = next
+      node = next.parent
+      node.bounds.owner = node.bounds
+      node.point = point
+      node.area = area
+      point.partition_node = node
+      tree.areaTree.insert(node)
+      while node.parent is not None:
+         node = node.parent
+         node.area = area
+   
+   def split(self, point, node):
+      if node.point is None and isinstance(node.bounds, Complement):
+         # we hit a complement node
+         layers = self.config.space.extractLayers(point.point)
+         area = 1.0
+         while node.bounds.subtrahend.__class__ != layers[0].__class__:
+            layer = layers.pop(0)
+            area *= hasattr(layer, 'layerFactor') and layer.layerFactor() or 1.0
+         segment = node.segment
+         parent = node
+         node = PartitionTreeNode(segment, 0, node, None, None, 0.0, None)
+         other = PartitionTreeNode(segment, 0, node, None, None, 0.0, None)
+         node.best_score = point.score
+         node.score_sum = point.score
+         area = 1.0
+         for layer in layers:
+            area *= hasattr(layer, 'layerFactor') and layer.layerFactor() or 1.0
+            node.bounds = layer
+            node.best_score = point.score
+            node.score_sum = point.score
+            other.bounds = Complement(node.parent.bounds, layer)
+            parent.children = [node, other]
+            next = PartitionTreeNode(segment, 0, node, None, None, 0.0, None)
+            other = PartitionTreeNode(segment, 0, node, None, None, 0.0, None)
+            parent = node
+            node = next
+         node = parent
+         node.bounds.owner = node.bounds
+         node.point = point
+         node.area = area
+         point.partition_node = node
+         current = node
+         while current.parent is not None:
+            current = current.parent
+            current.area += area
+         return node, other
+      else:
+         cfg = self.config.merge(Config(space=node.bounds.owner))
+         sep = self.config.secondary_separator(cfg)
+         # problem: point.point is LayeredRnnGenotype;
+         # VectorSeparationAlgorithm expects np.ndarray for Euclidean
+         # need to remap point, here and in traverse
+         # or create a space wrapper
+         pt = point.point
+         other = node.point
+         otherPt = other.point
+         point.point = self.config.space.layers(pt)[-1]
+         other.point = self.config.space.layers(otherPt)[-1]
+         bounds = node.bounds
+         node.bounds = bounds.wrapped
+         try:
+            n1,n2 = sep.split(point, node)
+            n1.bounds = self.config.space.wrapLayer(n1.bounds)
+            n2.bounds = self.config.space.wrapLayer(n2.bounds)
+         except:
+            node.point = other
+            raise
+         finally:
+            node.bounds = bounds
+            point.point = pt
+            other.point = otherPt
+         return n1, n2
 
 
 class PartitionTreeNode(object):
@@ -637,7 +805,7 @@ class Partition(object):
    def save(self):
       pass
 
-   def traverse(self, tree, point):
+   def traverse(self, point):
       """
          Traverse the partition tree to find the partition within which "point" is located.
          
@@ -650,9 +818,12 @@ class Partition(object):
                    the list of tree nodes traversed
 
       """
+      if isinstance(point, Point):
+         point = point.point
+      
       # get the top parent
-      current = tree.root
-      region = tree.root.bounds
+      current = self.root
+      region = self.root.bounds
       path = [current]
       
       last = None
@@ -666,14 +837,13 @@ class Partition(object):
          last = current
          
          for child in children:
-            if child.bounds.in_bounds(point.point, index=child.index):
+            if child.bounds.in_bounds(point, index=child.index):
                current = child
                path.append(current)
                children = current.children
                break
             
       node = current
-      
       return node, path
 
    def propagateScoreSum(self, node, config):
@@ -702,325 +872,11 @@ class Partition(object):
             depth += 1
       
       return depth
-
-   def traverseLayered(self, pointrep, segment, config, stats):
-      """
-         Traverse the tree to the split point, track the criteria as you go.
-         
-         Start at top layer, traverse to boundary
-         When boundary is identified, then check whether to proceed
-         into next layer; if not, break at the boundary
-      """
-      raise NotImplementedError("Need to abstract this to a LayeredSpace")
-      current = self.root
-      children = current.children
-      currentrep = current.layerrep
-      
-      for layer, layerrep in enumerate(pointrep):
-         #print "NEW LAYER traverse: ", current[0], layer, layerrep
-         layerspec = config.layerspec(layer, pointrep, config)
-         lower = layerspec.lower()
-         upper = layerspec.upper()
-         last = None
-         
-         while len(children) > 0 and children.layer == layer:
-            if current == last:
-               #if not (pointrep < pointrep).any():
-               #   print "partition.traverse looped, exception"
-               #   print lower
-               #   print upper
-               #   print pointrep
-               raise Exception, "Loop in partition.traverseLayers!"
-            last = current
-            
-            for child in children:
-            
-               if (layerrep[child.index] <= child.upper) and \
-                  (layerrep[child.index] >= child.lower):
-                  current = child
-                  currentrep = current.layerrep
-                  children = current.children
-                  lower[current.index] = current.lower
-                  upper[current.index] = current.upper
-                  
-                  break
-         
-               
-         # should we check next layer or return here?
-         ret = False
-         # we are at a layer boundary; do the layerreps match?
-         #print "deciding whether to return, ", layer
-         #print currentrep
-         #print pointrep
-         if currentrep.split(";")[layer] != layerspec.serializeLayer(layerrep,layer):
-            #print "return", layer
-            ret = True
-
-         
-         if ret:
-            node = current
-            return node, lower, upper, layer
-      
-                        
-      node = current
-      return node, lower, upper, len(pointrep) - 1
-
-   def separateLayered(self, point, config, stats):
-      """
-         Separate points according to a sequence of criteria
-         Each element in the sequence is a separate portion of the tree
-         If two points reach the boundary in the tree between 
-         criteria, then the node at the boundary is split.
-      """
-      raise NotImplementedError("Need to abstract this to LayeredSeparationAlgorithm")
-      pointrep = config.layerize(getattr(point, config.activeField))
-      #print [unicode(layer) for layer in pointrep]
-      stats.start("separate.traverse")
-      node, lower, upper, layer = self.traverseLayered(pointrep, point.segment, config, stats)
-      layerspec = config.layerspec(layer, pointrep, config)
-      
-      #print "traversed: ", layer, pointrep[layer]
-      
-      stats.stop("separate.traverse")
-      
-      isLeaf = len(node.children) == 0
-      if isLeaf and node.parent is None and node.point is None:
-         node.point = point
-         node.layer = layer
-         node.area = layerspec.area()
-         node.layerrep = layerspec.serialize(pointrep)
-         point.partition_node = node
-         return
-         
-               
-      stats.start("separate.main")
-      stats.start("separate.prepare")
-      
-      if isLeaf:
-         other = node.point
-         otherrep = config.layerize(getattr(other, config.activeField))
-         node.point = None
-      else:
-         otherrep = layerspec.deserialize(node.layerrep)
-      
-      #print "point: ", [unicode(layer2) for layer2 in pointrep]
-      #print "other: ", [unicode(layer2) for layer2 in otherrep]
-      
-      # node.save()
-      
-      newIndex = 0
-      newDiff = 0
-      midPoint = 0
-      upPointIsOther = True
-      stats.stop("separate.prepare")
-      stats.start("separate.separable")
-      
-      pointrep1 = pointrep[layer]
-      otherrep1 = otherrep[layer]
-      #print "separating: "
-      #print pointrep
-      #print otherrep
-      try:
-       for i in xrange(len(pointrep1)):
-         if lower[i] == upper[i]:
-            continue
-         diff = abs(pointrep1[i] - otherrep1[i])
-         #print i, " - ", pointrep1[i], otherrep1[i]
-         #print i, " - ", diff
-         if diff > newDiff:
-            newDiff = diff
-            newIndex = i
-            if pointrep1[i] > otherrep1[i]:
-               upPointIsOther = False
-               midPoint = (pointrep1[i] + otherrep1[i])/2.
-            else:
-               upPointIsOther = True
-               midPoint = (otherrep1[i] + pointrep1[i])/2.
-      except:
-         #print "EXCEPTION in separateLayered"
-         #print "node: ", node.id
-         #print "layer: ", layer
-         #print "point: ", pointrep
-         #print "rep: ", point.other
-         #print "weights: ", cpp.getAngles(cpp.convert(point.other))
-         #print "other: ", otherrep
-         #print "rep: ", node.point.other 
-         #print "weights: ", cpp.getAngles(cpp.convert(node.point.other))
-        
-         #self.printTree(point.segment)
-         raise
-      stats.stop("separate.separable")
-      stats.start("separate.compute")
-      
-      #print "got diff"
-      
-      if newDiff == 0.0:
-        if isLeaf:
-           node.point = other
-        #print "layer: ", layer
-        #print "unseparable: ", point.id, other.id
-        #print layerspec.serialize(pointrep)
-        #print layerspec.serialize(otherrep)
-        # node.save()
-        #print point.other
-        #print other.other
-        raise SeparationException, "No difference in points"
-      
-      
-      if isLeaf:
-         #print "partition at index ", newIndex, " with diff ", newDiff
-      
-         # compute proportion that goes to the lower node
-         proportion = layerspec.proportion(lower[newIndex], midPoint, upper[newIndex],ub=upper,lb=lower,idx=newIndex)
-      
-         #print "got proportion: ", lower[newIndex], midPoint, upper[newIndex], proportion
-      
-         
-         upArea = float(node.area * (1.0 - proportion))
-         downArea = float(node.area * proportion)
-         if upArea < 0.0 or downArea < 0.0:
-            print "negative! ", upArea, downArea, node.area, proportion, lower[newIndex], midPoint, upper[newIndex], layer
-            print newIndex
-            print pointrep1
-            print otherrep1
-            print upper
-            print lower
-            
-      else:
-         if upPointIsOther:
-            upArea = node.area 
-            downArea = layerspec.area()
-            #print layer, " new area ", downArea, " old area ", upArea
-         else:
-            upArea = layerspec.area()
-            downArea = node.area
-            #print layer, " new area ", upArea, " old area ", downArea
-         
-      
-      stats.stop("separate.compute")
-      stats.start("separate.sql")
-      
-      node.point = None
-      
-      if upPointIsOther:
-         down = point
-         downScore = point.score * downArea
-         downBest = point.score
-         downLayer = layerspec.serialize(pointrep)
-         if isLeaf:
-            up = other
-            upScore = other.score * upArea
-            upBest = other.score
-            upLayer = node.layerrep
-         else:
-            up = None
-            upScore = node.score_sum
-            upBest = node.best_score
-            upLayer = layerspec.serialize(otherrep)
-      else:
-         up = point
-         upScore = point.score * upArea
-         upBest = point.score
-         upLayer = layerspec.serialize(pointrep)
-         if isLeaf:
-            down = other
-            downScore = other.score * downArea
-            downBest = other.score
-            downLayer = node.layerrep
-         else:
-            down = None
-            downScore = node.score_sum
-            downBest = node.best_score
-            downLayer = layerspec.serialize(otherrep)
-      
-      
-      #print upPointIsOther, upLayer, downLayer
-      
-      if not isLeaf:
-        # get the current child ids
-        children = node.children
-      
-      n1 = PartitionTreeNode(
-         upper=float(upper[newIndex]), 
-         lower=float(midPoint),
-         segment=node.segment,
-         point=up,
-         area = upArea,
-         index = newIndex,
-         best_score = upBest,
-         score_sum = upScore,
-         parent = node,
-         layer = layer,
-         layerrep = upLayer
-      )
-    
-      n2 = PartitionTreeNode(
-         upper=float(midPoint), 
-         lower=float(lower[newIndex]),
-         segment=node.segment,
-         point=down,
-         area = downArea,
-         index = newIndex,
-         best_score = downBest,
-         score_sum = downScore,
-         parent = node,
-         layer = layer,
-         layerrep = downLayer
-      )
-
-      node.children = [n1,n2]
-      if up is not None:
-         up.partition_node = n1
-      if down is not None:
-         down.partition_node = n2
-
-         
-      if not isLeaf:
-         # update the children
-         if upPointIsOther:
-            parent = n1
-         else:
-            parent = n2
-            
-         for child in children:
-            child.parent = parent
-         parent.children = children
-         
-         
-      # propagate the new area and score sum
-      parent = node
-      while parent is not None:
-         parent.area = sum([child.area for child in node.children])
-         parent.score_sum = sum([child.score_sum for child in node.children])
-         parent.best_score = sum([child.best_score for child in node.children])
-         parent = node.parent
-      
-      
-      stats.stop("separate.sql")
-      stats.stop("separate.main")
-      stats.start("separate.propagate")
-      
-      # correct area in score tree
-      if isLeaf:
-         sn = other.score_node
-         if sn is not Node:
-            if not upPointIsOther:
-               diff = sn.area - downArea
-            else:
-               diff = sn.area - upArea
-            sn.segment.scoreTree.propagateAreaOnly(sn, config, diff)
-      
-      #print "end separate"
-      stats.stop("separate.propagate")   
-      
-      #print "after"
-      #self.printTree(point.segment)
-      
       
    def printTree(self, segment, node=None, indent=""):
       if node is None:
          node = self.root
-      print indent, node.id, ": ", node.layer, node.index, node.lower, node.upper, node.area
+      print indent, node.id, ": ", node.layer, node.index, node.bounds, node.area
       children = node.children
       for child in children:
          self.printTree(segment, child, indent + "\t")      
@@ -1083,6 +939,24 @@ class ScoreTree(object):
       if len(children) > 0:
          for child in sorted(children, key=lambda c: not c.left):
             self.printTree(segment, child, indent + '\t')
+
+   def checkBalance(self, node=None):
+      if node is None:
+         node = self.root
+      
+      try:
+         children = node.children
+         if len(children) > 0:
+            children = sorted(children, key=lambda c: not c.left)
+            assert (node.balance == (children[0].height - children[1].height))
+            for child in children:
+               self.checkBalance(child)
+      except AssertionError:
+         print "NODE: ", node.id, node.balance, children[0].height, children[1].height
+         self.printTree(self.segment)
+         raise RuntimeError("Boo")
+      except:
+         raise
 
    def rotateLeft(self, node, config):
       """
@@ -1587,10 +1461,10 @@ class AreaTree(object):
     def traverse(self, area):
         if self.root is None:
            raise AreaException("Cannot traverse empty tree")
-        elif self.root.low > area or self.root.high < area: # if we want this check, it needs to get the high from the space
-           err = "Area {0} out of bounds ({1},{2})"
-           err = err.format(area, self.root.low, self.root.high)
-           raise AreaException(err)
+        #elif self.root.low > area or self.root.high < area: # if we want this check, it needs to get the high from the space
+        #   err = "Area {0} out of bounds ({1},{2})"
+        #   err = err.format(area, self.root.low, self.root.high)
+        #   raise AreaException(err)
            
         next = self.root
         while len(next.children):
