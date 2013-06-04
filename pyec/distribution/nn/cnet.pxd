@@ -12,6 +12,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 cimport numpy as np
 #from libcpp.vector cimport vector
 
+cdef class LinkedListIntInt:
+    cdef int val1
+    cdef int val2
+    cdef LinkedListIntInt next
+    cdef LinkedListIntInt append(self,int,int)
+
+cdef class LinkedListIntIntInt:
+    cdef int val1
+    cdef int val2
+    cdef int val3
+    cdef LinkedListIntIntInt next
+    cdef LinkedListIntIntInt append(self,int,int,int)
+    
+cdef class LinkedListNumpy:
+    cdef np.ndarray val
+    cdef LinkedListNumpy next
+    cdef LinkedListNumpy append(self,np.ndarray)
+
+
 cdef class RnnEvaluator:
     """A compiled RNN as a computable object. Takes a network in a form that
     is efficient to activate so that the network can be evaluated quickly.
@@ -55,11 +74,11 @@ cdef class RnnEvaluator:
     cdef int numNeurons
     cdef list inputs
     cdef list outputs
-    cdef list stepWeights
-    cdef list stepFrm
-    cdef list stepTo
+    cdef LinkedListNumpy stepWeights
+    cdef LinkedListIntInt stepFrm
+    cdef LinkedListIntInt stepTo
     cdef np.ndarray state
-    cdef object activationStack
+    cdef LinkedListIntIntInt activationStack
     
     cpdef int clear(self)
     

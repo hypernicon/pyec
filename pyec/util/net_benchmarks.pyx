@@ -27,24 +27,34 @@ cdef float best = 0.0
 cpdef float concentric_spirals(RnnEvaluator net) except? -1:
     global best
     cdef float total = 0.0
-    cdef float factor = (1./len(concentric))
+    cdef float factor = (1./625.) #len(concentric))
     cdef list output, pt
-    cdef int netCorr
+    cdef float netCorr
     cdef int i, size
-    cdef np.ndarray grid = np.zeros(10000)
+    cdef np.ndarray grid
     size = len(concentric)
-    for i in xrange(size):
-        net.clear()
-        pt = [concentric[i]]
-        output = net.call(pt, 25)
-        netCorr = output[0][0] >= 0.0
-        grid[i] = netCorr
-        total += (concentricCorr[i] == netCorr) * factor
+    for i in xrange(25):#size):
+        for j in xrange(25):
+            k = i * 400 + j * 16
+            net.clear()
+            pt = [concentric[k]]
+            output = net.call(pt, 25)
+            if output is None:
+                return -1
+            netCorr = output[0][0] >= 0.0
+            total += (concentricCorr[k] == netCorr) * factor
     if total > best:
-       best = total
-       import pylab
-       pylab.imshow(grid.reshape((100,100)), origin='lower')
-       pylab.draw()
+        grid = np.zeros(size)
+        for i in xrange(size):
+            net.clear()
+            pt = [concentric[i]]
+            output = net.call(pt, 25)
+            grid[i] = output[0][0]
+    
+        best = total
+        import pylab
+        pylab.imshow(grid.reshape((100,100)), origin='lower')
+        pylab.draw()
     return total
 
 @cython.boundscheck(False)
@@ -53,7 +63,7 @@ cpdef float concentric_spirals_approx(RnnEvaluator net) except? -1:
     cdef int samples = 1000
     cdef float factor = (1./samples)
     cdef list output, pt
-    cdef int netCorr
+    cdef float netCorr
     cdef int i, idx, size
     size = len(concentric)
     for idx in xrange(samples):
@@ -61,6 +71,8 @@ cpdef float concentric_spirals_approx(RnnEvaluator net) except? -1:
         net.clear()
         pt = [concentric[i]]
         output = net.call(pt, 25)
+        if output is None:
+            return -1
         netCorr = output[0][0] >= 0.0
         total += (concentricCorr[i] == netCorr) * factor
     if total > 0.65:
@@ -74,7 +86,7 @@ cpdef float concentric_spirals_approx_100(RnnEvaluator net) except? -1:
     cdef float factor = (1./samples)
     cdef int i, idx, size
     cdef list output, pt
-    cdef int netCorr
+    cdef float netCorr
     size = len(concentric)
     for idx in xrange(samples):
         i = np.random.randint(0,size) 
