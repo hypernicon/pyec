@@ -39,7 +39,7 @@ class LayeredRnnSpace(LayeredSpace):
    
     def random(self):
         return self.type.random(self.inputs, self.outputs,
-                                self.bias, activator=self.activator)
+                                self.bias, activator=self.activator, scale=self.scale)
     
     def hash(self, x):
         point = x.weights()
@@ -47,7 +47,7 @@ class LayeredRnnSpace(LayeredSpace):
         return ",".join([str(pt) for pt in parts])
       
     def convert(self, x):
-        return x.compile()
+        return LayeredRnnGenotype.compile(x)
       
     def area(self, **kwargs):
         return 1.0
@@ -110,7 +110,7 @@ class LayeredRnnSpaceFixedLayers(LayeredRnnSpace):
     def random(self):
         hiddenSizes = 1 + np.random.poisson(self.numLayers)
         return self.type.random(self.inputs, self.outputs, 
-                                self.bias, hiddenSizes, activator=self.activator)
+                                self.bias, hiddenSizes, activator=self.activator, scale=self.scale)
       
     def in_bounds(self, x, **kwargs):
         return (super(LayeredRnnSpaceFixedLayers, self).in_bounds(x, **kwargs)
@@ -147,7 +147,7 @@ class LayeredRnnSpaceFixedSizes(LayeredRnnSpaceFixedLayers):
         
     def random(self):
         return self.type.random(self.inputs, self.outputs, 
-                                self.bias, self.layers, activator=self.activator)
+                                self.bias, self.layers, activator=self.activator, scale=self.scale)
       
     def in_bounds(self, x, **kwargs):
         return (super(LayeredRnnSpaceFixedSizes, self).in_bounds(x, **kwargs)
@@ -202,7 +202,7 @@ class LayeredRnnSpaceFixedConnectivity(LayeredRnnSpaceFixedSizes):
     def random(self):
         return self.type.random(self.inputs, self.outputs, 
                                 self.bias, self.layers,
-                                self.connections, activator=self.activator)
+                                self.connections, activator=self.activator, scale=self.scale)
       
     def in_bounds(self, x, **kwargs):
         return (super(LayeredRnnSpaceFixedConnectivity, self).in_bounds(x,

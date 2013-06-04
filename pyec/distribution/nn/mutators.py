@@ -15,6 +15,7 @@ from pyec.config import Config
 from pyec.distribution.ec.mutators import Crosser, Mutation
 from .genotypes import *
 
+
 class UniformRnnCrosser(Crosser):
     """Uniform crossover for neural networks. Layers are aligned by id, and
     any common links are subjected to uniform crossover of their matrices.
@@ -193,7 +194,7 @@ class AddNodeMutation(Mutation):
    
    """
    config = Config(node_creation_prob=.01,
-                   sd=0.1)
+                   sd=1.0)
    
    def mutate(self, net):
       if net.changed:
@@ -295,7 +296,7 @@ class AddLinkMutation(Mutation):
    
    """
    config = Config(link_creation_prob=0.025,
-                   sd=0.1)
+                   sd=1.0)
    
    def mutate(self, net):
       if net.changed:
@@ -370,7 +371,7 @@ class AddChainLayerMutation(Mutation):
       
     """
     config = Config(layer_creation_prob=.01,
-                    sd=0.1)
+                    sd=1.0)
    
     def mutate(self, net):
         if net.changed:
@@ -386,6 +387,47 @@ class AddChainLayerMutation(Mutation):
         target = targets[np.random.randint(0,len(targets))]
         source = net.layers[np.random.randint(0,len(targets))]
         middle = RnnLayer(source.size,activator=self.config.space.activator)
+        net.addLayer(middle)
+        net.connect(source, middle, np.identity(source.size))
+        #if (source, target) in net.links:
+        #    net.connect(middle, target, net.links[(source, target)].copy())
+        #else:
+        w = self.config.sd * np.random.randn(target.size, middle.size)
+        net.connect(middle, target, w)
+        net.changed = True
+        #net.checkLinks()
+        return net
+
+
+class AddRadialLayerMutation(Mutation):
+    """Add a layer to an RNN copied from another layer,
+    with a link going from the copied layer to the new layer
+    whose weights are the identity matrix, and a
+    link going to a random layer with random weights.
+   
+    Config parameters:
+   
+      * layer_creation_prob - The probability of adding a layer
+      * sd - The std dev for the Gaussian to generate random weights
+      
+    """
+    config = Config(layer_creation_prob=.01,
+                    sd=1.0)
+   
+    def mutate(self, net):
+        if net.changed:
+            return net
+      
+        if np.random.random_sample() > self.config.layer_creation_prob:
+            return net
+      
+        net = self.config.space.copy(net)
+        satisfactory = lambda lay: (not isinstance(lay, RnnLayerInput) and
+                                    not isinstance(lay, RnnLayerBias))
+        targets = [layer for layer in net.layers if satisfactory(layer)]
+        target = targets[np.random.randint(0,len(targets))]
+        source = net.layers[np.random.randint(0,len(targets))]
+        middle = RnnLayer(source.size,activator=RADIAL)
         net.addLayer(middle)
         net.connect(source, middle, np.identity(source.size))
         #if (source, target) in net.links:
@@ -452,7 +494,7 @@ class GaussianWeightMutation(WeightMutation):
         mask = np.random.binomial(1,
                                   self.config.link_mutation_prob,
                                   np.shape(weights))
-        return weights + mask * np.random.randn(*np.shape(weights))
+        return weights + sd * mask * np.random.randn(*np.shape(weights))
 
 
 class AreaSensitiveGaussianWeightMutation(GaussianWeightMutation):

@@ -20,6 +20,54 @@ cdef unsigned int CLOGISTIC = 1
 cdef unsigned int CHYPERBOLIC = 2
 cdef unsigned int CBIAS = 3
 cdef unsigned int CTHRESHOLD = 4
+cdef unsigned int CRADIAL = 5
+
+cdef class LinkedListIntInt:
+    def __init__(self):
+        self.next = None
+
+    cdef LinkedListIntInt append(self, int v1, int v2):
+        cdef LinkedListIntInt obj = self
+        cdef LinkedListIntInt newObj
+        while obj.next is not None:
+            obj = obj.next
+        newObj = LinkedListIntInt()
+        newObj.val1 = v1
+        newObj.val2 = v2
+        obj.next = newObj
+        return newObj
+
+cdef class LinkedListIntIntInt:
+    def __init__(self):
+        self.next = None
+
+    cdef LinkedListIntIntInt append(self, int v1, int v2, int v3):
+        cdef LinkedListIntIntInt obj = self
+        cdef LinkedListIntIntInt newObj
+        while obj.next is not None:
+            obj = obj.next
+        newObj = LinkedListIntIntInt()
+        newObj.val1 = v1
+        newObj.val2 = v2
+        newObj.val3 = v3
+        obj.next = newObj
+        return newObj
+
+
+cdef class LinkedListNumpy:
+    def __init__(self):
+        self.next = None
+
+    cdef LinkedListNumpy append(self, np.ndarray v):
+        cdef LinkedListNumpy obj = self
+        cdef LinkedListNumpy newObj
+        while obj.next is not None:
+            obj = obj.next
+        newObj = LinkedListNumpy()
+        newObj.val = v
+        obj.next = newObj
+        return newObj
+
 
 cdef class RnnEvaluator:
     """A compiled RNN as a computable object. Takes a network in a form that
@@ -63,25 +111,50 @@ cdef class RnnEvaluator:
     """
     
     def __init__(self, numNeurons, inputs, outputs, weightStack, activationStack):
-        cdef list stepW
-        cdef list frm
-        cdef list to
+        cdef LinkedListNumpy stepW
+        cdef LinkedListIntInt frm
+        cdef LinkedListIntInt to
+        cdef LinkedListIntIntInt stack
         self.numNeurons = numNeurons
         self.inputs = inputs
         self.outputs = outputs
-        stepW = []
-        frm = []
-        to = []
+        stepW = None
+        frm = None
+        to = None
         for step in weightStack:
             for weights, frmIdxs, toIdxs in step:
-                stepW.append(weights)
-                frm.append((frmIdxs.start,frmIdxs.stop))
-                to.append((toIdxs.start,toIdxs.stop))
-        self.stepWeights = stepW
-        self.stepFrm = frm
-        self.stepTo = to
-            
-        self.activationStack = activationStack
+                if stepW is None:
+                    stepW = LinkedListNumpy()
+                    stepW.val = weights
+                    self.stepWeights = stepW
+                else:
+                    stepW = stepW.append(weights)
+                    
+                if frm is None:
+                    frm = LinkedListIntInt()
+                    frm.val1 = frmIdxs.start
+                    frm.val2 = frmIdxs.stop
+                    self.stepFrm = frm
+                else:
+                    frm = frm.append(frmIdxs.start, frmIdxs.stop)
+                if to is None:
+                    to = LinkedListIntInt()
+                    to.val1 = toIdxs.start
+                    to.val2 = frmIdxs.stop
+                    self.stepTo = to
+                else:
+                    to = to.append(toIdxs.start,toIdxs.stop)
+
+        stack = None
+        for low, high, act in activationStack:
+            if stack is None:
+                stack = LinkedListIntIntInt()
+                stack.val1 = low
+                stack.val2 = high
+                stack.val3 = act
+                self.activationStack = stack
+            else:
+                stack = stack.append(low, high, act)
         self.clear()
     
     @cython.boundscheck(False)    
@@ -134,21 +207,32 @@ cdef class RnnEvaluator:
         cdef np.ndarray[FLOAT_t, ndim=1] next = np.zeros(self.numNeurons, dtype=np.float)
         cdef np.ndarray[FLOAT_t, ndim=2] weight
         cdef np.ndarray[FLOAT_t, ndim=1] state = self.state
-        cdef unsigned int size = len(self.stepWeights)
+        #cdef unsigned int size = len(self.stepWeights)
         cdef unsigned int i, k, w, low, high
         cdef unsigned int act
         cdef unsigned int frm1, frm2, to1, to2
         cdef float change
-        for i in xrange(size):
-            weight = self.stepWeights[i]
-            frm1,frm2 = self.stepFrm[i]
-            to1,to2 = self.stepTo[i]
+        cdef LinkedListIntInt stepFrm=self.stepFrm
+        cdef LinkedListIntInt stepTo=self.stepTo
+        cdef LinkedListNumpy stepWeights=self.stepWeights
+        cdef LinkedListIntIntInt stack = self.activationStack
+        while stepWeights is not None:
+            weight = stepWeights.val
+            frm1 = stepFrm.val1
+            frm2 = stepFrm.val2
+            to1 = stepTo.val1
+            to2 = stepTo.val2
             for k in xrange(to1, to2):
                 for w in xrange(frm1, frm2):
                     next[k] += weight[<unsigned int>(k-to1),<unsigned int>(w-frm1)] * state[w]
+            stepWeights = stepWeights.next
+            stepFrm = stepFrm.next
+            stepTo = stepTo.next
         
-        for i in xrange(len(self.activationStack)):
-            low, high, act = self.activationStack[i]
+        while stack is not None:
+            low = stack.val1
+            high = stack.val2
+            act = stack.val3
             if act == CLOGISTIC:
                 for k in xrange(low,high):
                     next[k] = 1. / (1. + np.exp(-next[k]))
@@ -161,6 +245,11 @@ cdef class RnnEvaluator:
             elif act == CTHRESHOLD:
                 for k in xrange(low, high):
                     next[k] = np.sign(next[k])
+            elif act == CRADIAL:
+                for k in xrange(low, high):
+                    next[k] = np.exp(-next[k]*next[k]/2.0)
+            
+            stack = stack.next
         
         change = np.abs(self.state - next).max()
         self.state = next

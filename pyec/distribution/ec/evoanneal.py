@@ -21,6 +21,7 @@ from pyec.distribution.ec.mutators import (Mutation,
                                            AreaSensitiveGaussian,
                                            AreaSensitiveBernoulli)
 from pyec.distribution.nn.mutators import (AddChainLayerMutation,
+                                           AddRadialLayerMutation,
                                            RemoveLayerMutation,
                                            AddNodeMutation,
                                            RemoveNodeMutation,

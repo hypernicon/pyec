@@ -22,6 +22,8 @@ THRESHOLD = np.sign
 def BIAS(x):
     return 1.0
 
+def RADIAL(x):
+    return np.exp(-x*x/2.0)
 
 
 class RnnLayer(object):
@@ -130,6 +132,10 @@ class RnnLayerBias(RnnLayer):
     
     """
     def __init__(self, **kwargs):
+        if 'size' in kwargs:
+            del kwargs['size']
+        if 'activator' in kwargs:
+            del kwargs['activator']
         super(RnnLayerBias, self).__init__(1, BIAS, **kwargs)
         
     def addSource(self):
@@ -263,6 +269,21 @@ class LayeredRnnGenotype(object):
         self._weights = weights
         return weights
       
+    def prune(self):
+        toRemove = []
+        while True:
+            toRemove = []
+            for layer in self.layers:
+                if len(layer.outLinks) == 0 or len(layer.inLinks)  == 0:
+                    if (not isinstance(layer, RnnLayerOutput) and
+                        not isinstance(layer, RnnLayerInput) and
+                        not isinstance(layer, RnnLayerBias)):
+                        toRemove.append(layer)
+            if len(toRemove) == 0:
+                break
+            for layer in toRemove:
+                self.removeLayer(layer)
+      
     def compile(self):
         """Return a neural network object that has a state and can be
         run. Such an object must be able to set the inputs, read the outputs,
@@ -279,6 +300,7 @@ class LayeredRnnGenotype(object):
             raise
             print "Fallback on pure python"
             from .net import RnnEvaluator
+        self.prune()
         slices = {}
         weightStack = []
         current = 0
@@ -309,6 +331,8 @@ class LayeredRnnGenotype(object):
                     activator = 3
                 elif layer.activator is THRESHOLD:
                     activator = 4
+                elif layer.activator is RADIAL:
+                    activator = 5
                 elif layer.activator is not IDENTITY:
                     raise ValueError("Could not map activator to cython net")
                 if activator:
@@ -344,12 +368,13 @@ class LayeredRnnGenotype(object):
             glayer.copyLinks(layer, layerMap)
         for edge, w in self.links.iteritems():
             genotype.links[(layerMap[edge[0]],layerMap[edge[1]])] = w.copy()
-        genotype._weights = self._weights.copy()
+        if self._weights is not None:
+            genotype._weights = self._weights.copy()
         return genotype
 
     @classmethod
     def random(cls, inputs, outputs, bias=True,
-               hiddenSizes=None, connections=None, activator=LOGISTIC):
+               hiddenSizes=None, connections=None, activator=LOGISTIC, scale=10.0):
         genotype = cls()
         inputLayers = []
         idx = 0L
@@ -391,22 +416,22 @@ class LayeredRnnGenotype(object):
             # connect inputs to every hidden, every hidden to output
             if bias:
                 for layer in hiddenLayers:
-                    genotype.connect(bias,layer,10.*np.random.randn(layer.size))
+                    genotype.connect(bias,layer,scale*np.random.randn(layer.size,1))
                 for layer in outputLayers:
-                    genotype.connect(bias,layer,10.*np.random.randn(layer.size))
+                    genotype.connect(bias,layer,scale*np.random.randn(layer.size,1))
             if len(hiddenLayers) > 0:
                 for layer in hiddenLayers:
                     for input in inputLayers:
-                        w = 10. * np.random.randn(layer.size, input.size)
+                        w = scale * np.random.randn(layer.size, input.size)
                         genotype.connect(input, layer, w)
                 for output in outputLayers:
                     for hidden in hiddenLayers:
-                        w = 10. * np.random.randn(output.size, hidden.size)
+                        w = scale * np.random.randn(output.size, hidden.size)
                         genotype.connect(hidden, output, w)
             else:
                 for layer in outputLayers:
                     for input in inputLayers:
-                        w = 10. * np.random.randn(layer.size, input.size)
+                        w = scale * np.random.randn(layer.size, input.size)
                         genotype.connect(input, layer, w)
                         
         return genotype

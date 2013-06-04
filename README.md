@@ -1,4 +1,4 @@
-PyEC is open-source optimization software. The current version is 0.2.5. The source code can be downloaded and installed with
+PyEC is open-source optimization software. The current version is 0.3.0. The source code can be downloaded and installed with
 
     python setup.py install
 
