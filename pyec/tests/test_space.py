@@ -92,13 +92,13 @@ class TestSpace(unittest.TestCase):
         scale[2] = 0.5
         rect3 = Hyperrectangle(center-scale, center+scale)
         dim5 = Euclidean(5, 0.0, 1.0)
-        self.assertTrue(np.abs(rect.area() - 3840.0) < 1e-2)
-        self.assertTrue(np.abs(rect2.area() - 32.0) < 1e-2)
+        self.assertTrue(np.abs(rect.area() - 1.0) < 1e-2) #3840.0) < 1e-2)
+        self.assertTrue(np.abs(rect2.area() - 1.0) < 1e-2) #32.0) < 1e-2)
         rect3.owner = rect2
         rect3.parent = rect2
-        self.assertTrue(np.abs(rect3.area(index=2) - 16.0) < 1e-2)
+        self.assertTrue(np.abs(rect3.area(index=2) - .5) < 1e-2)
         rect3._area = None
-        self.assertTrue(np.abs(rect3.area() - 16.0) < 1e-2)
+        self.assertTrue(np.abs(rect3.area() - 1.0) < 1e-2)
         rect3._area = None
         rect3.owner = dim5
         rect2._area = .6826 ** 5
@@ -183,9 +183,9 @@ class TestSpace(unittest.TestCase):
         # test extent
         lower, upper = rect.extent()
         self.assertEqual((lower.base & 15L), 8L)
-        self.assertEqual((lower.known & 15L), 15L)
+        self.assertEqual((lower.known & 15L), 10L)
         self.assertEqual((upper.base & 15L), 13L)
-        self.assertEqual((upper.known & 15L), 15L)
+        self.assertEqual((upper.known & 15L), 10L)
         
         # test area
         self.assertTrue(np.abs(rect.area() - .25) < 1e-2)
