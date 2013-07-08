@@ -52,9 +52,9 @@ cpdef float concentric_spirals(RnnEvaluator net) except? -1:
             grid[i] = output[0][0]
     
         best = total
-        import pylab
-        pylab.imshow(grid.reshape((100,100)), origin='lower')
-        pylab.draw()
+        #import pylab
+        #pylab.imshow(grid.reshape((100,100)), origin='lower')
+        #pylab.draw()
     return total
 
 @cython.boundscheck(False)
