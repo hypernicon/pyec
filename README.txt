@@ -16,7 +16,7 @@ Released under MIT license; see LICENSE.txt in this directory.
 
 Documentation and release notes available online at 
 
-    http://www.alockett.com/pyec/docs/0.2/index.html
+    http://www.alockett.com/pyec/docs/0.3/index.html
 
-or in the docs/0.2/build/html directory in this release.
+or in the docs/0.3/build/html directory in this release.
 
