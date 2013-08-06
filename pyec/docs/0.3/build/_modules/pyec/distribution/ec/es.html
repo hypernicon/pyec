@@ -1,0 +1,193 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.es &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.es</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">Distribution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.mutators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.selectors</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Euclidean</span><span class="p">,</span> <span class="n">EndogeneousProduct</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+
+<span class="sd">&quot;&quot;&quot;A (1+1)-ES; Note the use of EndogeneousProduct space&quot;&quot;&quot;</span>
+<span class="n">ES1_1</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">selection</span><span class="o">=</span><span class="s">&quot;plus&quot;</span><span class="p">)]</span> <span class="o">&lt;&lt;</span>
+   <span class="n">EndogeneousGaussian</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)]</span>
+<span class="p">)[</span><span class="n">_</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">space</span><span class="o">=</span><span class="n">EndogeneousProduct</span><span class="p">(</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">)))]</span>
+
+<span class="sd">&quot;&quot;&quot;A (10,100)-ES&quot;&quot;&quot;</span>
+<span class="n">ES10_100</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&lt;&lt;</span>
+   <span class="n">EndogeneousGaussian</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)]</span>
+<span class="p">)[</span><span class="n">_</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">space</span><span class="o">=</span><span class="n">EndogeneousProduct</span><span class="p">(</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">)))]</span>
+
+<span class="sd">&quot;&quot;&quot;A (10/3,100)-ES with intermediate crossover&quot;&quot;&quot;</span>
+<span class="n">IntermediateCrossES10Slash3_100</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&lt;&lt;</span>
+   <span class="p">((</span><span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> 
+    <span class="p">((</span><span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&gt;&gt;</span> <span class="mi">2</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+     <span class="n">Crossover</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">crosser</span><span class="o">=</span><span class="n">IntermediateCrosser</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="mi">3</span><span class="p">)]))</span> <span class="o">&lt;&lt;</span>
+   <span class="n">EndogeneousGaussian</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)]</span>
+<span class="p">)[</span><span class="n">_</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">space</span><span class="o">=</span><span class="n">EndogeneousProduct</span><span class="p">(</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">)))]</span>
+
+<span class="sd">&quot;&quot;&quot;A (10/3,100)-ES with dominany crossover&quot;&quot;&quot;</span>
+<span class="n">DominantCrossES10Slash3_100</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&lt;&lt;</span>
+   <span class="p">((</span><span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> 
+    <span class="p">((</span><span class="n">EvolutionStrategySelection</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="mi">10</span><span class="p">)]</span> <span class="o">&gt;&gt;</span> <span class="mi">2</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+     <span class="n">Crossover</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">crosser</span><span class="o">=</span><span class="n">DominantCrosser</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="mi">3</span><span class="p">)]))</span> <span class="o">&lt;&lt;</span>
+   <span class="n">EndogeneousGaussian</span><span class="p">[</span><span class="n">_</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)]</span>
+<span class="p">)[</span><span class="n">_</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">space</span><span class="o">=</span><span class="n">EndogeneousProduct</span><span class="p">(</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span>
+                             <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">center</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)))]</span>
+
+
+<div class="viewcode-block" id="Cmaes1996Initial"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.es.Cmaes1996Initial">[docs]</a><span class="k">class</span> <span class="nc">Cmaes1996Initial</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;Initialize the 1996 version of CMA-ES.</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">buildRotation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">sd</span><span class="p">):</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">dim</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">dim</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="p">:</span>
+               <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sd</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">j</span> <span class="o">&gt;</span> <span class="n">i</span><span class="p">:</span>
+               <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">ret</span>
+   
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">random</span><span class="p">(),</span>
+              <span class="bp">self</span><span class="o">.</span><span class="n">buildRotation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span><span class="p">),</span>
+              <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
+              <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
+              <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="p">)]</span>
+      
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+   
+   </div>
+<div class="viewcode-block" id="makeCmaesConfig"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.es.makeCmaesConfig">[docs]</a><span class="k">def</span> <span class="nf">makeCmaesConfig</span><span class="p">(</span><span class="n">populationSize</span><span class="p">,</span> <span class="n">mu</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">sd</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;Convenience function to configure the 1996 version of CMA-ES</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="n">populationSize</span><span class="p">,</span>
+              <span class="n">space</span><span class="o">=</span><span class="n">EndogeneousProduct</span><span class="p">(</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">),</span>
+                                       <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span> <span class="o">*</span> <span class="p">(</span><span class="n">dim</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span>
+                                       <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">),</span>
+                                       <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">),</span>
+                                       <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">)),</span>
+              <span class="n">sd</span><span class="o">=</span><span class="n">sd</span><span class="p">,</span>
+              <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">)</span>
+   <span class="n">config</span><span class="o">.</span><span class="n">initial</span> <span class="o">=</span> <span class="n">Cmaes1996Initial</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+   <span class="k">return</span> <span class="n">config</span>
+</div>
+<span class="sd">&quot;&quot;&quot;Old CMA-ES&quot;&quot;&quot;</span>
+<span class="n">Cmaes1996</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">EvolutionStrategySelection</span> <span class="o">&lt;&lt;</span>
+   <span class="n">CorrelatedEndogeneousGaussian</span>
+<span class="p">)[</span><span class="n">makeCmaesConfig</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span><span class="mi">10</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mf">0.05</span><span class="p">)]</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

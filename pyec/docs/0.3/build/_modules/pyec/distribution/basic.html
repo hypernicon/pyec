@@ -1,0 +1,904 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.basic &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.basic</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy.linalg</span> <span class="kn">as</span> <span class="nn">la</span>
+<span class="kn">import</span> <span class="nn">binascii</span><span class="o">,</span> <span class="nn">struct</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">ConfigBuilder</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">History</span><span class="p">,</span> <span class="n">MarkovHistory</span><span class="p">,</span> <span class="n">SortedMarkovHistory</span><span class="p">,</span> <span class="n">DoubleMarkovHistory</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Euclidean</span><span class="p">,</span> <span class="n">Binary</span>
+<span class="kn">from</span> <span class="nn">pyec.util.registry</span> <span class="kn">import</span> <span class="n">BENCHMARKS</span>
+<span class="kn">from</span> <span class="nn">pyec.util.RunStats</span> <span class="kn">import</span> <span class="n">RunStats</span>
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+
+<div class="viewcode-block" id="Distribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Distribution">[docs]</a><span class="k">class</span> <span class="nc">Distribution</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A Distribution that can be sampled.</span>
+<span class="sd">   </span>
+<span class="sd">      :param config: A set of configuration parameters for the distribution.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">()</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Distribution</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">Distribution</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Distribution.sample"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Distribution.sample">[docs]</a>   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Get a single sample from the distribution.&quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="Distribution.batch"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.Distribution.batch">[docs]</a>   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampleSize</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Get a sample from the distribution.</span>
+<span class="sd">      </span>
+<span class="sd">         :param sampleSize: The size of the sample to generate.</span>
+<span class="sd">         :type sampleSize: int</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+      
+</div></div>
+<div class="viewcode-block" id="ProposalDistribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution">[docs]</a><span class="k">class</span> <span class="nc">ProposalDistribution</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A proposal distribution for e.g. simulated annealing.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ProposalDistribution.adjust"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution.adjust">[docs]</a>   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rate</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Given the current acceptance rate, alter the distribution as needed.&quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="ProposalDistribution.densityRatio"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.ProposalDistribution.densityRatio">[docs]</a>   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">i</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Given two points, give the ratio of the densities p(x1) / p(x2).&quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+
+</div></div>
+<div class="viewcode-block" id="initStandard"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.initStandard">[docs]</a><span class="k">def</span> <span class="nf">initStandard</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+     <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Standard initialization for population distributions, </span>
+<span class="sd">        inserted by :class:`PopulationDistributionMeta`. Will</span>
+<span class="sd">        call the provided initialization method as well.</span>
+<span class="sd">        </span>
+<span class="sd">        :param cls: The class being initialized</span>
+<span class="sd">        :type cls: A class of type :class:`PopulationDistributionMeta`</span>
+<span class="sd">        :param init: The existing initialization method as defined in the</span>
+<span class="sd">                     class; keyword arguments will be placed in a config</span>
+<span class="sd">                     and merged in with the class level config. IT IS STILL</span>
+<span class="sd">                     THE RESPONSIBILITY OF THE USER TO CALL </span>
+<span class="sd">                     ``super().__init__`` IF ``__init__`` </span>
+<span class="sd">                     IS OVERRIDDEN! This provides a level of automaticity</span>
+<span class="sd">                     without preventing the user from doing whatever they</span>
+<span class="sd">                     want.</span>
+<span class="sd">                     </span>
+<span class="sd">     &quot;&quot;&quot;</span>
+     <span class="k">if</span> <span class="n">init</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+             <span class="n">config</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+             <span class="nb">super</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="bp">None</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="bp">None</span>
+    
+     <span class="k">else</span><span class="p">:</span>
+         <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+             <span class="n">config</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">Config</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="bp">None</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="bp">None</span>
+             <span class="n">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+    
+     <span class="k">return</span> <span class="n">__init__</span>
+
+</div>
+<div class="viewcode-block" id="PopulationDistributionMeta"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistributionMeta">[docs]</a><span class="k">class</span> <span class="nc">PopulationDistributionMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;Metaclass for optimizers; defines class operations that generate</span>
+<span class="sd">   new optimizers before instantiation.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">__registry__</span> <span class="o">=</span> <span class="p">{}</span>
+   
+   <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">):</span>
+   
+      <span class="n">init</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">u&quot;__init__&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">init</span><span class="p">:</span>
+          <span class="k">del</span> <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">PopulationDistributionMeta</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> 
+                                                           <span class="n">name</span><span class="p">,</span> 
+                                                           <span class="n">bases</span><span class="p">,</span> 
+                                                           <span class="n">attrs</span><span class="p">)</span>
+      <span class="n">ret</span><span class="o">.</span><span class="n">__init__</span> <span class="o">=</span> <span class="n">initStandard</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">init</span><span class="p">)</span>
+      <span class="n">PopulationDistributionMeta</span><span class="o">.</span><span class="n">__registry__</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ret</span>
+      <span class="k">return</span> <span class="n">ret</span>
+   
+   <span class="k">def</span> <span class="nf">_checkName</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Check whether a generated name is already in use; if so, </span>
+<span class="sd">      return the class assigned that name, otherwise return ``None``.</span>
+<span class="sd">      </span>
+<span class="sd">      :param name: A name generated by ``cls._makeName()``</span>
+<span class="sd">      :type name: ``str``</span>
+<span class="sd">      :returns: The class with the provided name, or ``None``</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">PopulationDistributionMeta</span><span class="o">.</span><span class="n">__registry__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a :class:`PopulationDistribution` based on this class, </span>
+<span class="sd">         configured to apply certain parameters</span>
+<span class="sd">         </span>
+<span class="sd">         :param cfg: A config object to be applied</span>
+<span class="sd">         :type cfg: :class:`Config`</span>
+<span class="sd">         :returns: A new population distribution class</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_qqq{1}qqq&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="nb">hash</span><span class="p">(</span><span class="n">cfg</span><span class="p">))</span>
+      <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">cls</span><span class="p">,)</span>
+          <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+          <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;config&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">cls2</span>
+
+   <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution through scalar multiplication </span>
+<span class="sd">         by a nonnegative number</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A scalar weight</span>
+<span class="sd">         :type other: a nonnegative scalar</span>
+<span class="sd">         :returns: A new population distribution class</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">val</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot multiply an optimizer by a negative number&quot;</span><span class="p">)</span>
+      
+      
+      <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_mult_qqq{1}qqq&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+      <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">,</span><span class="s">&quot;_&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&quot;-&quot;</span><span class="p">,</span><span class="s">&quot;_&quot;</span><span class="p">)</span>
+      <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">cls</span><span class="p">,)</span>
+          <span class="n">attrs</span> <span class="o">=</span> <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+          <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;weight&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span> <span class="o">*</span> <span class="n">cls</span><span class="o">.</span><span class="n">weight</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">cls2</span>
+   
+   <span class="n">__rmul__</span> <span class="o">=</span> <span class="n">__mul__</span>
+   
+   <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution by adding two optimizers.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A generator for second optimizer, possibly weighted</span>
+<span class="sd">         :type other: A class subclassing :class:`PopulationDistribution`</span>
+<span class="sd">         :returns: A new population distribution class</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="ow">or</span> 
+          <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">)):</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Optimizer addition requires optimizers&quot;</span><span class="p">)</span>
+    
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convex</span>
+      <span class="n">cvx</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convex</span><span class="o">.</span><span class="n">Convex</span>
+      <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_add_qqq{1}qqq&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+      <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">cvx</span><span class="p">,)</span>
+          <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+              <span class="n">first</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">second</span> <span class="o">=</span> <span class="n">other</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">second</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+              <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+              <span class="n">cvx</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">,),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+          <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">cvx</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+          <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">cls2</span>
+
+
+   <span class="k">def</span> <span class="nf">__lshift__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution by convolving two optimizers.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A generator for second optimizer, possibly weighted</span>
+<span class="sd">                       or an integer for self convolution</span>
+<span class="sd">         :type other: A class subclassing :class:`PopulationDistribution`</span>
+<span class="sd">                      or ``int``</span>
+<span class="sd">         :returns: A new population distribution class</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convolution</span>
+      <span class="n">conv</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convolution</span><span class="o">.</span><span class="n">Convolution</span>
+      
+      <span class="k">if</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+          <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_convolve_qqq{1}qqq&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">conv</span><span class="p">,)</span>
+              <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                  <span class="n">first</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                  <span class="n">second</span> <span class="o">=</span> <span class="n">other</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                  <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">second</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+                  <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+                  <span class="n">conv</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                                <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">,),</span> 
+                                <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">conv</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span> 
+              <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+              <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+          <span class="k">return</span> <span class="n">cls2</span>
+      
+      <span class="k">try</span><span class="p">:</span>
+          <span class="n">val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+          <span class="n">err</span> <span class="o">=</span> <span class="s">&quot;Convolution requires either an integer or an optimizer&quot;</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+          <span class="k">if</span> <span class="n">val</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+              <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot convolve by a negative number&quot;</span><span class="p">)</span>
+      
+          <span class="n">conv</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convolution</span><span class="o">.</span><span class="n">SelfConvolution</span>
+          <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_convolve_{1}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">conv</span><span class="p">,)</span>
+              <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                  <span class="n">first</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                  <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+                  <span class="n">conv</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">conv</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+              <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+              <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+          <span class="k">return</span> <span class="n">cls2</span>     
+
+   <span class="k">def</span> <span class="nf">__rshift__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Create a population distribution by trajectory truncation.</span>
+<span class="sd">         </span>
+<span class="sd">         Argument specifies the number of steps to truncate.</span>
+<span class="sd">         </span>
+<span class="sd">         Or, argument can be another optimizer, in which case the result</span>
+<span class="sd">         is a convolution with the right side truncated one step.</span>
+<span class="sd">      </span>
+<span class="sd">         :param other: The integer number of steps to truncate, or optimizer</span>
+<span class="sd">         :type other: ``int`` or :class:`PopulationDistribution`</span>
+<span class="sd">         :returns: A new population distribution class, truncated or convolved </span>
+<span class="sd">                   with a truncated operator</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convolution</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.truncation</span>
+      <span class="n">tt</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">truncation</span><span class="o">.</span><span class="n">TrajectoryTruncation</span>
+                      
+      <span class="k">if</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+          <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_truncate_1&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">tt</span><span class="p">,)</span>
+              <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                  <span class="n">sub</span> <span class="o">=</span> <span class="n">other</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                  <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+                  <span class="n">tt</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sub</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">tt</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+              <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+              <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+          
+          <span class="k">return</span> <span class="n">cls</span> <span class="o">&lt;&lt;</span> <span class="n">cls2</span>
+      
+      <span class="k">try</span><span class="p">:</span>
+         <span class="n">other</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Could not coerce truncation argument to integer&quot;</span><span class="p">)</span>
+      
+      <span class="k">else</span><span class="p">:</span>
+          <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_truncate_{1}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+          <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">tt</span><span class="p">,)</span>
+              <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                  <span class="n">sub</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                  <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+                  <span class="n">tt</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sub</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">tt</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+              <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+              <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+          
+          <span class="k">return</span> <span class="n">cls2</span>
+
+   <span class="k">def</span> <span class="nf">__or__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Given two optimizers create a new optimizer that splits the</span>
+<span class="sd">      population between the two of them, apportioning according to</span>
+<span class="sd">      the ``weight`` property of the optimizers being combined</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="ow">and</span>
+          <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">)):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Expected pipe argument &quot;</span>
+                          <span class="s">&quot;to be a PopulationDistribution subclass&quot;</span><span class="p">)</span>
+
+      <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;{0}_pipe_qqq{1}qqq&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+      <span class="n">cls2</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_checkName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">cls2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="kn">import</span> <span class="nn">pyec.distribution.split</span>
+         <span class="n">split</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">split</span><span class="o">.</span><span class="n">Splitter</span>
+         <span class="n">bases</span> <span class="o">=</span> <span class="p">(</span><span class="n">split</span><span class="p">,)</span>
+         <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">first</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">second</span> <span class="o">=</span> <span class="n">other</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">second</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+            <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+            <span class="n">subs</span> <span class="o">=</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">)</span>
+            <span class="n">split</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+         <span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(((</span><span class="n">k</span><span class="p">,</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">split</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span> 
+         <span class="n">attrs</span><span class="p">[</span><span class="s">&quot;__init__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init</span>
+         <span class="n">cls2</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">)</span>
+         
+      <span class="k">return</span> <span class="n">cls2</span>
+
+</div>
+<div class="viewcode-block" id="PopulationDistribution"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution">[docs]</a><span class="k">class</span> <span class="nc">PopulationDistribution</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A distribution governing a population-based optimizer.</span>
+<span class="sd">   </span>
+<span class="sd">      This is the parent class for optimizers in PyEC. Its core methods are ``batch``, inherited from :class:`Distribution`, and ``update``, which reports the population and the scores after a generation is complete.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * populationSize -- The size of each population, default 1</span>
+<span class="sd">      * history -- The class of the :class:`History` to use, default</span>
+<span class="sd">                   :class:`SortedMarkovHistory`</span>
+<span class="sd">      * space -- The :class:`Space` to search, default `None` must be</span>
+<span class="sd">                 overridden</span>
+<span class="sd">      * initial -- The initial distribution; a :class:`Distribution`, </span>
+<span class="sd">                   a callable object that returns a single solution,</span>
+<span class="sd">                   or ``None`` to use the space&#39;s randomizer</span>
+<span class="sd">      * observer -- A view or listener; should have a method ``report()``</span>
+<span class="sd">                    which will be called with this instance and the next</span>
+<span class="sd">                    population when updated, e.g.</span>
+<span class="sd">                    ``self.config.report(self, pop)``. In this case, ``pop``</span>
+<span class="sd">                    is a scored population, consisting of a list of</span>
+<span class="sd">                    ``(solution, score)`` tuples.</span>
+<span class="sd">      </span>
+<span class="sd">      :params config: The configuration parameters.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">PopulationDistributionMeta</span>
+   <span class="n">weight</span> <span class="o">=</span> <span class="mf">1.0</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">populationSize</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="c"># The size of each population</span>
+                   <span class="n">history</span><span class="o">=</span><span class="n">SortedMarkovHistory</span><span class="p">,</span> <span class="c"># The class for the history</span>
+                   <span class="n">space</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="c"># The search space</span>
+                   <span class="n">minimize</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                   <span class="n">stats</span> <span class="o">=</span> <span class="n">RunStats</span><span class="p">(),</span>
+                   <span class="n">observer</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span>
+                  <span class="p">)</span>
+   
+<div class="viewcode-block" id="PopulationDistribution.run"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.run">[docs]</a>   <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fitness</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">extraArgs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Run this :class:`PopulationDistribution` instance to maximize a fitness function.</span>
+<span class="sd">        </span>
+<span class="sd">        After running this method, the property ``PopulationDistribution.trainer`` will contain the :class:`Trainer` object used to optimize the function. </span>
+<span class="sd">        </span>
+<span class="sd">        :param fitness: The fitness function (objective) to be maximized. </span>
+<span class="sd">                        If ``None``, then the function will be looked up from </span>
+<span class="sd">                        ``pyec.util.registry.BENCHMARKS`` based on the </span>
+<span class="sd">                        ``function`` property of the :class:`Config`.</span>
+<span class="sd">        :type fitness: any callable object with a single argument, or ``None``</span>
+<span class="sd">        :param history: A history object to extend, or ``None`` to create</span>
+<span class="sd">                        a new history from the class in the ``history``</span>
+<span class="sd">                        property of the :class:`Config` object.</span>
+<span class="sd">        :type history: :class:`History` or ``None``</span>
+<span class="sd">        :param extraArgs: Any extra args to be passed to </span>
+<span class="sd">                          ``pyec.util.registry.BENCHMARKS``.</span>
+<span class="sd">        :type extraArgs: list </span>
+<span class="sd">        :returns: The :class:`History for the object</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+     
+      <span class="c"># Set up the fitness if necessary</span>
+      <span class="k">if</span> <span class="n">fitness</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">extraArgs</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">extraArgs</span> <span class="o">=</span> <span class="p">[]</span>
+         <span class="n">fitness</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">function</span><span class="p">,</span> <span class="o">*</span><span class="n">extraArgs</span><span class="p">)</span>
+         <span class="k">try</span><span class="p">:</span>
+            <span class="n">fitness</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">=</span> <span class="bp">self</span>
+            <span class="n">fitness</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
+         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="n">fitness</span>
+     
+      <span class="c"># Set up history</span>
+      <span class="k">if</span> <span class="n">history</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">history</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+     
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">compatible</span><span class="p">(</span><span class="n">history</span><span class="p">):</span>
+         <span class="n">name</span> <span class="o">=</span> <span class="n">history</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Incompatible history class {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+    
+      <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">)</span>
+        
+      <span class="c"># get the sample</span>
+      <span class="n">pop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">population</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">)</span>
+     
+      <span class="c"># update the history</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">pop</span><span class="p">,</span> <span class="n">fitness</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="p">)</span>
+     
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span>
+      </div>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">popSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+          <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+          <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span><span class="p">,</span> <span class="s">&#39;batch&#39;</span><span class="p">):</span>
+              <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="n">popSize</span><span class="p">)</span>
+          <span class="k">else</span><span class="p">:</span>
+              <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+      <span class="k">else</span><span class="p">:</span>
+          <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="n">popSize</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pair</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Call ``update`` by splitting out the pair into a :class:`History` and</span>
+<span class="sd">      a fitness function. Returns the optimizer for use as a continuation.</span>
+<span class="sd">      </span>
+<span class="sd">      :param pair: A tuple with the history and fitness.</span>
+<span class="sd">      :type pair: A ``tuple`` of a :class:`History` and a callable object</span>
+<span class="sd">      :returns: This optimizer (``self``)</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span> <span class="o">=</span> <span class="n">pair</span>
+     
+      <span class="c"># Set up history</span>
+      <span class="k">if</span> <span class="n">history</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">history</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+      
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">compatible</span><span class="p">(</span><span class="n">history</span><span class="p">):</span>
+          <span class="n">err</span> <span class="o">=</span> <span class="p">(</span><span class="s">&quot;Got an incompatible history in __getitem__; &quot;</span>
+                 <span class="s">&quot;expected [history,fitness]&quot;</span><span class="p">)</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+          
+      <span class="c"># Set up the fitness if necessary</span>
+      <span class="k">if</span> <span class="n">fitness</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">fitness</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">function</span>
+      
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+          <span class="n">fitness</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fitness</span><span class="p">)</span>
+          <span class="k">try</span><span class="p">:</span>
+              <span class="n">fitness</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">=</span> <span class="bp">self</span>
+              <span class="n">fitness</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
+          <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+              <span class="k">pass</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="n">fitness</span>    
+    
+      <span class="k">if</span> <span class="ow">not</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isfunction</span><span class="p">(</span><span class="n">fitness</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">fitness</span><span class="p">,</span> <span class="s">&#39;__call__&#39;</span><span class="p">):</span>
+          <span class="n">err</span> <span class="o">=</span> <span class="p">(</span><span class="s">&quot;Second object in __getitem__ is not a function; &quot;</span>
+                 <span class="s">&quot;expected [history,fitness]&quot;</span><span class="p">)</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+    
+      <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">)</span>
+      <span class="k">return</span> <span class="bp">self</span>
+      
+   <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution through scalar multiplication </span>
+<span class="sd">         by a nonnegative number.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A scalar weight</span>
+<span class="sd">         :type other: a nonnegative scalar</span>
+<span class="sd">         :returns: A new optimizer with the same class but multiplied weight</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">val</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot multiply an optimizer by a negative number&quot;</span><span class="p">)</span>
+      
+      <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      <span class="n">ret</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">*</span> <span class="n">val</span>
+      <span class="k">return</span> <span class="n">ret</span>
+
+   <span class="n">__rmul__</span> <span class="o">=</span> <span class="n">__mul__</span>
+
+   <span class="k">def</span> <span class="nf">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Modify this population distribution through scalar multiplication </span>
+<span class="sd">         by a nonnegative number.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A scalar weight</span>
+<span class="sd">         :type other: a nonnegative scalar</span>
+<span class="sd">         :returns: This optimizer (``self``)</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">val</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">val</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot multiply an optimizer by a negative number&quot;</span><span class="p">)</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">*=</span> <span class="n">val</span>
+      <span class="k">return</span> <span class="bp">self</span>
+      
+   <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution by adding two optimizers.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A generator for second optimizer, possibly weighted</span>
+<span class="sd">         :type other: A class subclassing :class:`PopulationDistribution`</span>
+<span class="sd">         :returns: :class:`Convex`</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Optimizer addition requires optimizers&quot;</span><span class="p">)</span>
+    
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convex</span>
+      <span class="n">cvx</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convex</span><span class="o">.</span><span class="n">Convex</span>
+      <span class="k">return</span> <span class="n">cvx</span><span class="p">((</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">),</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      
+   <span class="n">__iadd__</span> <span class="o">=</span> <span class="n">__add__</span>
+
+   <span class="k">def</span> <span class="nf">__lshift__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Create a population distribution by convolving two optimizers.</span>
+<span class="sd">     </span>
+<span class="sd">         :param other: A generator for second optimizer, possibly weighted</span>
+<span class="sd">                       or an integer for self convolution</span>
+<span class="sd">         :type other: A class subclassing :class:`PopulationDistribution`</span>
+<span class="sd">                      or ``int``</span>
+<span class="sd">         :returns: :class:`Convolution`</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convolution</span>
+      <span class="n">conv</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convolution</span><span class="o">.</span><span class="n">Convolution</span>
+      
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+          <span class="k">return</span> <span class="n">conv</span><span class="p">((</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">),</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      
+      <span class="k">try</span><span class="p">:</span>
+          <span class="n">val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+          <span class="n">err</span> <span class="o">=</span> <span class="s">&quot;Convolution requires either an integer or an optimizer&quot;</span>
+          <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+          <span class="k">if</span> <span class="n">val</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+              <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot convolve by a negative number&quot;</span><span class="p">)</span>
+      
+          <span class="n">conv</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">convolution</span><span class="o">.</span><span class="n">SelfConvolution</span>
+          <span class="k">return</span> <span class="n">conv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>    
+
+   <span class="n">__ilshift__</span> <span class="o">=</span> <span class="n">__lshift__</span>
+
+   <span class="k">def</span> <span class="nf">__rshift__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Create a population distribution by trajectory truncation.</span>
+<span class="sd">         </span>
+<span class="sd">         Argument specifies the number of steps to truncate.</span>
+<span class="sd">         </span>
+<span class="sd">         Or, argument can be another optimizer, in which case the result</span>
+<span class="sd">         is a convolution with the right side truncated one step.</span>
+<span class="sd">      </span>
+<span class="sd">         :param other: The integer number of steps to truncate, or optimizer</span>
+<span class="sd">         :type other: ``int`` or :class:`PopulationDistribution`</span>
+<span class="sd">         :returns: A :class:`TrajectoryTruncation` or :class:`Convolution`</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.convolution</span>
+      <span class="kn">import</span> <span class="nn">pyec.distribution.truncation</span>
+      <span class="n">tt</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">truncation</span><span class="o">.</span><span class="n">TrajectoryTruncation</span>
+                      
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+          <span class="k">return</span> <span class="bp">self</span> <span class="o">&lt;&lt;</span> <span class="n">tt</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">other</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      
+      <span class="k">try</span><span class="p">:</span>
+         <span class="n">other</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Could not coerce truncation argument to integer&quot;</span><span class="p">)</span>
+      
+      <span class="k">else</span><span class="p">:</span>
+          <span class="k">return</span> <span class="n">tt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+
+   <span class="n">__irshift__</span> <span class="o">=</span> <span class="n">__rshift__</span>
+
+   <span class="k">def</span> <span class="nf">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Given two optimizers create a new optimizer that splits the</span>
+<span class="sd">      population between the two of them, apportioning according to</span>
+<span class="sd">      the ``weight`` property of the optimizers being combined</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Expected pipe argument &quot;</span>
+                          <span class="s">&quot;to be a PopulationDistribution&quot;</span><span class="p">)</span>
+      
+      <span class="kn">import</span> <span class="nn">pyec.distribution.split</span>
+      <span class="n">split</span> <span class="o">=</span> <span class="n">pyec</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">split</span><span class="o">.</span><span class="n">Splitter</span>
+      <span class="k">return</span> <span class="n">split</span><span class="p">((</span><span class="bp">self</span><span class="p">,</span><span class="n">other</span><span class="p">),</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+   
+   <span class="n">__ior__</span> <span class="o">=</span> <span class="n">__or__</span>
+
+<div class="viewcode-block" id="PopulationDistribution.update"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.update">[docs]</a>   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Update the state of the :class:`PopulationDistribution` based on the</span>
+<span class="sd">         history.</span>
+<span class="sd">          </span>
+<span class="sd">         :params history: A :class:`History` object with sufficient info</span>
+<span class="sd">                          to update the state of the optimizer </span>
+<span class="sd">         :type history: :class: `History`</span>
+<span class="sd">         :param fitness: A fitness function</span>
+<span class="sd">         :type fitness: Any callable</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="n">history</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">fitness</span> <span class="o">=</span> <span class="n">fitness</span>
+</div>
+<div class="viewcode-block" id="PopulationDistribution.convert"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.convert">[docs]</a>   <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">         Convert a point to a scorable representation. Deprecated. Use </span>
+<span class="sd">         ``Space.convert`` instead.</span>
+<span class="sd">         </span>
+<span class="sd">        :params x: The candidate solution (genotype)</span>
+<span class="sd">        :returns: The converted candidate (phenotype)</span>
+<span class="sd">        </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="PopulationDistribution.compatible"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.compatible">[docs]</a>   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Check whether the provided history is acceptable for this</span>
+<span class="sd">      optimizer.</span>
+<span class="sd">      </span>
+<span class="sd">      :param history: The history object that will be used to track</span>
+<span class="sd">                           the progress of the algorithm</span>
+<span class="sd">      :type history: A :class:`History`</span>
+<span class="sd">      :returns: ``bool`` -- whether the history class is acceptable</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">True</span>
+      </div>
+<div class="viewcode-block" id="PopulationDistribution.needsScores"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.PopulationDistribution.needsScores">[docs]</a>   <span class="k">def</span> <span class="nf">needsScores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Whether the optimizer uses the scores at all; used to </span>
+<span class="sd">      prevent evaluation when not necessary in convolutions.</span>
+<span class="sd">      </span>
+<span class="sd">      :returns: ``bool`` -- whether this optimizer needs scores</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">True</span>
+
+</div></div>
+<div class="viewcode-block" id="HistoryMapper"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.HistoryMapper">[docs]</a><span class="k">class</span> <span class="nc">HistoryMapper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;Mixin.&quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span> <span class="o">=</span> <span class="p">{}</span>
+      
+<div class="viewcode-block" id="HistoryMapper.mapHistory"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.HistoryMapper.mapHistory">[docs]</a>   <span class="k">def</span> <span class="nf">mapHistory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sub</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Find a compatible subhistory for this suboptimizer.</span>
+<span class="sd">      </span>
+<span class="sd">      :param sub: One of the suboptimizers for this convolution</span>
+<span class="sd">      :type sub: :class:`PopulationDistribution`</span>
+<span class="sd">      :returns: A compatible :class:`History` for the suboptimizer</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="n">history</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span>
+      
+      <span class="k">if</span> <span class="n">history</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span> <span class="o">=</span> <span class="p">{}</span>
+      
+      <span class="k">if</span> <span class="n">sub</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span><span class="p">:</span>
+         <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">history</span><span class="o">.</span><span class="n">histories</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+               <span class="k">if</span> <span class="n">sub</span><span class="o">.</span><span class="n">compatible</span><span class="p">(</span><span class="n">h</span><span class="p">):</span>
+                  <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span><span class="p">[</span><span class="n">sub</span><span class="p">]</span> <span class="o">=</span> <span class="n">h</span>
+                  <span class="k">break</span>
+            <span class="k">except</span><span class="p">:</span>
+               <span class="k">pass</span>
+      
+      <span class="k">if</span> <span class="n">sub</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">historyCache</span><span class="p">[</span><span class="n">sub</span><span class="p">]</span>
+      
+      <span class="n">c</span> <span class="o">=</span> <span class="n">sub</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>  
+      <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;No compatible history found for {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">c</span> <span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="GaussianProposal"><a class="viewcode-back" href="../../../index.html#pyec.distribution.basic.GaussianProposal">[docs]</a><span class="k">class</span> <span class="nc">GaussianProposal</span><span class="p">(</span><span class="n">ProposalDistribution</span><span class="p">,</span> <span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">   </span>
+<span class="sd">      A Gaussian Proposal Distribution. Used as an initial distribution</span>
+<span class="sd">      by several algorithms, and as a proposal distribution by Simulated Annealing.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      * sd -- The standard deviation for the Gaussian, may be ndarray or float</span>
+<span class="sd">      * sd_factor -- The factor to multiply / divide when adjusting the std.</span>
+<span class="sd">                     dev. dynamically</span>
+<span class="sd">      </span>
+<span class="sd">      :params config: The configuration parameters.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>   <span class="c"># the initial standard dev for the Gaussian; </span>
+                             <span class="c"># may be float or ndarray</span>
+                   <span class="n">sd_factor</span><span class="o">=</span><span class="mf">1.05</span><span class="p">,</span> <span class="c"># the factor to multiply / divide</span>
+                                     <span class="c"># when adjusting the std. dev. dynamically</span>
+                   <span class="c"># use a DoubleMarkovHistory to match simulated annealing</span>
+                   <span class="c"># so that convolution doesn&#39;t cause the different</span>
+                   <span class="c"># histories to disagree on the acceptance rate.</span>
+                   <span class="c"># This feels like a hack, and could cause</span>
+                   <span class="c"># problems for anyone using this class, and so</span>
+                   <span class="c"># a better solution should be devised.</span>
+                   <span class="n">history</span><span class="o">=</span><span class="n">DoubleMarkovHistory</span>
+                  <span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GaussianProposal</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="p">,</span> <span class="n">Euclidean</span><span class="p">):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot use Gaussian on a non-Euclidean space&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">):</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">*</span> <span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd_factor</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">last</span> <span class="o">=</span> <span class="bp">None</span>
+      
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;lastPopulation&#39;</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()</span>
+      <span class="k">if</span> <span class="n">center</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">center</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">index</span> <span class="o">=</span> <span class="s">&quot;index&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;index&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="mi">0</span>
+         <span class="n">center</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="n">index</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+      
+      <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">variance</span><span class="p">()</span>
+      <span class="n">varied</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">*</span> <span class="n">var</span> <span class="o">+</span> <span class="n">center</span>
+      
+      <span class="c"># check bounds; call again if outside bounds</span>
+      <span class="k">try</span><span class="p">:</span>
+         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">varied</span><span class="p">):</span>
+             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+         <span class="k">print</span> <span class="s">&quot;Recursion error: &quot;</span><span class="p">,</span> <span class="n">varied</span>
+         <span class="k">print</span> <span class="nb">abs</span><span class="p">(</span><span class="n">varied</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">center</span><span class="p">)</span>
+         <span class="k">print</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span>
+      <span class="k">return</span> <span class="n">varied</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+   
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">center</span><span class="p">):</span>
+      <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">variance</span><span class="p">()</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">):</span>
+         <span class="n">var</span> <span class="o">=</span> <span class="n">var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+         <span class="c">#print x</span>
+      <span class="n">diff</span> <span class="o">=</span> <span class="n">center</span> <span class="o">-</span> <span class="n">x</span>
+      <span class="k">if</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">diff</span> <span class="o">*</span> <span class="n">diff</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mf">5.</span> <span class="o">*</span> <span class="n">var</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">0.0</span>
+      <span class="n">covar</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="n">var</span> <span class="o">*</span> <span class="n">identity</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+      <span class="n">diff</span> <span class="o">=</span> <span class="n">center</span> <span class="o">-</span> <span class="n">x</span>
+      <span class="nb">pow</span> <span class="o">=</span> <span class="o">-.</span><span class="mi">5</span> <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="n">la</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">covar</span><span class="p">),</span> <span class="n">diff</span><span class="p">))</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="p">((((</span><span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">la</span><span class="o">.</span><span class="n">det</span><span class="p">(</span><span class="n">covar</span><span class="p">))</span> <span class="o">**</span> <span class="o">-.</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="nb">pow</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">d</span>       
+                     
+   <span class="k">def</span> <span class="nf">variance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span>
+   
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GaussianProposal</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span><span class="n">fitness</span><span class="p">)</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;acceptanceRate&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">evals</span> <span class="o">%</span> <span class="mi">100</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">adjust</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">acceptanceRate</span><span class="p">)</span>
+            
+   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rate</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">rate</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+      <span class="k">elif</span> <span class="n">rate</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">23</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">/=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">varIncr</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">var</span> <span class="o">=</span> <span class="n">minimum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span><span class="o">/</span><span class="mf">5.</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">usePrior</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span>
+            <span class="n">center</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+         <span class="k">return</span> <span class="n">exp</span><span class="p">((</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">var</span><span class="o">**</span><span class="mi">2</span><span class="p">)))</span> <span class="o">*</span> <span class="p">(((</span><span class="n">center</span> <span class="o">-</span> <span class="n">x2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> 
+                                         <span class="o">-</span> <span class="p">((</span><span class="n">center</span> <span class="o">-</span> <span class="n">x1</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()))</span>
+
+   <span class="k">def</span> <span class="nf">needsScores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">False</span>         </div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

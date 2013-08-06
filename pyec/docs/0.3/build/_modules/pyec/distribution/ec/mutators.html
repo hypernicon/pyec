@@ -1,0 +1,819 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.mutators &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.mutators</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">binascii</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">struct</span>
+
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">PopulationDistribution</span>
+<span class="c">#from pyec.util.partitions import Segment, Partition</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">MarkovHistory</span><span class="p">,</span> <span class="n">MultiStepMarkovHistory</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">EndogeneousProduct</span>
+
+<div class="viewcode-block" id="Crosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Crosser">[docs]</a><span class="k">class</span> <span class="nc">Crosser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">      Base class to perform recombination on a given list of organisms.</span>
+<span class="sd">      </span>
+<span class="sd">      :param config: The configuration parameters.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+   
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Perform recombination.</span>
+<span class="sd">         </span>
+<span class="sd">         :param orgs: List of parent organisms (may be more than 2)</span>
+<span class="sd">         :type orgs: list</span>
+<span class="sd">         :param prob: Probability of performing any crossover. Returns the first item in ``orgs`` if a bernoulli test on this parameter fails.</span>
+<span class="sd">         :type prob: float between 0 and 1</span>
+<span class="sd">         :returns: The recombined organism.</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="UniformCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.UniformCrosser">[docs]</a><span class="k">class</span> <span class="nc">UniformCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Uniform crossover.</span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#Uniform_Crossover_and_Half_Uniform_Crossover&gt;</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">prob</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+         <span class="n">rnd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span><span class="o">.</span><span class="n">round</span><span class="p">()</span>
+         <span class="k">return</span> <span class="n">rnd</span> <span class="o">*</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">rnd</span><span class="p">)</span> <span class="o">*</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">TernaryString</span><span class="p">:</span>
+         <span class="n">rnd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">bytes</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="o">*</span> <span class="mi">8</span><span class="p">)</span>
+         <span class="n">rnd</span> <span class="o">=</span> <span class="nb">long</span><span class="p">(</span><span class="n">binascii</span><span class="o">.</span><span class="n">hexlify</span><span class="p">(</span><span class="n">rnd</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span>
+         <span class="n">base</span> <span class="o">=</span> <span class="n">rnd</span> <span class="o">&amp;</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">base</span> <span class="o">|</span> <span class="o">~</span><span class="n">rnd</span> <span class="o">&amp;</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">base</span>
+         <span class="n">known</span> <span class="o">=</span> <span class="n">rnd</span> <span class="o">&amp;</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">known</span> <span class="o">|</span> <span class="o">~</span><span class="n">rnd</span> <span class="o">&amp;</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">known</span>
+         <span class="k">return</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">known</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">err</span> <span class="o">=</span> <span class="s">&quot;Unknown type for UniformCrossover: {0}&quot;</span>
+         <span class="k">raise</span> <span class="n">NotImplementException</span><span class="p">(</span><span class="n">err</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="OnePointDualCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.OnePointDualCrosser">[docs]</a><span class="k">class</span> <span class="nc">OnePointDualCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      One point crossover, mixes two individuals to create two new individuals by splicing them together at a random index.</span>
+<span class="sd">      </span>
+<span class="sd">      So:: </span>
+<span class="sd">      </span>
+<span class="sd">         xxxxxx</span>
+<span class="sd">         oooooo</span>
+<span class="sd">      </span>
+<span class="sd">      might become::</span>
+<span class="sd">      </span>
+<span class="sd">         xxoooo</span>
+<span class="sd">         ooxxxx</span>
+<span class="sd">      </span>
+<span class="sd">      And both items are returned.</span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#One-point_crossover&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">dual</span> <span class="o">=</span> <span class="bp">True</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">prob</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+         <span class="k">return</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="n">idx</span><span class="p">],</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">idx</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+                 <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">][:</span><span class="n">idx</span><span class="p">],</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">idx</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+      <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">TernaryString</span><span class="p">):</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+         <span class="n">ret1</span> <span class="o">=</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">base</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">known</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+         <span class="n">ret2</span> <span class="o">=</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">base</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">known</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+         <span class="n">ret1</span><span class="p">[</span><span class="n">idx</span><span class="p">:]</span> <span class="o">=</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">idx</span><span class="p">:]</span>
+         <span class="n">ret2</span><span class="p">[</span><span class="n">idx</span><span class="p">:]</span> <span class="o">=</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">idx</span><span class="p">:]</span>
+         <span class="k">return</span> <span class="n">ret1</span><span class="p">,</span><span class="n">ret2</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Received unknown type in OnePointDualCrosser.&quot;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="OnePointCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.OnePointCrosser">[docs]</a><span class="k">class</span> <span class="nc">OnePointCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Cross two organisms at one point and return only one crossed version.</span>
+<span class="sd">      </span>
+<span class="sd">      Unlike :class:`OnePointDualCrosser`, this discards the second variant.</span>
+<span class="sd">   </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#One-point_crossover&gt;.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">prob</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+         <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="n">idx</span><span class="p">],</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">idx</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">TernaryString</span><span class="p">):</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+         <span class="n">ret</span> <span class="o">=</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">base</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">known</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+         <span class="n">ret</span><span class="p">[</span><span class="n">idx</span><span class="p">:]</span> <span class="o">=</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">idx</span><span class="p">:]</span>
+         <span class="k">return</span> <span class="n">ret</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Received unknown type in OnePointCrosser&quot;</span><span class="p">)</span>
+      </div>
+<div class="viewcode-block" id="TwoPointCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.TwoPointCrosser">[docs]</a><span class="k">class</span> <span class="nc">TwoPointCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Cross two organism by wrapping them into a circle, picking two indices, and combining the two rings. </span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm)#Two-point_crossover&gt;.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">prob</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="n">idx1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+      <span class="n">idx2</span> <span class="o">=</span> <span class="n">idx1</span>
+      <span class="k">while</span> <span class="n">idx1</span> <span class="o">==</span> <span class="n">idx2</span><span class="p">:</span>
+         <span class="n">idx2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+      
+      <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="k">if</span> <span class="n">idx1</span> <span class="o">&gt;</span> <span class="n">idx2</span><span class="p">:</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="mi">1</span>
+         <span class="n">a</span> <span class="o">=</span> <span class="n">idx1</span>
+         <span class="n">idx1</span> <span class="o">=</span> <span class="n">idx2</span>
+         <span class="n">idx2</span> <span class="o">=</span> <span class="n">a</span>
+
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+         <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">][:</span><span class="n">idx1</span><span class="p">],</span>
+                                    <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="n">idx</span><span class="p">][</span><span class="n">idx1</span><span class="p">:</span><span class="n">idx2</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+                          <span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="n">idx2</span><span class="p">:],</span>
+                          <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">TernaryString</span><span class="p">):</span>
+         <span class="n">ret</span> <span class="o">=</span> <span class="n">TernartString</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">base</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">known</span><span class="p">,</span> <span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+         <span class="n">ret</span><span class="p">[</span><span class="n">idx1</span><span class="p">:</span><span class="n">idx2</span><span class="p">]</span> <span class="o">=</span> <span class="n">orgs</span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="n">idx</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="IntermediateCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.IntermediateCrosser">[docs]</a><span class="k">class</span> <span class="nc">IntermediateCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Cross multiple organisms by averaging their values component-wise.</span>
+<span class="sd">      </span>
+<span class="sd">      Normally used by evolution strategies.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+         <span class="k">return</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">orgs</span><span class="p">)]</span>
+      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">orgs</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">)</span>
+      
+      </div>
+<div class="viewcode-block" id="DominantCrosser"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.DominantCrosser">[docs]</a><span class="k">class</span> <span class="nc">DominantCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Cross multiple organisms using generalized uniform crossover.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+         <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">prob</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">orgs</span><span class="p">)]</span>
+      <span class="n">x</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orgs</span><span class="p">))</span>
+         <span class="n">x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">orgs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="n">i</span><span class="p">])</span>
+      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      
+      </div>
+<span class="k">class</span> <span class="nc">DifferentialCrosser</span><span class="p">(</span><span class="n">Crosser</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">learningRate</span><span class="p">,</span> <span class="n">crossoverProb</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">CR</span> <span class="o">=</span> <span class="n">crossoverProb</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">F</span> <span class="o">=</span> <span class="n">learningRate</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orgs</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+      <span class="n">y</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">orgs</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+      <span class="n">idx2</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="k">for</span> <span class="n">yi</span> <span class="ow">in</span> <span class="n">y</span><span class="p">:</span>
+         <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span>
+         <span class="k">if</span> <span class="n">idx2</span> <span class="o">==</span> <span class="n">d</span> <span class="ow">or</span> <span class="n">r</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">CR</span><span class="p">:</span>
+            <span class="n">y</span><span class="p">[</span><span class="n">idx2</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">idx2</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">F</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">idx2</span><span class="p">]</span> <span class="o">-</span> <span class="n">c</span><span class="p">[</span><span class="n">idx2</span><span class="p">])</span> 
+            <span class="n">idx2</span> <span class="o">+=</span> <span class="mi">1</span>
+      <span class="k">return</span> <span class="n">y</span>
+
+
+<div class="viewcode-block" id="Crossover"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Crossover">[docs]</a><span class="k">class</span> <span class="nc">Crossover</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Performs recombination using a crossover policy given by</span>
+<span class="sd">      a :class:`Crosser` instance.</span>
+<span class="sd">   </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      </span>
+<span class="sd">      * crossoverProb -- A probability that is sampled; if a bernouli test</span>
+<span class="sd">                         on this value fails, then no crossover is performed,</span>
+<span class="sd">                         and the first selected organism is chosen</span>
+<span class="sd">      * order -- The number of organisms to crossover at each step</span>
+<span class="sd">      * crosser -- A :class:`Crosser` to perform the crossover</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">crossoverProb</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="c"># probability of performing crossover</span>
+                   <span class="n">order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="c"># number of solutions to crossover</span>
+                   <span class="n">crosser</span><span class="o">=</span><span class="n">UniformCrosser</span><span class="p">,</span> <span class="c"># descendant of Crosser</span>
+                   <span class="n">history</span><span class="o">=</span><span class="n">MultiStepMarkovHistory</span><span class="p">)</span> <span class="c"># num steps must match order</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Crossover</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">crosser</span><span class="p">,</span> <span class="s">&#39;dual&#39;</span><span class="p">)</span>
+                   <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">crosser</span><span class="o">.</span><span class="n">dual</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;populations&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;order&#39;</span><span class="p">)</span>
+              <span class="ow">and</span> <span class="n">history</span><span class="o">.</span><span class="n">order</span><span class="p">()</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">order</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span><span class="p">:</span>
+         <span class="n">psize</span> <span class="o">=</span> <span class="n">popSize</span> <span class="o">/</span> <span class="mi">4</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">psize</span> <span class="o">=</span> <span class="n">popSize</span>
+      <span class="n">crossoverProb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">crossoverProb</span>
+      <span class="k">if</span> <span class="n">crossoverProb</span> <span class="o">&lt;</span> <span class="mf">1e-16</span><span class="p">:</span>
+         <span class="k">return</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">populations</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">crosser</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">crosser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+      <span class="n">pops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">populations</span>
+      <span class="n">newpop</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">crosser</span><span class="p">([</span><span class="n">org</span> <span class="k">for</span> <span class="n">org</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">orgs</span><span class="p">],</span> <span class="n">crossoverProb</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">orgs</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">pops</span><span class="p">)]</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual</span><span class="p">:</span>
+         <span class="n">pop</span> <span class="o">=</span> <span class="p">[]</span>
+         <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="ow">in</span> <span class="n">newpop</span><span class="p">:</span>
+            <span class="n">pop</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">pop</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+         <span class="n">newpop</span> <span class="o">=</span> <span class="n">pop</span>
+      <span class="k">return</span> <span class="n">newpop</span>
+
+</div>
+<div class="viewcode-block" id="Mutation"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Mutation">[docs]</a><span class="k">class</span> <span class="nc">Mutation</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Base class for mutation operators. Provides a method ``mutate`` that performs mutation on a single member of a population.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">history</span><span class="o">=</span><span class="n">MarkovHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">needsScores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">False</span>
+   
+<div class="viewcode-block" id="Mutation.mutate"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Mutation.mutate">[docs]</a>   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Perform mutation on a single organism.</span>
+<span class="sd">         </span>
+<span class="sd">         :param x: The organism to mutate.</span>
+<span class="sd">         :type x: varied</span>
+<span class="sd">         :returns: The mutated organism.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">x</span>
+</div>
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="n">pop</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()):</span>
+         <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="o">=</span> <span class="n">val</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">idx</span> <span class="o">=</span> <span class="n">i</span>
+         <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mutate</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span>
+         <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+            <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">cnt</span> <span class="o">&gt;</span> <span class="mi">10000</span><span class="p">:</span>
+               <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;Rejection sampling in mutation failed&quot;</span>
+                                  <span class="s">&quot; to generate a point in the space after&quot;</span>
+                                  <span class="s">&quot; 10,000 attempts.&quot;</span><span class="p">)</span>
+            <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mutate</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="n">pop</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">pop</span>
+
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">historyClass</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">historyClass</span><span class="p">,</span> <span class="s">&#39;lastPopulation&#39;</span><span class="p">)</span>
+ 
+</div>
+<div class="viewcode-block" id="Gaussian"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Gaussian">[docs]</a><span class="k">class</span> <span class="nc">Gaussian</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Gaussian mutation. Randomly mutates a random selection of components</span>
+<span class="sd">      of a real vector.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * sd -- The standard deviation to use. </span>
+<span class="sd">      * p -- The probability of mutating each component; defaults to 1.0</span>
+<span class="sd">      </span>
+<span class="sd">  &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+                   <span class="n">p</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Gaussian</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Space for Gaussian must have type numpy.ndarray&quot;</span><span class="p">)</span>
+         
+   <span class="k">def</span> <span class="nf">sd</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span>
+         
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">p</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sd</span><span class="p">()</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">ret</span><span class="p">):</span>
+         <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span>
+         <span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">center</span>
+         <span class="n">ret</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">scale</span><span class="o">+</span><span class="n">center</span><span class="p">),</span><span class="n">center</span><span class="o">-</span><span class="n">scale</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">ret</span>
+      
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">point</span><span class="p">):</span>
+      <span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sd</span><span class="p">()</span>
+      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">*</span> <span class="n">sd</span> <span class="o">*</span> <span class="n">sd</span><span class="p">))</span> <span class="o">*</span>
+                    <span class="p">((</span><span class="n">point</span> <span class="o">-</span> <span class="n">center</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">/</span> <span class="n">sd</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="DecayedGaussian"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.DecayedGaussian">[docs]</a><span class="k">class</span> <span class="nc">DecayedGaussian</span><span class="p">(</span><span class="n">Gaussian</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Gaussian mutation with a variance that decreases over time according to fixed formula.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * sd -- A scale factor on the standard deviation.</span>
+<span class="sd">      * decay -- A multiplicative decay factor.</span>
+<span class="sd">      * decayExp -- An exponential decay factor.</span>
+<span class="sd">      </span>
+<span class="sd">      Standard deviation is determined by::</span>
+<span class="sd">      </span>
+<span class="sd">         sd = sd0 * exp(-(generation * varDecay) ** varExp)</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">decay</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">decayExp</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">sd</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">updates</span>
+      <span class="n">decay</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decay</span>
+      <span class="n">decayExp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decayExp</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">decay</span><span class="p">)</span> <span class="o">**</span> <span class="n">decayExp</span><span class="p">)</span> 
+
+</div>
+<div class="viewcode-block" id="AreaSensitiveGaussian"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.AreaSensitiveGaussian">[docs]</a><span class="k">class</span> <span class="nc">AreaSensitiveGaussian</span><span class="p">(</span><span class="n">Gaussian</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Gaussian mutation with a variance that depends on the size of a</span>
+<span class="sd">      partition of the space (see :class:`pyec.util.partitions.Partition`).</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      * jogo2012 -- Whether to use the methods from Lockett &amp; Miikkulainen, 2012</span>
+<span class="sd">      * decay -- A function ``decay(n,config)`` to compute the multiplier</span>
+<span class="sd">                 that controls the rate of decrease in standard deviation.</span>
+<span class="sd">                 Faster decay causes faster convergence, but may miss the</span>
+<span class="sd">                 optimum. Default is ``((1/generations))``</span>
+<span class="sd">      </span>
+<span class="sd">      Standard deviation is determined by::</span>
+<span class="sd">      </span>
+<span class="sd">         sd = .5 * ((upper-lower) * decay(n)</span>
+<span class="sd">         </span>
+<span class="sd">      where ``dim`` is the dimension of the space (``config.dim``) and </span>
+<span class="sd">      ``area`` is the volume of the partition region for the object being mutated.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">jogo2012</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                   <span class="n">decay</span><span class="o">=</span><span class="k">lambda</span> <span class="n">n</span><span class="p">,</span><span class="n">cfg</span><span class="p">:</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">n</span><span class="p">))</span> <span class="c"># **(1./cfg.space.dim))</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">AreaSensitiveGaussian</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">jogo2012</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decay</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">n</span><span class="p">,</span><span class="n">cfg</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">n</span><span class="p">)</span><span class="o">**.</span><span class="mi">5</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="c"># N.B. we use a Markov history, but assume we are passed the partition nodes</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;lastPopulation&#39;</span><span class="p">)</span>
+   
+<div class="viewcode-block" id="AreaSensitiveGaussian.mutate"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.AreaSensitiveGaussian.mutate">[docs]</a>   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Apply area-sensitive gaussian mutation.</span>
+<span class="sd">         Assume that the passed value is a :class:`Point` object</span>
+<span class="sd">         </span>
+<span class="sd">         :param x: The point to mutate</span>
+<span class="sd">         :type x: :class:`Point`</span>
+<span class="sd">         :returns: A numpy.ndarray mutation the ``point`` property of ``x``.</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">center</span>
+      <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span>
+      
+      <span class="n">y</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">x</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">point</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">jogo2012</span><span class="p">:</span>
+         <span class="n">area</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">area</span>
+         <span class="c"># sd = 2 * scale / (-log(area))</span>
+         <span class="k">if</span> <span class="n">area</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span> 
+            <span class="n">area</span> <span class="o">=</span> <span class="mf">1e-100</span>
+         <span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span> <span class="o">*</span> <span class="n">scale</span> <span class="o">*</span> <span class="p">(</span><span class="n">area</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)))</span>
+         <span class="n">sd</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decay</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">updates</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">area</span> <span class="o">=</span> <span class="n">node</span>
+         <span class="n">lower</span><span class="p">,</span> <span class="n">upper</span> <span class="o">=</span> <span class="n">area</span><span class="o">.</span><span class="n">bounds</span><span class="o">.</span><span class="n">extent</span><span class="p">()</span>
+         <span class="n">sd</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span> <span class="o">*</span> <span class="p">(</span><span class="n">upper</span> <span class="o">-</span> <span class="n">lower</span><span class="p">)</span>
+         <span class="n">sd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">sd</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+         <span class="n">sd</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decay</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">updates</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+      
+      <span class="n">ret</span> <span class="o">=</span> <span class="n">y</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span> <span class="o">*</span> <span class="n">sd</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">ret</span><span class="p">):</span>
+         <span class="n">ret</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">scale</span><span class="o">+</span><span class="n">center</span><span class="p">),</span><span class="n">center</span><span class="o">-</span><span class="n">scale</span><span class="p">)</span>
+      
+      <span class="k">return</span> <span class="n">ret</span>
+</div>
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">point</span><span class="p">):</span>
+      <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span>
+      <span class="n">center</span><span class="p">,</span> <span class="n">area</span> <span class="o">=</span> <span class="n">info</span>
+      <span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span> <span class="o">*</span> <span class="n">scale</span> <span class="o">*</span> <span class="p">(</span><span class="n">area</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">point</span><span class="p">)))</span>
+      
+      <span class="k">return</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sd</span> <span class="o">*</span> <span class="n">sd</span><span class="p">))</span> <span class="o">*</span>
+                 <span class="p">((</span><span class="n">point</span> <span class="o">-</span> <span class="n">center</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">/</span> <span class="n">sd</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span> 
+
+</div>
+<div class="viewcode-block" id="UniformArea"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.UniformArea">[docs]</a><span class="k">class</span> <span class="nc">UniformArea</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Uniform mutation within a partition region. The region is determined by the organism being mutated.</span>
+<span class="sd">      </span>
+<span class="sd">      :param config: The configuration parameters.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="UniformArea.mutate"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.UniformArea.mutate">[docs]</a>   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Apply uniform area mutation.</span>
+<span class="sd">         Assume that the passed value is a :class:`Point` object</span>
+<span class="sd">         </span>
+<span class="sd">         :param x: The point to mutate</span>
+<span class="sd">         :type x: :class:`Point`</span>
+<span class="sd">         :returns: A numpy.ndarray mutation the ``point`` property of ``x``.</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">y</span><span class="p">,</span> <span class="n">area</span> <span class="o">=</span> <span class="n">x</span>
+      <span class="k">return</span> <span class="n">area</span><span class="o">.</span><span class="n">bounds</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+
+</div></div>
+<div class="viewcode-block" id="Cauchy"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Cauchy">[docs]</a><span class="k">class</span> <span class="nc">Cauchy</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Cauchy mutation.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * sd -- The width parameter of the Cauchy (\pi)</span>
+<span class="sd">      * p -- The probability of mutating each component, 1.0 by default</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">sd</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">p</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Cauchy</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+      <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">standard_cauchy</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="Bernoulli"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Bernoulli">[docs]</a><span class="k">class</span> <span class="nc">Bernoulli</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Bernoulli mutation on a :class:`TernaryString` object. Randomly flips bits on a fully specified binary string.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * p -- The probability of flipping each bit.   </span>
+<span class="sd"> </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">inspect</span><span class="o">.</span><span class="n">isclass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span><span class="p">)</span> <span class="ow">or</span>
+          <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">TernaryString</span><span class="p">)):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Space must produce points descending &quot;</span>
+                          <span class="s">&quot;from TernaryString&quot;</span><span class="p">)</span>
+      <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span>
+      <span class="k">if</span> <span class="p">((</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span> <span class="o">&gt;</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">())</span> <span class="ow">or</span>
+          <span class="p">(</span><span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="ow">and</span> <span class="n">p</span> <span class="o">&gt;</span> <span class="mf">1.0</span><span class="p">)):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;bit flip probability &gt; 1.0: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+
+   <span class="k">def</span> <span class="nf">p</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span>
+
+<div class="viewcode-block" id="Bernoulli.mutate"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.Bernoulli.mutate">[docs]</a>   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;This method uses an iterative algorithm to flip bits in</span>
+<span class="sd">      a TernaryString with a given probability. The algorithm essentially</span>
+<span class="sd">      uses the binary representation of the bit-flipping probability in order</span>
+<span class="sd">      to convert random byte sampling (``p=.5``) to account for any probability,</span>
+<span class="sd">      with resolution of ``1e-16``.</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="n">flipped</span> <span class="o">=</span> <span class="n">TernaryString</span><span class="o">.</span><span class="n">bernoulli</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="n">base</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">base</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">flipped</span><span class="o">.</span><span class="n">base</span> <span class="o">|</span> <span class="o">~</span><span class="n">x</span><span class="o">.</span><span class="n">base</span> <span class="o">&amp;</span> <span class="n">flipped</span><span class="o">.</span><span class="n">base</span>
+      <span class="n">known</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">known</span> <span class="o">&amp;</span> <span class="n">flipped</span><span class="o">.</span><span class="n">known</span>
+      <span class="k">return</span> <span class="n">TernaryString</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">known</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="DecayedBernoulli"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.DecayedBernoulli">[docs]</a><span class="k">class</span> <span class="nc">DecayedBernoulli</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Like :class:`DecayedGaussian`, but with a Bernoulli distribution instead of a Gaussian; the bit flipping probability decays to zero.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * sd -- A scale factor on the standard deviation.</span>
+<span class="sd">      * decay -- A multiplicative decay factor.</span>
+<span class="sd">      * decayExp -- An exponential decay factor.</span>
+<span class="sd">      </span>
+<span class="sd">      Bit flip prob is determined by::</span>
+<span class="sd">      </span>
+<span class="sd">         p = p0 * exp(-(generation * varDecay) ** varExp)</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">decay</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">decayExp</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">p</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">updates</span>
+      <span class="n">decay</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decay</span>
+      <span class="n">decayExp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">decayExp</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">decay</span><span class="p">)</span> <span class="o">**</span> <span class="n">decayExp</span><span class="p">)</span> 
+
+</div>
+<div class="viewcode-block" id="AreaSensitiveBernoulli"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.AreaSensitiveBernoulli">[docs]</a><span class="k">class</span> <span class="nc">AreaSensitiveBernoulli</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Like :class:`AreaSensitiveGaussian` but with a Bernoulli.</span>
+<span class="sd">      </span>
+<span class="sd">      Because a bit space is finite, there is no need to decay, but</span>
+<span class="sd">      we still want to make exiting the area less likely to promote</span>
+<span class="sd">      exploration within the selected area.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * p -- The bit-flipping prob</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">_p</span> <span class="o">=</span> <span class="bp">None</span>
+   
+   <span class="k">def</span> <span class="nf">p</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_p</span>
+   
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">point</span>
+      <span class="n">area</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="n">bf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_p</span>
+      <span class="n">prod</span> <span class="o">=</span> <span class="mf">1.0</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+         <span class="k">if</span> <span class="n">z</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+            <span class="n">prod</span> <span class="o">*=</span> <span class="n">bf</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">prod</span> <span class="o">*=</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">bf</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">prod</span>
+      
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">point</span>
+      <span class="n">area</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="c">#lower, upper = area.bounds.extent()</span>
+      <span class="c">#diff = TernaryString(lower.base ^ upper.base,-1L,lower.length).toArray()</span>
+      <span class="c">#logArea = self.config.space.dim - diff.sum()</span>
+      <span class="c">#self._p = (diff * self.config.p  +</span>
+      <span class="c">#           (1.0 - diff) * self.config.p ** logArea)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">p</span>
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">AreaSensitiveBernoulli</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">mutate</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+  </div>
+<div class="viewcode-block" id="EndogeneousGaussian"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.EndogeneousGaussian">[docs]</a><span class="k">class</span> <span class="nc">EndogeneousGaussian</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Gaussian mutation for evolution strategies, where the adaptive mutation</span>
+<span class="sd">      parameters are encoded with the organism.</span>
+<span class="sd">    </span>
+<span class="sd">      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS</span>
+<span class="sd">      </span>
+<span class="sd">      Config params</span>
+<span class="sd">      </span>
+<span class="sd">      * sd -- The standard deviation to start with.</span>
+<span class="sd">      * baseDim -- The portion of the genotype encoding the point, i.e. the</span>
+<span class="sd">                   number of dimensions being searched.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">baseDim</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">EndogeneousGaussian</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="p">,</span> <span class="n">EndogeneousProduct</span><span class="p">)</span> <span class="ow">or</span>
+          <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Endogeneous Gaussian expects EndogeneousProduct &quot;</span>
+                          <span class="s">&quot;space with two components, each of &quot;</span>
+                          <span class="s">&quot;type numpy.ndarray&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">tau</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sd</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">tau0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sd</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="n">sig</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="n">rnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sig</span><span class="p">))</span>
+            
+      <span class="n">sig2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tau0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="n">sig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">rnd</span><span class="p">)</span> 
+      <span class="n">z</span> <span class="o">=</span> <span class="n">y</span> <span class="o">+</span> <span class="n">sig2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+      
+      <span class="k">return</span> <span class="p">[</span><span class="n">z</span><span class="p">,</span><span class="n">sig2</span><span class="p">]</span> 
+
+</div>
+<div class="viewcode-block" id="CorrelatedEndogeneousGaussian"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian">[docs]</a><span class="k">class</span> <span class="nc">CorrelatedEndogeneousGaussian</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Implements an old (1996) version of mutation for the </span>
+<span class="sd">      Correlated Matrix Adaption method of Hansen and Ostermeier.</span>
+<span class="sd">      </span>
+<span class="sd">      This method is obsolete and is very different from the modern version.</span>
+<span class="sd">      </span>
+<span class="sd">      NEEDS A SPACE TO HANDLE PULLING OUT THE SIGNIFICANT DIMENSIONS, see</span>
+<span class="sd">      :class:`EndogeneousProduct`</span>
+<span class="sd">      </span>
+<span class="sd">      1996 paper says to set cmaCumulation to $\frac{1}{\sqrt{n}}$,</span>
+<span class="sd">      cmaDamping to $\frac{1}{n}$, cmaCorrelation to $\frac{2}{n^2}$.</span>
+<span class="sd">      Default assumes will be run 1000 generations, n=1000</span>
+<span class="sd">      </span>
+<span class="sd">      Config Parameters:</span>
+<span class="sd">      </span>
+<span class="sd">      * sd</span>
+<span class="sd">      * cmaCumulation</span>
+<span class="sd">      * cmaDamping</span>
+<span class="sd">      * cmaCorrelation</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">baseDim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                   <span class="n">sd</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">cmaCumulation</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1000.</span><span class="p">),</span> <span class="c"># 1/sqrt(n)</span>
+                   <span class="n">cmaDamping</span><span class="o">=.</span><span class="mo">001</span><span class="p">,</span> <span class="c"># 1/n</span>
+                   <span class="n">cmaCorrelation</span><span class="o">=</span><span class="mf">0.000002</span><span class="p">)</span> <span class="c"># 2/n^2</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">CorrelatedEndogeneousGaussian</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="p">,</span> <span class="n">EndogeneousProduct</span><span class="p">)</span> <span class="ow">or</span>
+          <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">5</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">!=</span>
+           <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">*</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">))</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">or</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Correlated Endogeneous Gaussian expects &quot;</span>
+                          <span class="s">&quot;EndogeneousProduct &quot;</span>
+                          <span class="s">&quot;space with five components, each of &quot;</span>
+                          <span class="s">&quot;type numpy.ndarray; if the dimension of &quot;</span>
+                          <span class="s">&quot;the first is N, the dimension of the second &quot;</span>
+                          <span class="s">&quot;must be N(N+1)/2, and the third through fifth are &quot;</span>
+                          <span class="s">&quot;both of dimension N&quot;</span><span class="p">)</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">sd</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">center</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">spaces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">scale</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cumulation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmaCumulation</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cu</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cumulation</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">cumulation</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmaDamping</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">chi</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">)</span> 
+                  <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">))</span> 
+                  <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="mi">21</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)))))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">correlation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmaCorrelation</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">numEndogeneous</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span>
+    
+<div class="viewcode-block" id="CorrelatedEndogeneousGaussian.unpack"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.unpack">[docs]</a>   <span class="k">def</span> <span class="nf">unpack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sig</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;take a N(N+1)/2 array and make a N x N matrix&quot;&quot;&quot;</span>
+      <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="n">mat</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+         <span class="n">row</span> <span class="o">=</span> <span class="p">[]</span>
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">i</span><span class="p">:</span>
+                <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sig</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+                <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+         <span class="n">mat</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
+   </div>
+<div class="viewcode-block" id="CorrelatedEndogeneousGaussian.pack"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.pack">[docs]</a>   <span class="k">def</span> <span class="nf">pack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mat</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;take a N x N matrix and make a N(N+1)/2 array&quot;&quot;&quot;</span>
+      <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="n">sig</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">j</span> <span class="o">&gt;=</span> <span class="n">i</span><span class="p">:</span>
+                <span class="n">sig</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mat</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">])</span>
+      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sig</span><span class="p">)</span> 
+   </div>
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="n">sig</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+      <span class="n">cum</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+      <span class="n">delta</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+      <span class="n">deltaCum</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+      <span class="n">rot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="n">sig</span><span class="p">)</span>
+      <span class="n">corr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rot</span><span class="p">,</span> <span class="n">rot</span><span class="p">)</span>
+            
+      <span class="n">deltaRot</span> <span class="o">=</span> <span class="n">rot</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">rot</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+      <span class="n">deltaCum2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">cumulation</span><span class="p">)</span> <span class="o">*</span> <span class="n">deltaCum</span> \
+       <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">cu</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">deltaRot</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+      <span class="n">delta2</span> <span class="o">=</span> <span class="n">delta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">deltaCum2</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">chi</span><span class="p">))</span>
+            
+      <span class="n">cum2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">cumulation</span><span class="p">)</span> <span class="o">*</span> <span class="n">cum</span> \
+          <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">cu</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rot</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+      <span class="n">corr2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">correlation</span><span class="p">)</span> <span class="o">*</span> <span class="n">corr</span> \
+          <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">correlation</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">cum2</span><span class="p">,</span> <span class="n">cum2</span><span class="p">)</span>
+      <span class="n">rot2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">cholesky</span><span class="p">(</span><span class="n">corr2</span><span class="p">)</span>
+      <span class="n">sig2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="n">rot2</span><span class="p">)</span>
+      
+      <span class="n">z</span> <span class="o">=</span> <span class="n">y</span> <span class="o">+</span> <span class="n">delta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">rot</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)))</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">sd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">sig</span><span class="p">)</span>      
+      <span class="k">return</span> <span class="p">[</span><span class="n">z</span><span class="p">,</span> <span class="n">sig2</span><span class="p">,</span> <span class="n">cum2</span><span class="p">,</span> <span class="n">delta2</span><span class="p">,</span> <span class="n">deltaCum2</span><span class="p">]</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

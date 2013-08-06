@@ -1,0 +1,328 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.bayes.structure.proposal &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.bayes.structure.proposal</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">traceback</span><span class="o">,</span> <span class="nn">sys</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">.basic</span> <span class="kn">import</span> <span class="n">StructureSearch</span><span class="p">,</span> <span class="n">CyclicException</span><span class="p">,</span> <span class="n">DuplicateEdgeException</span><span class="p">,</span> <span class="n">IrreversibleEdgeException</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">ProposalDistribution</span><span class="p">,</span> <span class="n">PopulationDistribution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.net</span> <span class="kn">import</span> <span class="n">BayesNet</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">MarkovHistory</span>
+
+
+<span class="k">class</span> <span class="nc">StaticDecayProb</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.3333333</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">p</span> <span class="o">=</span> <span class="n">p</span>
+      
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span> <span class="o">**</span> <span class="n">network</span><span class="o">.</span><span class="n">decay</span>
+
+<span class="k">class</span> <span class="nc">ProbDecayInvEdgeRatio</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.75</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">alpha</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network</span><span class="p">):</span>
+      <span class="n">decay</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">decay</span>
+      <span class="n">edgeRatio</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">-</span> <span class="n">network</span><span class="o">.</span><span class="n">edgeRatio</span>
+      <span class="n">adjEdgeRatio</span> <span class="o">=</span> <span class="n">edgeRatio</span> <span class="o">+</span> <span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+      <span class="n">num</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">-</span> <span class="p">(</span><span class="n">adjEdgeRatio</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span>
+      <span class="n">denom</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">-</span> <span class="p">(</span><span class="n">edgeRatio</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">num</span> <span class="o">&lt;=</span> <span class="mf">0.0</span> <span class="ow">or</span> <span class="n">denom</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">0.0</span>
+      <span class="k">return</span> <span class="p">(</span><span class="o">.</span><span class="mi">25</span> <span class="o">+</span> <span class="o">.</span><span class="mi">75</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">num</span> <span class="o">/</span> <span class="n">denom</span><span class="p">))</span> <span class="o">**</span> <span class="n">decay</span> 
+
+<span class="k">class</span> <span class="nc">ProbDecayEdgeRatio</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">alpha</span>
+      
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network</span><span class="p">):</span>
+      <span class="n">decay</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">decay</span>
+      <span class="n">adjEdgeRatio</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="n">network</span><span class="o">.</span><span class="n">edgeRatio</span>
+      <span class="n">num</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">-</span> <span class="p">(</span><span class="n">adjEdgeRatio</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span>
+      <span class="n">denom</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">-</span> <span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">edgeRatio</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">denom</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">0.0</span>
+      <span class="k">return</span> <span class="p">(</span><span class="n">num</span> <span class="o">/</span> <span class="n">denom</span><span class="p">)</span> <span class="o">**</span> <span class="n">decay</span> 
+
+<div class="viewcode-block" id="StructureProposal"><a class="viewcode-back" href="../../../../../index.html#pyec.distribution.bayes.structure.proposal.StructureProposal">[docs]</a><span class="k">class</span> <span class="nc">StructureProposal</span><span class="p">(</span><span class="n">StructureSearch</span><span class="p">,</span>
+                        <span class="n">ProposalDistribution</span><span class="p">,</span>
+                        <span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A proposal distribution for structure searching with a heuristic</span>
+<span class="sd">   algorithm such as simulated annealing.</span>
+<span class="sd">   </span>
+<span class="sd">   Config params:</span>
+<span class="sd">   </span>
+<span class="sd">   * branchFactor The maximum number of parents per variable</span>
+<span class="sd">   * remove_edge_prob A callable object that takes a network and returns a</span>
+<span class="sd">                      probability of removing a random edge.</span>
+<span class="sd">   * add_edge_prob A callable object that takes a network and returns a</span>
+<span class="sd">                   probability of adding a random edge</span>
+<span class="sd">   * reverse_edge_prob A callable object that takes a network and</span>
+<span class="sd">                       returns a probability of reversing a random edges</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span>
+      <span class="n">branchFactor</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+      <span class="n">remove_edge_prob</span> <span class="o">=</span> <span class="n">ProbDecayInvEdgeRatio</span><span class="p">(),</span> 
+      <span class="n">add_edge_prob</span> <span class="o">=</span> <span class="n">ProbDecayEdgeRatio</span><span class="p">(),</span> 
+      <span class="n">reverse_edge_prob</span> <span class="o">=</span> <span class="n">ProbDecayEdgeRatio</span><span class="p">(),</span>
+      <span class="n">history</span> <span class="o">=</span> <span class="n">MarkovHistory</span><span class="p">,</span>
+   <span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span> 
+      <span class="n">PopulationDistribution</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">prem</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">remove_edge_prob</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">padd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">add_edge_prob</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">prev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">reverse_edge_prob</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="bp">None</span>
+
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;lastPopulation&#39;</span><span class="p">)</span>
+
+   <span class="sd">&quot;&quot;&quot; # obsolete? Doesn&#39;t make sense...</span>
+<span class="sd">   def __getstate__(self):</span>
+<span class="sd">      self.data = None</span>
+<span class="sd">      self.network = None</span>
+<span class="sd">      return self.__dict__</span>
+<span class="sd">      </span>
+<span class="sd">   def __setstate__(self,state):</span>
+<span class="sd">      state[&#39;network&#39;] = None</span>
+<span class="sd">      state[&#39;data&#39;] = None</span>
+<span class="sd">      self.__dict__.update(state)</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__getstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">{</span><span class="s">&#39;prem&#39;</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">prem</span><span class="p">,</span><span class="s">&#39;padd&#39;</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">padd</span><span class="p">,</span><span class="s">&#39;prev&#39;</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">prev</span><span class="p">}</span>
+      
+   <span class="k">def</span> <span class="nf">__setstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">prem</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s">&#39;prem&#39;</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">prev</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s">&#39;prev&#39;</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">padd</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s">&#39;padd&#39;</span><span class="p">]</span>
+         
+   <span class="k">def</span> <span class="nf">canReverse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">newChild</span><span class="p">,</span> <span class="n">newParent</span><span class="p">):</span>
+      <span class="n">check</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">StructureProposal</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">canReverse</span><span class="p">(</span><span class="n">newChild</span><span class="p">,</span> <span class="n">newParent</span><span class="p">)</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">newChild</span><span class="o">.</span><span class="n">parents</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">branchFactor</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">False</span>
+      <span class="k">return</span> <span class="n">check</span>
+   
+   <span class="k">def</span> <span class="nf">maybeChange</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">changer</span><span class="p">,</span> <span class="n">existing</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+      <span class="n">changed</span> <span class="o">=</span> <span class="bp">False</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">computeEdgeStatistics</span><span class="p">()</span>
+      <span class="k">try</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">p</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="p">):</span>
+            <span class="c"># pick a random edge</span>
+            <span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
+               <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                  <span class="k">return</span> <span class="bp">False</span>
+               <span class="n">index</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">edges</span><span class="p">))</span>
+               <span class="n">parent</span><span class="p">,</span> <span class="n">child</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+               <span class="n">changer</span><span class="p">(</span><span class="n">parent</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+               <span class="n">indexFrom</span> <span class="o">=</span> <span class="n">indexTo</span> <span class="o">=</span> <span class="mi">0</span>
+               <span class="n">exists</span> <span class="o">=</span> <span class="bp">False</span>
+               <span class="n">attempts</span> <span class="o">=</span> <span class="mi">0</span>
+               <span class="n">maxAttempts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">numVariables</span> <span class="o">**</span> <span class="mi">2</span>
+               <span class="k">while</span> <span class="p">(</span><span class="n">indexFrom</span> <span class="o">==</span> <span class="n">indexTo</span> <span class="ow">or</span> <span class="n">exists</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">attempts</span> <span class="o">&lt;</span> <span class="n">maxAttempts</span><span class="p">):</span>
+                  <span class="n">indexFrom</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">))</span>
+                  <span class="n">indexTo</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">))</span>
+                  <span class="n">exists</span> <span class="o">=</span> <span class="bp">False</span>
+                  
+                  <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+                     <span class="k">if</span> <span class="n">edge</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexFrom</span><span class="p">]</span> <span class="ow">and</span> <span class="n">edge</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexTo</span><span class="p">]:</span>
+                        <span class="n">exists</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="k">break</span>   
+                
+                  <span class="c">#check branch factor</span>
+                  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexTo</span><span class="p">]</span><span class="o">.</span><span class="n">parents</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">branchFactor</span><span class="p">:</span>
+                     <span class="n">exists</span> <span class="o">=</span> <span class="bp">True</span>
+                     
+                  <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmpIdx</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexFrom</span><span class="p">]</span><span class="o">.</span><span class="n">index</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmpIdx</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexTo</span><span class="p">]</span><span class="o">.</span><span class="n">index</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">cmpIdx</span><span class="p">:</span>
+                        <span class="n">exists</span> <span class="o">=</span> <span class="bp">True</span>
+                
+                  <span class="n">attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+                  
+               <span class="k">if</span> <span class="n">attempts</span> <span class="o">&gt;=</span> <span class="n">maxAttempts</span> <span class="ow">or</span> <span class="n">exists</span><span class="p">:</span> 
+                  <span class="k">return</span> <span class="bp">False</span>
+               <span class="n">changer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexTo</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">indexFrom</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">changed</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">computeEdgeStatistics</span><span class="p">()</span>
+      <span class="k">except</span> <span class="n">CyclicException</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+         <span class="k">pass</span>
+      <span class="k">except</span> <span class="n">DuplicateEdgeException</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+         <span class="k">pass</span>
+      <span class="k">except</span> <span class="n">IrreversibleEdgeException</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+         <span class="k">pass</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+         <span class="k">print</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">msg</span>
+         <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">changed</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">networks</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="k">if</span> <span class="n">networks</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="n">networks</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()]</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">networks</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">size</span><span class="p">)]</span>
+      
+      <span class="n">ret</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">net</span> <span class="ow">in</span> <span class="n">networks</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="k">return</span> <span class="n">ret</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+
+   <span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">network</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">network</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">BayesNet</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">updateVariables</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">data</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">computeEdgeStatistics</span><span class="p">()</span>
+      
+      <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="n">changes</span> <span class="o">=</span> <span class="mi">1</span>
+      <span class="k">while</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="c"># changes &gt; 0:</span>
+         <span class="n">changes</span> <span class="o">=</span> <span class="mi">0</span>
+         
+         <span class="c"># remove an edge</span>
+         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">maybeChange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prem</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">removeEdge</span><span class="p">):</span>
+            <span class="n">changes</span> <span class="o">+=</span> <span class="mi">1</span> 
+         
+         <span class="c"># reverse an edge</span>
+         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">maybeChange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">reverseEdge</span><span class="p">):</span>
+            <span class="n">changes</span> <span class="o">+=</span> <span class="mi">1</span>
+         
+         <span class="c"># add an edge</span>
+         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">maybeChange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">padd</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">addEdge</span><span class="p">,</span> <span class="bp">False</span><span class="p">):</span>
+            <span class="n">changes</span> <span class="o">+=</span> <span class="mi">1</span>
+         <span class="n">total</span> <span class="o">+=</span> <span class="n">changes</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+      <span class="n">network</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="k">return</span> <span class="n">network</span>
+      
+                     
+<div class="viewcode-block" id="StructureProposal.adjust"><a class="viewcode-back" href="../../../../../index.html#pyec.distribution.bayes.structure.proposal.StructureProposal.adjust">[docs]</a>   <span class="k">def</span> <span class="nf">adjust</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">acceptanceRatio</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Called by simulated annealing to update generation statistics&quot;&quot;&quot;</span>
+</div>
+<div class="viewcode-block" id="StructureProposal.densityRatio"><a class="viewcode-back" href="../../../../../index.html#pyec.distribution.bayes.structure.proposal.StructureProposal.densityRatio">[docs]</a>   <span class="k">def</span> <span class="nf">densityRatio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Called by simulated annealing to adjust for assymetric densities</span>
+<span class="sd">         The density governing this proposal should be symmetric.</span>
+<span class="sd">         Still need to check this claim</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="mf">1.0</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

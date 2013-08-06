@@ -1,0 +1,346 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.optimize &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.optimize</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.de</span> <span class="kn">import</span> <span class="n">DifferentialEvolution</span> <span class="k">as</span> <span class="n">DE</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.cmaes</span> <span class="kn">import</span> <span class="n">Cmaes</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.neldermead</span> <span class="kn">import</span> <span class="n">NelderMead</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.gss</span> <span class="kn">import</span> <span class="n">GeneratingSetSearch</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.sa</span> <span class="kn">import</span> <span class="n">RealSimulatedAnnealing</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.pso</span> <span class="kn">import</span> <span class="n">ParticleSwarmOptimization</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.evoanneal</span> <span class="kn">import</span> <span class="n">RealEvolutionaryAnnealing</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Euclidean</span><span class="p">,</span> <span class="n">Hyperrectangle</span>
+
+<div class="viewcode-block" id="optimize"><a class="viewcode-back" href="../../index.html#pyec.optimize.optimize">[docs]</a><span class="k">def</span> <span class="nf">optimize</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Configure and run an optimizer on a function.</span>
+<span class="sd">      </span>
+<span class="sd">      By default the function will be minimize, but maximization can be performed by setting the keyword argument *minimize* to ``False``.</span>
+<span class="sd">      </span>
+<span class="sd">      Benchmark functions can be optimized by name. The following names are supported:</span>
+<span class="sd">      </span>
+<span class="sd">      - ackley -- A checker-board like oscillator, minimum is -13.37 in 5 dimensions.</span>
+<span class="sd">      - ackley2 -- Exponentiated and centered version of ackley, minimum is 0 at 0.</span>
+<span class="sd">      - griewank -- Oscillator with large scale, minimum at 0.</span>
+<span class="sd">      - langerman -- Sparse, rough, multi-modal. Minimum is 0.98 in five dimensions. </span>
+<span class="sd">      - rosenbrock -- Standard benchmark.</span>
+<span class="sd">      - rastrigin -- Oscillator. Minimum at </span>
+<span class="sd">      - salomon -- Ring oscillation. Minimum 0 at 0.</span>
+<span class="sd">      - schwefel -- Deceptive multimodal function. Minimum is -418 on (-512,512).</span>
+<span class="sd">      - shekel2 -- Shekel&#39;s foxholes, modified. Minimum is -10.4 in five dimensions. </span>
+<span class="sd">      - sphere -- A spherical paraboloid, minimum is 0 at 0</span>
+<span class="sd">      - whitley -- Complex, fractal like shape with small relevant area. Minimum is 0.0.</span>
+<span class="sd">      - weierstrass -- Everywhere continuous, nowhere differentiable; minimum is 0 at 0.</span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      :param optimizer: A :class:`PopulationDistribution` subclass</span>
+<span class="sd">      :type optimizer: ``class``</span>
+<span class="sd">      :param func: The function to be optimized, or a lookup key for a benchmark.</span>
+<span class="sd">      :type func: any callable object or str</span>
+<span class="sd">      :param dimension: The vector dimension in the search domain</span>
+<span class="sd">      :type dimension: int</span>
+<span class="sd">      :param population: The population size (sample size) for the optimizer.</span>
+<span class="sd">      :type population: int</span>
+<span class="sd">      :param generations: The number of populations to build (number of samples) during optimization.</span>
+<span class="sd">      :type generations: int</span>
+<span class="sd">      :returns: A tuple (best solution, best value) where the first element is the *best solution* located during optimization and *best value* is the value of the function at *best solution*.</span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      Keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * minimize -- Whether to minimize the function, otherwise maximize; default is True.</span>
+<span class="sd">      * initial -- A callable (no arguments) that returns random starting points for the initial distribution of the optimizer.</span>
+<span class="sd">      * display -- Show progress information once every second.</span>
+<span class="sd">      * constraint -- A :class:`Boundary` object implementing a constraint region (default is unconstrained). </span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">space</span> <span class="o">=</span> <span class="p">(</span><span class="s">&quot;constraint&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;constraint&quot;</span><span class="p">]</span>
+            <span class="ow">or</span> <span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dimension</span><span class="p">))</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="s">&quot;minimize&quot;</span><span class="p">:</span><span class="bp">True</span><span class="p">,</span>
+      <span class="s">&quot;space&quot;</span><span class="p">:</span><span class="n">space</span><span class="p">,</span>
+      <span class="s">&quot;populationSize&quot;</span><span class="p">:</span><span class="n">population</span>
+   <span class="p">}</span>
+   <span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+   
+   <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.registry</span> <span class="kn">import</span> <span class="n">BENCHMARKS</span>
+      <span class="n">func</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+      <span class="c">#if config[&quot;minimize&quot;]:</span>
+      <span class="c">#   h = func</span>
+      <span class="c">#   func = lambda x: -h(x)</span>
+         
+   <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s">&quot;minimize&quot;</span><span class="p">]:</span>
+     <span class="n">optfunc</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="o">-</span><span class="n">func</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+   <span class="k">else</span><span class="p">:</span>
+     <span class="n">optfunc</span> <span class="o">=</span> <span class="n">func</span>
+   
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="p">)</span>
+   <span class="n">alg</span> <span class="o">=</span> <span class="p">(</span><span class="n">optimizer</span><span class="p">[</span><span class="n">config</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">generations</span><span class="p">)()</span>
+   <span class="n">pop</span> <span class="o">=</span> <span class="n">alg</span><span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="n">optfunc</span><span class="p">]()</span>
+   <span class="n">alg</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">pop</span><span class="p">,</span> <span class="n">optfunc</span><span class="p">,</span> <span class="n">space</span><span class="p">,</span> <span class="n">alg</span><span class="p">)</span>
+   <span class="k">return</span> <span class="n">alg</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">best</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="differential_evolution"><a class="viewcode-back" href="../../index.html#pyec.optimize.differential_evolution">[docs]</a><span class="k">def</span> <span class="nf">differential_evolution</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply differential evolution (DE) to optimize a function. See &lt;http://en.wikipedia.org/wiki/Differential_evolution&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * CR -- The crossover probability for DE, default 0.2.</span>
+<span class="sd">      * F -- The learning rate for DE, default 0.5.</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">DE</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`differential_evolution`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">differential_evolution</span>
+
+<div class="viewcode-block" id="cmaes"><a class="viewcode-back" href="../../index.html#pyec.optimize.cmaes">[docs]</a><span class="k">def</span> <span class="nf">cmaes</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply Correlated Matrix Adaptation Evolution Strategy (CMA-ES) to optimize a function. See &lt;http://en.wikipedia.org/wiki/CMA-ES&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * parents -- The percentage of the population to use as parents, default 0.5.</span>
+<span class="sd">      * variance -- The standard deviation for CMA-ES to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">popSize</span> <span class="o">=</span> <span class="s">&quot;population&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;population&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="mi">25</span>
+   <span class="k">if</span> <span class="s">&quot;parents&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+      <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;parents&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">popSize</span><span class="p">)</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">Cmaes</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+   </div>
+<div class="viewcode-block" id="nelder_mead"><a class="viewcode-back" href="../../index.html#pyec.optimize.nelder_mead">[docs]</a><span class="k">def</span> <span class="nf">nelder_mead</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply Nelder-Mead method to optimize a function. See &lt;http://en.wikipedia.org/wiki/Nelder-Mead_method&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * convergence -- The tolerance on the simplex before restarting; default 1e-10.</span>
+<span class="sd">      * alpha, beta, gamma, delta -- standard parameters for Nelder-Mead.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">if</span> <span class="s">&quot;convergence&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+      <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;tol&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;convergence&quot;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">NelderMead</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="n">generations</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="n">population</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synomnym for :func:`nelder_mead`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">nm</span> <span class="o">=</span> <span class="n">nelder_mead</span>
+
+<div class="viewcode-block" id="generating_set_search"><a class="viewcode-back" href="../../index.html#pyec.optimize.generating_set_search">[docs]</a><span class="k">def</span> <span class="nf">generating_set_search</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply a basic generating set search to optimize a function. See &lt;http://smartfields.stanford.edu/documents/080403_kolda.pdf&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Uses no search heuristic, and uses the d+1 size basis in dimension d.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * convergence -- The tolerance on the simplex before restarting; default 1e-10.</span>
+<span class="sd">      * penalty_func -- A penalty function for the objective.</span>
+<span class="sd">      * expansion_factor -- Multiplicative expansion factor to use when a new best solution is found; default is 1.1.</span>
+<span class="sd">      * contraction_factor -- Multiplicative contraction factor to use when no new best is found; default is 0.95.</span>
+<span class="sd">      * initial_step -- The initial step.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;convergence&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;tol&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;convergence&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;expansion_factor&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;expand&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;expansion_factor&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;contraction_factor&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;contract&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;contraction_factor&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;initial_step&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;step&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;initial_step&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">GeneratingSetSearch</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="n">generations</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="n">population</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`generating_set_search`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">gss</span> <span class="o">=</span> <span class="n">generating_set_search</span>   
+
+<div class="viewcode-block" id="simulated_annealing"><a class="viewcode-back" href="../../index.html#pyec.optimize.simulated_annealing">[docs]</a><span class="k">def</span> <span class="nf">simulated_annealing</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply simulated annealing to optimize a function. See &lt;http://en.wikipedia.org/wiki/Simulated_annealing&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * schedule -- One of (log, linear) for a logarithmic or linear cooling schedule, or a function T(n) to return the temperature at time n.</span>
+<span class="sd">      * learning_rate -- The temperature will be divided by the learning rate is a logarithmic or linear schedule is used.</span>
+<span class="sd">      * restart_prob -- A probability to restart simulated annealing; 0.001 by default.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;sd&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;variance&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;learning_rate&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;learningRate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;schedule_divisor&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;divisor&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;schedule_divisor&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;restart_prob&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;restart&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;restart_prob&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">RealSimulatedAnnealing</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="n">generations</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="n">population</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`simulated_annealing`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">sa</span> <span class="o">=</span> <span class="n">simulated_annealing</span>
+
+<div class="viewcode-block" id="particle_swarm_optimization"><a class="viewcode-back" href="../../index.html#pyec.optimize.particle_swarm_optimization">[docs]</a><span class="k">def</span> <span class="nf">particle_swarm_optimization</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply particle swarm optmization to optimize a function. See &lt;http://en.wikipedia.org/wiki/Particle_swarm_optimization&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * omega -- The velocity decay.</span>
+<span class="sd">      * phi_g -- The global best influence parameter.</span>
+<span class="sd">      * phi_p -- The local best influence parameter.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;omega&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;omega&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;omega&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;phi_g&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;phig&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;phi_g&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;phi_p&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;phip&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;phi_p&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">ParticleSwarmOptimization</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="n">generations</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="n">population</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`particle_swarm_optimization`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">pso</span> <span class="o">=</span> <span class="n">particle_swarm_optimization</span>
+
+<div class="viewcode-block" id="evolutionary_annealing"><a class="viewcode-back" href="../../index.html#pyec.optimize.evolutionary_annealing">[docs]</a><span class="k">def</span> <span class="nf">evolutionary_annealing</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply evolutionary annealing to optimize a function. See Chapter 11 of &lt;http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`optimize`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments:</span>
+<span class="sd">      </span>
+<span class="sd">      * learning_rate -- A scaling factor controlling the temperature schedule; smaller numbers search more slowly and thoroughly, larger numbers search faster and less thoroughly. </span>
+<span class="sd">      * variance -- The initial standard deviation of the Gaussian mutation distribution, i.e. how locally the search is spaced. Defaults to 1.0, does not need to be changed.</span>
+<span class="sd">      * jogo2012 -- Use the parameters from Lockett and Miikkulainen in JOGO   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;learning_rate&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;learningRate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">):</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;sd&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;variance&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;jogo2012&#39;</span><span class="p">):</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.partitions</span> <span class="kn">import</span> <span class="n">VectorSeparationAlgorithm</span>
+      <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;jogo2012&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+      <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;schedule&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;log&quot;</span>
+      <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;separator&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">VectorSeparationAlgorithm</span>
+
+   <span class="k">return</span> <span class="n">optimize</span><span class="p">(</span><span class="n">RealEvolutionaryAnnealing</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`evolutionary_annealing`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">evoanneal</span> <span class="o">=</span> <span class="n">evolutionary_annealing</span>
+
+
+   
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

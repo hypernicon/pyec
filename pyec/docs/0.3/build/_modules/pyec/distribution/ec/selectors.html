@@ -1,0 +1,428 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.selectors &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.selectors</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">PopulationDistribution</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">SortedMarkovHistory</span>
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Selection"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Selection">[docs]</a><span class="k">class</span> <span class="nc">Selection</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A selection method (Abstract class)&quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">history</span><span class="o">=</span><span class="n">SortedMarkovHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">needsScores</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">True</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&#39;lastPopulation&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BestSelection"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.BestSelection">[docs]</a><span class="k">class</span> <span class="nc">BestSelection</span><span class="p">(</span><span class="n">Selection</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Select the best member of the prior population.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Selection</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+   
+</div>
+<div class="viewcode-block" id="EvolutionStrategySelection"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.EvolutionStrategySelection">[docs]</a><span class="k">class</span> <span class="nc">EvolutionStrategySelection</span><span class="p">(</span><span class="n">Selection</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Implements standard selection for evolution strategies.</span>
+<span class="sd">      </span>
+<span class="sd">      The property ``config.selection`` determines the type of selection,</span>
+<span class="sd">      either &quot;plus&quot; or &quot;comma&quot;. The config should provide $\mu$, and the</span>
+<span class="sd">      population size together with mu and the selection type determines</span>
+<span class="sd">      lambda.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      </span>
+<span class="sd">      * mu -- The number of parents to be taken from the prior population</span>
+<span class="sd">      * selection -- Either &quot;plus&quot; selection or &quot;comma&quot;; &quot;comma&quot; is default</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">mu</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                   <span class="n">selection</span><span class="o">=</span><span class="s">&quot;comma&quot;</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">EvolutionStrategySelection</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">mu</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">plus</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&#39;plus&#39;</span> <span class="c"># plus or comma selection, for ES</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">)</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()[</span><span class="n">idx</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">:</span>
+         <span class="k">return</span> <span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()[:</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">]]</span>
+                  <span class="o">+</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">)])</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+
+</div>
+<div class="viewcode-block" id="GeneralizedProportional"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.GeneralizedProportional">[docs]</a><span class="k">class</span> <span class="nc">GeneralizedProportional</span><span class="p">(</span><span class="n">Selection</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Fitness proportional selection with a modulating function.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      </span>
+<span class="sd">      * modulator -- A funtion applied to the fitness; proportional selection</span>
+<span class="sd">                     is performed on the image of this function. For fitness</span>
+<span class="sd">                     $f$, this is $modulator\cdot f$. The modulator is given</span>
+<span class="sd">                     the index of the element in the population second.</span>
+<span class="sd">                     The modulator is passed</span>
+<span class="sd">                     the configuration function as a third argument; if this</span>
+<span class="sd">                     causes an exception, then on the score is passed. That is,</span>
+<span class="sd">                     the fitness ``s = f(x)`` is computed, and then a call is</span>
+<span class="sd">                     made to ``modulator(s,i,cfg)``, and if this causes an</span>
+<span class="sd">                     exception, ``modulator(s,i)`` is used.</span>
+
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">modulator</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span> <span class="o">=</span> <span class="p">[]</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">rnd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">total</span>
+      <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">amt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">amt</span> <span class="o">&gt;=</span> <span class="n">rnd</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">x</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">)</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="n">history</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">buildProbabilities</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">())</span>
+      
+<div class="viewcode-block" id="GeneralizedProportional.buildProbabilities"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.GeneralizedProportional.buildProbabilities">[docs]</a>   <span class="k">def</span> <span class="nf">buildProbabilities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lastPopulation</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Take the last population (with scores) and recompute the</span>
+<span class="sd">      sampling vector for proportional selection.</span>
+<span class="sd">      </span>
+<span class="sd">      :param lastPopulation: The last population, of size</span>
+<span class="sd">                             ``config.populationSize``</span>
+<span class="sd">      :type lastPopulation: A list of (point, score) tuples</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">if</span> <span class="n">lastPopulation</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+      
+      <span class="k">try</span><span class="p">:</span>
+         <span class="n">population</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">modulator</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">))</span>
+                       <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lastPopulation</span><span class="p">)]</span>
+      <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+         <span class="n">population</span> <span class="o">=</span> <span class="p">[(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">modulator</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
+                       <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">lastPopulation</span><span class="p">]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">s</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">population</span><span class="p">])</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span> <span class="o">=</span> <span class="p">[]</span>
+      
+      <span class="n">amt</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">population</span><span class="p">:</span>
+         <span class="n">amt</span> <span class="o">+=</span> <span class="n">s</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">x</span><span class="p">,</span><span class="n">amt</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="Proportional"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Proportional">[docs]</a><span class="k">class</span> <span class="nc">Proportional</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Fitness proportional selection (roulette wheel selection).</span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Fitness_proportionate_selection&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Fitness values must be nonnegative.</span>
+<span class="sd">      </span>
+<span class="sd">      This :class:`Selection` method is just :class:`GeneralizedProportional`</span>
+<span class="sd">      with a modulating function</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">modulator</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">cfg</span><span class="p">:</span>
+                      <span class="n">cfg</span><span class="o">.</span><span class="n">minimize</span> <span class="ow">and</span> <span class="o">-</span><span class="nb">abs</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">abs</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="ExponentiatedProportional"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.ExponentiatedProportional">[docs]</a><span class="k">class</span> <span class="nc">ExponentiatedProportional</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;Fitness propotional selection, but with an exponentional modulationg</span>
+<span class="sd">   function so that any fitness values may be used.</span>
+<span class="sd">   </span>
+<span class="sd">   $p(x) = \exp(\frac{-f(x)}{T})$</span>
+<span class="sd">   </span>
+<span class="sd">   Config parameters:</span>
+<span class="sd">   </span>
+<span class="sd">   * T -- A &quot;temperature&quot; to divide the explicand.</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="c"># a temperature value</span>
+                   <span class="n">modulator</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">cfg</span><span class="p">:</span>
+                      <span class="n">cfg</span><span class="o">.</span><span class="n">minimize</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">s</span><span class="o">/</span><span class="n">cfg</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span><span class="o">/</span><span class="n">cfg</span><span class="o">.</span><span class="n">T</span><span class="p">))</span>
+
+   </div>
+<div class="viewcode-block" id="Tournament"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Tournament">[docs]</a><span class="k">class</span> <span class="nc">Tournament</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Tournament selection on the entire population.</span>
+<span class="sd">      </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/Tournament_selection&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      This class extends :class:`GeneralizedProportional`, but only to</span>
+<span class="sd">      get the method ``buildProbabilities`` (and the particular use of</span>
+<span class="sd">      ``batch``). Its modulating function is</span>
+<span class="sd">      built-in and is just the rank of the member in the population.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      * pressure -- The probability of choosing the best</span>
+<span class="sd">                    member of the randomly subsampled population.</span>
+<span class="sd">      * size -- The size of the subsample to select from, or ``None``</span>
+<span class="sd">                 for tournament selection over the entire population</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">pressure</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                   <span class="n">size</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                   <span class="n">history</span><span class="o">=</span><span class="n">SortedMarkovHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Tournament</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">pressure</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">size</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">ordered</span> <span class="o">=</span> <span class="bp">None</span>
+
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">Tournament</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">compatible</span><span class="p">(</span><span class="n">history</span><span class="p">)</span> <span class="ow">and</span> <span class="n">history</span><span class="o">.</span><span class="n">sorted</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ordered</span><span class="p">)</span>
+      <span class="n">newpop</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ordered</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">],</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+      <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+         <span class="n">rnd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span>
+         <span class="k">if</span> <span class="n">rnd</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">newpop</span><span class="p">[</span><span class="n">idx</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+         <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+   <span class="k">def</span> <span class="nf">buildProbabilities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lastPopulation</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">lastPopulation</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">ordered</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span>
+                      <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">())]</span>
+
+</div>
+<div class="viewcode-block" id="Ranker"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Ranker">[docs]</a><span class="k">class</span> <span class="nc">Ranker</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A policy to allocate selection probabilities under ranking selection.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Determine the probability of choosing the individual with a given rank inside a population of a given size.</span>
+<span class="sd">         </span>
+<span class="sd">         :param rank: The rank of the solution under consideration.</span>
+<span class="sd">         :type rank: int</span>
+<span class="sd">         :param popSize: The size of the population.</span>
+<span class="sd">         :type popSize: int</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="LinearRanker"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.LinearRanker">[docs]</a><span class="k">class</span> <span class="nc">LinearRanker</span><span class="p">(</span><span class="n">Ranker</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Computes the probability of selecting a solution from a population using linear ranking selection.</span>
+<span class="sd">      </span>
+<span class="sd">      See e.g. &lt;http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html&gt;</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;pressure between 1.0 and 2.0&quot;&quot;&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">pressure</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">popSize</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">populationSize</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rank</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">+</span>
+              <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pressure</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">*</span> <span class="p">((</span><span class="n">rank</span><span class="o">-</span><span class="mf">1.0</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">popSize</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)))</span> 
+      </div>
+<div class="viewcode-block" id="NonlinearRanker"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.NonlinearRanker">[docs]</a><span class="k">class</span> <span class="nc">NonlinearRanker</span><span class="p">(</span><span class="n">Ranker</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Computes the probability of selecting a solution from a population using nonlinear ranking selection.</span>
+<span class="sd">   </span>
+<span class="sd">      See e.g. &lt;http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html&gt;</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">pressure</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">)]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-=</span> <span class="n">popSize</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">roots</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">real</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rank</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; root is root of (pressure * sum_k=0^(popSize-1) x^k) - popSize * x ^(popSize - 1)&quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">**</span> <span class="p">(</span><span class="n">rank</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> 
+
+</div>
+<div class="viewcode-block" id="Ranking"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Ranking">[docs]</a><span class="k">class</span> <span class="nc">Ranking</span><span class="p">(</span><span class="n">GeneralizedProportional</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Ranking selection, e.g.</span>
+<span class="sd">      &lt;http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html&gt;</span>
+<span class="sd">   </span>
+<span class="sd">      Takes a ranking function which weights individuals according to rank</span>
+<span class="sd">      Rank is 1 for lowest, K for highest in population of size K</span>
+<span class="sd">      </span>
+<span class="sd">      Note that the ranking function is a class, instantiated with the</span>
+<span class="sd">      algorithm&#39;s config. When this method is initialized, the ranking</span>
+<span class="sd">      function is instanted and placed in ``config.rankerInst``, unless</span>
+<span class="sd">      the ``config.rankerInst`` is provided first</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      </span>
+<span class="sd">      * pressure -- The selection pressure passed to the ranker.</span>
+<span class="sd">      * ranker -- A :class:`Ranker` subclass for the ranking policy.</span>
+<span class="sd">      * rankerInst -- A :class:`Ranker` instance for the ranking policy;</span>
+<span class="sd">                      if not provided, then ``ranker(config)`` is used.</span>
+<span class="sd">    </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">pressure</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">ranker</span><span class="o">=</span><span class="n">LinearRanker</span><span class="p">,</span>
+                   <span class="n">modulator</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">cfg</span><span class="p">:</span>
+                     <span class="n">cfg</span><span class="o">.</span><span class="n">rankerInst</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">populationSize</span><span class="o">-</span><span class="n">i</span><span class="p">))</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Ranking</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rankerInst</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rankerInst</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">ranker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+  
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ranker</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">matchedPopulation</span><span class="p">))</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">total</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">Ranking</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">compatible</span><span class="p">(</span><span class="n">history</span><span class="p">)</span> <span class="ow">and</span> <span class="n">history</span><span class="o">.</span><span class="n">sorted</span>
+
+</div>
+<div class="viewcode-block" id="Elitist"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.selectors.Elitist">[docs]</a><span class="k">class</span> <span class="nc">Elitist</span><span class="p">(</span><span class="n">Selection</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Implements elitism by replacing the worst member of the population</span>
+<span class="sd">      with the best solution seen so far. If the best solution is a member</span>
+<span class="sd">      of the current population, nothing is changed.</span>
+<span class="sd">      </span>
+<span class="sd">      Elitism can be applied to an algorithm by piping the algorithm</span>
+<span class="sd">      with elitism, i.e.::</span>
+<span class="sd">      </span>
+<span class="sd">      ElitistVersion = .2 * Elitist | .8 * SomeAlgorithm</span>
+<span class="sd">      </span>
+<span class="sd">      for a new version of ``SomeAlgorithm`` that selects the first</span>
+<span class="sd">      20 % of the population as the best solutions so far, and fills</span>
+<span class="sd">      in the rest of the population with ``SomeAlgorithm``.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()]</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

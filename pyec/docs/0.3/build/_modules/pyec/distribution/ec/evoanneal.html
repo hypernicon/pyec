@@ -1,0 +1,384 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.evoanneal &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.evoanneal</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.convolution</span> <span class="kn">import</span> <span class="n">Convolution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.mutators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.structure.proposal</span> <span class="kn">import</span> <span class="n">StructureProposal</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.selectors</span> <span class="kn">import</span> <span class="n">Selection</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.mutators</span> <span class="kn">import</span> <span class="p">(</span><span class="n">Mutation</span><span class="p">,</span>
+                                           <span class="n">Bernoulli</span><span class="p">,</span>
+                                           <span class="n">Crossover</span><span class="p">,</span>
+                                           <span class="n">Gaussian</span><span class="p">,</span>
+                                           <span class="n">AreaSensitiveGaussian</span><span class="p">,</span>
+                                           <span class="n">AreaSensitiveBernoulli</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.nn.mutators</span> <span class="kn">import</span> <span class="p">(</span><span class="n">AddChainLayerMutation</span><span class="p">,</span>
+                                           <span class="n">AddRadialLayerMutation</span><span class="p">,</span>
+                                           <span class="n">RemoveLayerMutation</span><span class="p">,</span>
+                                           <span class="n">AddNodeMutation</span><span class="p">,</span>
+                                           <span class="n">RemoveNodeMutation</span><span class="p">,</span>
+                                           <span class="n">AddLinkMutation</span><span class="p">,</span>
+                                           <span class="n">RemoveLinkMutation</span><span class="p">,</span>
+                                           <span class="n">NetAreaStripper</span><span class="p">,</span>
+                                           <span class="n">AreaSensitiveGaussianWeightMutation</span><span class="p">,</span>
+                                           <span class="n">UniformOrIntermediateRnnCrosser</span><span class="p">,</span>
+                                           <span class="n">UniformRnnLinkCrosser</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">History</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Euclidean</span><span class="p">,</span> <span class="n">Binary</span>
+<span class="kn">from</span> <span class="nn">pyec.util.combinatorics</span> <span class="kn">import</span> <span class="n">factorial</span>
+<span class="kn">from</span> <span class="nn">pyec.util.partitions</span> <span class="kn">import</span> <span class="p">(</span><span class="n">Segment</span><span class="p">,</span>
+                                  <span class="n">Partition</span><span class="p">,</span>
+                                  <span class="n">ScoreTree</span><span class="p">,</span>
+                                  <span class="n">AreaTree</span><span class="p">,</span>
+                                  <span class="n">Point</span><span class="p">,</span>
+                                  <span class="n">SeparationAlgorithm</span><span class="p">,</span>
+                                  <span class="n">VectorSeparationAlgorithm</span><span class="p">,</span>
+                                  <span class="n">LongestSideVectorSeparationAlgorithm</span><span class="p">,</span>
+                                  <span class="n">BinarySeparationAlgorithm</span><span class="p">,</span>
+                                  <span class="n">BayesSeparationAlgorithm</span><span class="p">,</span>
+                                  <span class="n">LayeredSeparationAlgorithm</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyec.util.RunStats</span> <span class="kn">import</span> <span class="n">RunStats</span>
+
+<span class="kn">from</span> <span class="nn">scipy.special</span> <span class="kn">import</span> <span class="n">erf</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>  
+
+
+<div class="viewcode-block" id="PartitionHistory"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.PartitionHistory">[docs]</a><span class="k">class</span> <span class="nc">PartitionHistory</span><span class="p">(</span><span class="n">History</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;A :class:`History` that records all points and uses those points</span>
+<span class="sd">   to partition the search domain usina a :class:`Partition` object. Also</span>
+<span class="sd">   stores a :class:`ScoreTree` and a :class:`AreaTree`.</span>
+<span class="sd">   </span>
+<span class="sd">   This class is memory intensive, so be careful about convolving or</span>
+<span class="sd">   convexly combining it, since each of those combinations may cause</span>
+<span class="sd">   multiple copies of this history to be stored in memory.</span>
+
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">PartitionHistory</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">segment</span> <span class="o">=</span> <span class="n">Segment</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="n">RunStats</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">stats</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">recording</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">record</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">separator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">separator</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">attrs</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">([</span><span class="s">&quot;segment&quot;</span><span class="p">,</span> <span class="s">&quot;stats&quot;</span><span class="p">])</span>
+   
+   <span class="k">def</span> <span class="nf">temperature</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">updates</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">divisor</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span><span class="p">,</span> <span class="s">&#39;__call__&#39;</span><span class="p">):</span>
+         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="s">&quot;linear&quot;</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">learningRate</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="s">&quot;log&quot;</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">learningRate</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="s">&quot;discount&quot;</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">temp0</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">discount</span> <span class="o">**</span> <span class="n">n</span><span class="p">))</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="s">&quot;log_area&quot;</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.</span><span class="o">/-</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="o">.</span><span class="n">partitionTree</span><span class="o">.</span><span class="n">largestArea</span><span class="p">())</span>
+                     <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">learningRate</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">return</span> <span class="mf">1.0</span>
+      
+<div class="viewcode-block" id="PartitionHistory.internalUpdate"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.PartitionHistory.internalUpdate">[docs]</a>   <span class="k">def</span> <span class="nf">internalUpdate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">population</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;Insert all new points into the partition.</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      
+      <span class="k">if</span> <span class="n">population</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="c"># skip unscored updates inside convolution</span>
+         <span class="k">return</span>
+      
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">population</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+         <span class="c"># again, skip intermediate</span>
+         <span class="k">return</span>
+      
+      <span class="n">pts</span> <span class="o">=</span> <span class="p">[</span><span class="n">Point</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span>
+             <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">population</span><span class="p">]</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="s">&quot;save&quot;</span><span class="p">)</span>
+      <span class="n">Point</span><span class="o">.</span><span class="n">bulkSave</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="p">,</span> <span class="n">pts</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stats</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">stop</span><span class="p">(</span><span class="s">&quot;save&quot;</span><span class="p">)</span>
+
+</div></div>
+<span class="k">class</span> <span class="nc">TaylorPartitionHistory</span><span class="p">(</span><span class="n">PartitionHistory</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">TaylorPartitionHistory</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">internalUpdate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">population</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">population</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="c"># skip unscored updates inside convolution</span>
+         <span class="k">return</span>
+      
+      <span class="nb">super</span><span class="p">(</span><span class="n">TaylorPartitionHistory</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">internalUpdate</span><span class="p">(</span><span class="n">population</span><span class="p">)</span>
+      <span class="n">bottom</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span> <span class="o">*</span> <span class="n">floor</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">())</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">learningRate</span><span class="p">)</span>
+      <span class="k">if</span>  <span class="n">bottom</span> <span class="o">&gt;</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="o">.</span><span class="n">taylorCenter</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="o">.</span><span class="n">scoreTree</span><span class="o">.</span><span class="n">resetTaylor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segment</span><span class="p">,</span> <span class="mf">1.</span><span class="o">/</span><span class="n">bottom</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Annealing"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.Annealing">[docs]</a><span class="k">class</span> <span class="nc">Annealing</span><span class="p">(</span><span class="n">Selection</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Base class for annealed selection. See e.g.</span>
+<span class="sd">      </span>
+<span class="sd">      Lockett, A. and Miikkulainen, R. Real-space Evolutionary Annealing, 2011.</span>
+<span class="sd">      </span>
+<span class="sd">      For a more up-to-date version, see Chapters 11-13 of </span>
+<span class="sd">      </span>
+<span class="sd">      &lt;http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters (many like simulated annealing)</span>
+<span class="sd">      </span>
+<span class="sd">      * schedule -- The cooling schedule to use. May be any callable function, or</span>
+<span class="sd">                 a string, one of (&quot;log&quot;, &quot;linear&quot;, &quot;discount&quot;). If it is a</span>
+<span class="sd">                 callable, then it will be passed the ``updates`` value in</span>
+<span class="sd">                 :class:`History` and should return a floating point value</span>
+<span class="sd">                 that will divide the exponent in the Boltzmann distribution.</span>
+<span class="sd">                 That is, ``schedule(n)`` should converge to zero as n goes to</span>
+<span class="sd">                 infinity.</span>
+<span class="sd">      * learningRate -- A divisor for the cooling schedule, used for built-in </span>
+<span class="sd">                     schedules &quot;log&quot; and &quot;inear&quot;. As a divisor, it divides the</span>
+<span class="sd">                     temperature but multiplies the exponent.</span>
+<span class="sd">      * temp0 -- An initial temperature for the temperature decay in &quot;discount&quot;</span>
+<span class="sd">      * divisor -- A divisor that divides the ``updates`` property of</span>
+<span class="sd">                :class:`History`, scaling the rate of decline in the temperature</span>
+<span class="sd">      * discount -- The decay factor for the built-in discount schedule; ``temp0``</span>
+<span class="sd">                 is multiplied by ``discount`` once each time the ``update``</span>
+<span class="sd">                 method is called</span>
+<span class="sd">      * separator -- A :class:`SeparationAlgorithm` for partitioning regions</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">schedule</span><span class="o">=</span><span class="s">&quot;log_area&quot;</span><span class="p">,</span>
+                   <span class="n">learningRate</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">divisor</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">temp0</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">discount</span> <span class="o">=</span> <span class="o">.</span><span class="mi">99</span><span class="p">,</span>
+                   <span class="n">separator</span> <span class="o">=</span> <span class="n">SeparationAlgorithm</span><span class="p">,</span>
+                   <span class="n">history</span> <span class="o">=</span> <span class="n">PartitionHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Annealing</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">jogo2012</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="s">&quot;log&quot;</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">separator</span> <span class="o">=</span> <span class="n">VectorSeparationAlgorithm</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">PartitionHistory</span><span class="p">)</span>
+   
+<div class="viewcode-block" id="Annealing.sample"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.Annealing.sample">[docs]</a>   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Child classes should override this method in order to select a point</span>
+<span class="sd">         from the active segment in :class:`pyec.util.partitions.Point`.</span>
+<span class="sd">         </span>
+<span class="sd">         The actual return should be a partition node.</span>
+<span class="sd">         </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">pass</span>
+      </div>
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">m</span><span class="p">)]</span>
+
+</div>
+<div class="viewcode-block" id="ProportionalAnnealing"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.ProportionalAnnealing">[docs]</a><span class="k">class</span> <span class="nc">ProportionalAnnealing</span><span class="p">(</span><span class="n">Annealing</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Proportional Annealing, as described in </span>
+<span class="sd">      </span>
+<span class="sd">      Lockett, A. And Miikkulainen, R. Real-space Evolutionary Annealing (2011).</span>
+<span class="sd">      </span>
+<span class="sd">      See :class:`Annealing` for more details.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      </span>
+<span class="sd">      * taylorCenter -- Center for Taylor approximation to annealing densities.</span>
+<span class="sd">      * taylorDepth -- The number of coefficients to use for Taylor approximation of the annealing density.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">taylorCenter</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+                   <span class="n">taylorDepth</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+                   <span class="n">history</span> <span class="o">=</span> <span class="n">TaylorPartitionHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">TaylorPartitionHistory</span><span class="p">)</span>
+         
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">Point</span><span class="o">.</span><span class="n">sampleProportional</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">segment</span><span class="p">,</span>
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">temperature</span><span class="p">(),</span>
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+  
+  </div>
+<div class="viewcode-block" id="TournamentAnnealing"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.TournamentAnnealing">[docs]</a><span class="k">class</span> <span class="nc">TournamentAnnealing</span><span class="p">(</span><span class="n">Annealing</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Tournament Annealing, as described in Chapter 11 of</span>
+<span class="sd">      </span>
+<span class="sd">      &lt;http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf&gt;</span>
+<span class="sd">      </span>
+<span class="sd">      See :class:`Annealing` for more details.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">pressure</span><span class="o">=</span><span class="mf">0.025</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">Point</span><span class="o">.</span><span class="n">sampleTournament</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">segment</span><span class="p">,</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">temperature</span><span class="p">(),</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="AreaStripper"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.evoanneal.AreaStripper">[docs]</a><span class="k">class</span> <span class="nc">AreaStripper</span><span class="p">(</span><span class="n">Mutation</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;:class:`Annealing` and its descendents pass along a tuple; this class</span>
+<span class="sd">   extracts the point for use with other methods.</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">mutate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">point</span>
+</div>
+<span class="n">AnnealingCrossover</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="p">((</span><span class="n">TournamentAnnealing</span> <span class="o">&lt;&lt;</span> <span class="n">AreaStripper</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+    <span class="p">(((</span><span class="n">TournamentAnnealing</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">AreaStripper</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+     <span class="n">Crossover</span><span class="p">))</span>
+<span class="p">)</span>
+
+<span class="n">RealEvolutionaryAnnealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">TournamentAnnealing</span> <span class="o">&lt;&lt;</span> <span class="n">AreaSensitiveGaussian</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">LongestSideVectorSeparationAlgorithm</span><span class="p">)]</span>
+
+<span class="n">RealEvolutionaryAnnealingJogo2012</span> <span class="o">=</span> <span class="n">RealEvolutionaryAnnealing</span><span class="p">[</span><span class="n">Config</span><span class="p">(</span>
+   <span class="n">jogo2012</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+   <span class="n">schedule</span><span class="o">=</span><span class="s">&quot;log&quot;</span><span class="p">,</span>
+   <span class="n">separator</span><span class="o">=</span><span class="n">VectorSeparationAlgorithm</span>
+<span class="p">)]</span>
+
+<span class="n">CrossedRealEvolutionaryAnnealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">AnnealingCrossover</span> <span class="o">&lt;&lt;</span> <span class="n">Gaussian</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">LongestSideVectorSeparationAlgorithm</span><span class="p">)]</span>
+
+<span class="n">BinaryEvolutionaryAnnealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">TournamentAnnealing</span> <span class="o">&lt;&lt;</span> <span class="n">AreaStripper</span> <span class="o">&lt;&lt;</span> <span class="n">Bernoulli</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">BinarySeparationAlgorithm</span><span class="p">)]</span>
+
+<span class="n">CrossedBinaryEvolutionaryAnnealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">AnnealingCrossover</span> <span class="o">&lt;&lt;</span> <span class="n">Bernoulli</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">BinarySeparationAlgorithm</span><span class="p">)]</span>
+
+<span class="n">BayesEvolutionaryAnnealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="n">AnnealingCrossover</span> <span class="o">&lt;&lt;</span> <span class="n">StructureProposal</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">BayesSeparationAlgorithm</span><span class="p">,</span>
+         <span class="n">crosser</span><span class="o">=</span><span class="n">Merger</span><span class="p">,</span> <span class="c">#UniformBayesCrosser,</span>
+         <span class="n">schedule</span><span class="o">=</span><span class="s">&quot;log&quot;</span><span class="p">,</span>
+         <span class="n">learningRate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+         <span class="n">crossoverProb</span><span class="o">=.</span><span class="mi">25</span><span class="p">)]</span>
+
+<span class="n">NeuroannealingCrossover</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="p">((</span><span class="n">TournamentAnnealing</span> <span class="o">&lt;&lt;</span> <span class="n">NetAreaStripper</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+    <span class="p">(((</span><span class="n">TournamentAnnealing</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">NetAreaStripper</span><span class="p">)</span> <span class="o">&lt;&lt;</span>
+      <span class="n">Crossover</span><span class="p">[</span><span class="n">Config</span><span class="p">(</span><span class="n">crosser</span><span class="o">=</span><span class="n">UniformOrIntermediateRnnCrosser</span><span class="p">,</span> <span class="n">crossoverProb</span><span class="o">=.</span><span class="mi">5</span><span class="p">)]))</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">learningRate</span><span class="o">=.</span><span class="mi">1</span><span class="p">,</span> <span class="n">schedule</span><span class="o">=</span><span class="s">&quot;log&quot;</span><span class="p">)]</span>
+
+<span class="n">Neuroannealing</span> <span class="o">=</span> <span class="p">(</span>
+   <span class="c">#TournamentAnnealing &lt;&lt; NetAreaStripper &lt;&lt; </span>
+   <span class="n">NeuroannealingCrossover</span> <span class="o">&lt;&lt;</span>
+   <span class="n">AddChainLayerMutation</span> <span class="o">&lt;&lt;</span> <span class="n">RemoveLayerMutation</span> <span class="o">&lt;&lt;</span>
+   <span class="n">AddNodeMutation</span> <span class="o">&lt;&lt;</span> <span class="n">RemoveNodeMutation</span> <span class="o">&lt;&lt;</span>
+   <span class="n">AddLinkMutation</span> <span class="o">&lt;&lt;</span> <span class="n">RemoveLinkMutation</span> <span class="o">&lt;&lt;</span>
+   <span class="n">AreaSensitiveGaussianWeightMutation</span>
+<span class="p">)[</span><span class="n">Config</span><span class="p">(</span><span class="n">separator</span><span class="o">=</span><span class="n">LayeredSeparationAlgorithm</span><span class="p">,</span>
+         <span class="n">secondary_separator</span><span class="o">=</span><span class="n">LongestSideVectorSeparationAlgorithm</span><span class="p">)]</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

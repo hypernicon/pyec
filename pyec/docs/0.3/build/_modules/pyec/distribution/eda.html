@@ -1,0 +1,280 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.eda &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.eda</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy.linalg</span>
+
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">PopulationDistribution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.net</span> <span class="kn">import</span> <span class="n">BayesNet</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.sample</span> <span class="kn">import</span> <span class="n">DAGSampler</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.structure.greedy</span> <span class="kn">import</span> <span class="n">GreedyStructureSearch</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.structure.proposal</span> <span class="kn">import</span> <span class="n">StructureProposal</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.score</span> <span class="kn">import</span> <span class="n">BayesianDirichletScorer</span><span class="p">,</span> <span class="n">BayesianInformationCriterion</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.bayes.variables</span> <span class="kn">import</span> <span class="n">BinaryVariable</span><span class="p">,</span> <span class="n">GaussianVariable</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">SortedMarkovHistory</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Binary</span><span class="p">,</span> <span class="n">BinaryReal</span><span class="p">,</span> <span class="n">Euclidean</span>
+<span class="kn">from</span> <span class="nn">pyec.util.TernaryString</span> <span class="kn">import</span> <span class="n">TernaryString</span>
+
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+
+<span class="kn">import</span> <span class="nn">scipy.cluster.vq</span> <span class="kn">as</span> <span class="nn">vq</span>
+
+<span class="n">seterr</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s">&quot;ignore&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Boa"><a class="viewcode-back" href="../../../index.html#pyec.distribution.eda.Boa">[docs]</a><span class="k">class</span> <span class="nc">Boa</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;The Bayesian Optimization Algorithm of Martin Pelikan. &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">variableGenerator</span><span class="o">=</span><span class="n">BinaryVariable</span><span class="p">,</span>
+                   <span class="n">branchFactor</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                   <span class="n">structureGenerator</span><span class="o">=</span><span class="n">GreedyStructureSearch</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">BayesianInformationCriterion</span><span class="p">()),</span>
+                   <span class="n">randomizer</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">net</span><span class="p">:</span> <span class="n">TernaryString</span><span class="p">(</span><span class="il">0L</span><span class="p">,</span> <span class="o">-</span><span class="il">1L</span><span class="p">,</span> <span class="n">net</span><span class="o">.</span><span class="n">numVariables</span><span class="p">),</span>
+                   <span class="n">sampler</span> <span class="o">=</span> <span class="n">DAGSampler</span><span class="p">(),</span>
+                   <span class="n">data</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span>
+                   <span class="n">truncate</span> <span class="o">=</span> <span class="mf">0.60</span><span class="p">,</span> <span class="c"># percentage of the population to keep</span>
+                   <span class="n">space</span> <span class="o">=</span> <span class="n">BinaryReal</span><span class="p">(</span><span class="n">realDim</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span>
+                   <span class="n">history</span><span class="o">=</span><span class="n">SortedMarkovHistory</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Boa</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">BayesNet</span><span class="p">(</span><span class="n">numVariables</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span>
+                              <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">StructureProposal</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">trained</span> <span class="o">=</span> <span class="bp">False</span>
+
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="s">&quot;lastPopulation&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">history</span><span class="o">.</span><span class="n">sorted</span>
+
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span>
+      <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">in_bounds</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+         <span class="k">if</span> <span class="n">cnt</span> <span class="o">&gt;</span> <span class="mi">10000</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Rejection sampling failed after 10,000 attempts in BOA&quot;</span><span class="p">)</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span>
+         <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+      <span class="k">return</span> <span class="n">x</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">)]</span>
+
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Boa</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span><span class="n">fitness</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+      
+      <span class="n">population</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()]</span>
+      <span class="n">selected</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">truncate</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">population</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">BayesNet</span><span class="p">(</span><span class="n">numVariables</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span>
+                              <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span> <span class="o">=</span> <span class="n">StructureProposal</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">__properties__</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">population</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">structureSearch</span><span class="p">(</span><span class="n">population</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">updates</span><span class="p">,</span> <span class="n">population</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="RBoa"><a class="viewcode-back" href="../../../index.html#pyec.distribution.eda.RBoa">[docs]</a><span class="k">class</span> <span class="nc">RBoa</span><span class="p">(</span><span class="n">Boa</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;The Real-coded Boa algorithm of Ahn et al.&quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">variableGenerator</span><span class="o">=</span><span class="n">GaussianVariable</span><span class="p">,</span>
+                   <span class="n">randomizer</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">net</span><span class="p">:</span> <span class="n">zeros</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">numVariables</span><span class="p">),</span>
+                   <span class="n">space</span><span class="o">=</span><span class="n">Euclidean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">5</span><span class="p">))</span>
+   
+   <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="c"># set up the clustering</span>
+      <span class="k">for</span> <span class="n">w</span><span class="p">,</span> <span class="n">subset</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">decomp</span><span class="p">):</span>
+         <span class="c"># pick a cluster</span>
+         <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span>
+         <span class="n">idx</span> <span class="o">=</span> <span class="bp">None</span>
+         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">clusterCoeffs</span><span class="p">[</span><span class="n">w</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="o">&gt;=</span> <span class="n">r</span><span class="p">:</span>
+               <span class="n">idx</span> <span class="o">=</span> <span class="n">i</span>
+            
+         <span class="c"># set the mean, sd, and sdinv to match the cluster choice</span>
+         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">subset</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clusterMeans</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">idx</span><span class="p">][</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">sd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clusterSds</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">idx</span><span class="p">][</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">sdinv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clusterSdInvs</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">idx</span><span class="p">][</span><span class="n">j</span><span class="p">]</span>
+      
+      <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">RBoa</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+   
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">RBoa</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">fitness</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+      
+      <span class="n">population</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">history</span><span class="o">.</span><span class="n">lastPopulation</span><span class="p">()]</span>
+      <span class="n">selected</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">truncate</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">population</span><span class="p">))</span>
+      <span class="n">data</span> <span class="o">=</span> <span class="n">population</span><span class="p">[:</span><span class="n">selected</span><span class="p">]</span>
+      
+      <span class="n">decomp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">decompose</span><span class="p">()</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">decomp</span> <span class="o">=</span> <span class="n">decomp</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">assignments</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">numClusters</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">clusterCoeffs</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">clusterMeans</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">clusterSds</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">clusterSdInvs</span> <span class="o">=</span> <span class="p">{}</span>
+      <span class="c">#cluster within decomp</span>
+      <span class="k">for</span> <span class="n">w</span><span class="p">,</span> <span class="n">subset</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">decomp</span><span class="p">):</span>
+         <span class="n">data2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="p">)</span>
+         <span class="n">distortion</span> <span class="o">=</span> <span class="mf">1e300</span>
+         <span class="n">means</span> <span class="o">=</span> <span class="bp">None</span>
+         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">selected</span> <span class="o">/</span> <span class="mi">5</span><span class="p">):</span>
+            <span class="n">ms</span><span class="p">,</span> <span class="n">distort</span> <span class="o">=</span> <span class="n">vq</span><span class="o">.</span><span class="n">kmeans</span><span class="p">(</span><span class="n">data2</span><span class="p">,</span> <span class="n">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">distort</span> <span class="o">&lt;</span> <span class="n">distortion</span> <span class="ow">or</span> <span class="n">means</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+               <span class="n">means</span> <span class="o">=</span> <span class="n">ms</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">numClusters</span><span class="p">[</span><span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span><span class="o">+</span><span class="mi">1</span>
+         
+         <span class="c"># assign data to closest cluster</span>
+         <span class="n">assign</span> <span class="o">=</span> <span class="p">{}</span>
+         <span class="n">coeffs</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numClusters</span><span class="p">[</span><span class="n">w</span><span class="p">])</span>
+         <span class="n">assigned</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numClusters</span><span class="p">[</span><span class="n">w</span><span class="p">])]</span>
+         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data2</span><span class="p">):</span>
+            <span class="n">closest</span> <span class="o">=</span> <span class="mf">1e300</span>
+            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">means</span><span class="p">):</span>
+               <span class="n">dist</span> <span class="o">=</span> <span class="p">((</span><span class="n">d</span> <span class="o">-</span> <span class="n">m</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+               <span class="k">if</span> <span class="ow">not</span> <span class="n">assign</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="ow">or</span> <span class="n">dist</span> <span class="o">&lt;</span> <span class="n">closest</span><span class="p">:</span>
+                  <span class="n">assign</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">j</span>
+                  <span class="n">closest</span> <span class="o">=</span> <span class="n">dist</span>
+            <span class="n">coeffs</span><span class="p">[</span><span class="n">assign</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">+=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">selected</span>
+            <span class="n">assigned</span><span class="p">[</span><span class="n">assign</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+         
+         <span class="c"># print w, self.numClusters[w], &quot; clusters&quot;</span>
+         <span class="n">coeffs2</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numClusters</span><span class="p">[</span><span class="n">w</span><span class="p">])</span>
+         <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+         <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">coeffs</span><span class="p">):</span>
+            <span class="n">total</span> <span class="o">+=</span> <span class="n">c</span>
+            <span class="n">coeffs2</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">total</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">assignments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assign</span><span class="p">)</span>
+         <span class="c"># print coeffs2</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">clusterCoeffs</span><span class="p">[</span><span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="n">coeffs2</span>
+         
+         <span class="bp">self</span><span class="o">.</span><span class="n">clusterMeans</span><span class="p">[</span><span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">clusterSds</span><span class="p">[</span><span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">clusterSdInvs</span><span class="p">[</span><span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+         <span class="k">for</span> <span class="n">cnum</span><span class="p">,</span> <span class="n">subdata</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">assigned</span><span class="p">):</span>
+             <span class="c"># compute mean and sd for the cluster</span>
+             <span class="n">subdata</span> <span class="o">=</span> <span class="n">array</span><span class="p">(</span><span class="n">subdata</span><span class="p">)</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">clusterMeans</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">clusterSds</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">clusterSdInvs</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+             <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">subset</span><span class="p">:</span>
+                <span class="c"># get variable idx</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+                <span class="c"># set variable params </span>
+                <span class="n">var</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">subdata</span><span class="p">)</span>
+                <span class="c"># store variable params</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">clusterMeans</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">][</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">mu</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">clusterSds</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">][</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">sd</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">clusterSdInvs</span><span class="p">[</span><span class="n">w</span><span class="p">][</span><span class="n">cnum</span><span class="p">][</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span><span class="o">.</span><span class="n">sdinv</span>
+        
+   <span class="k">def</span> <span class="nf">project</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="p">):</span>
+      <span class="n">data2</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+         <span class="n">nd</span> <span class="o">=</span> <span class="p">[]</span>
+         <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">subset</span><span class="p">:</span>
+            <span class="n">nd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+         <span class="n">data2</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">array</span><span class="p">(</span><span class="n">data2</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

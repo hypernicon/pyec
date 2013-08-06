@@ -1,0 +1,389 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.optimize &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.optimize</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">FixedCube</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.de</span> <span class="kn">import</span> <span class="n">DEConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.cmaes</span> <span class="kn">import</span> <span class="n">CmaesConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.neldermead</span> <span class="kn">import</span> <span class="n">NMConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.gss</span> <span class="kn">import</span> <span class="n">GSSConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.sa</span> <span class="kn">import</span> <span class="n">SAConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.pso</span> <span class="kn">import</span> <span class="n">PSOConfigurator</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.evoanneal</span> <span class="kn">import</span> <span class="n">REAConfigurator</span>
+
+<span class="k">def</span> <span class="nf">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Configure and run an optimizer on a function using a :class:`ConfigBuilder` object in order to instantiate the optimizer.</span>
+<span class="sd">      </span>
+<span class="sd">      By default the function will be minimize, but maximization can be performed by setting the keyword argument *minimize* to ``False``.</span>
+<span class="sd">      </span>
+<span class="sd">      Benchmark functions can be optimized by name. The following names are supported:</span>
+<span class="sd">      - ackley -- A checker-board like oscillator, minimum is -13.37 in 5 dimensions.</span>
+<span class="sd">      - ackley2 -- Exponentiated and centered version of ackley, minimum is 0 at 0.</span>
+<span class="sd">      - griewank -- Oscillator with large scale, minimum at 0.</span>
+<span class="sd">      - langerman -- Sparse, rough, multi-modal. Minimum is 0.98 in five dimensions. </span>
+<span class="sd">      - rosenbrock -- Standard benchmark.</span>
+<span class="sd">      - rastrigin -- Oscillator. Minimum at </span>
+<span class="sd">      - salomon -- Ring oscillation. Minimum 0 at 0.</span>
+<span class="sd">      - schwefel -- Deceptive multimodal function. Minimum is -418 on (-512,512).</span>
+<span class="sd">      - shekel2 -- Shekel&#39;s foxholes, modified. Minimum is -10.4 in five dimensions. </span>
+<span class="sd">      - sphere -- A spherical paraboloid, minimum is 0 at 0</span>
+<span class="sd">      - whitley -- Complex, fractal like shape with small relevant area. Minimum is 0.0.</span>
+<span class="sd">      - weierstrass -- Everywhere continuous, nowhere differentiable; minimum is 0 at 0.</span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      :param configurator: A builder used to generate a parameterized optimizer.</span>
+<span class="sd">      :type configurator: :class:`ConfigBuilder`</span>
+<span class="sd">      :param func: The function to be optimized, or a lookup key for a benchmark.</span>
+<span class="sd">      :type func: any callable object or str</span>
+<span class="sd">      :param dimension: The vector dimension in the search domain</span>
+<span class="sd">      :type dimension: int</span>
+<span class="sd">      :param population: The population size (sample size) for the optimizer.</span>
+<span class="sd">      :type population: int</span>
+<span class="sd">      :param generations: The number of populations to build (number of samples) during optimization.</span>
+<span class="sd">      :type generations: int</span>
+<span class="sd">      :returns: A tuple (best solution, best value) where the first element is the *best solution* located during optimization and *best value* is the value of the function at *best solution*.</span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      Keyword arguments:</span>
+<span class="sd">      * minimize -- Whether to minimize the function, otherwise maximize; default is True.</span>
+<span class="sd">      * initial -- A callable (no arguments) that returns random starting points for the initial distribution of the optimizer.</span>
+<span class="sd">      * display -- Show progress information once every second.</span>
+<span class="sd">      * constraint -- A :class:`Boundary` object implementing a constraint region (default is unconstrained). </span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">printOut</span> <span class="o">=</span> <span class="bp">False</span>
+   <span class="n">minimize</span> <span class="o">=</span> <span class="bp">True</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;minimize&#39;</span><span class="p">):</span>
+      <span class="n">minimize</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;minimize&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">func</span><span class="p">)</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">func</span><span class="p">)</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="s">u&quot;&quot;</span><span class="p">):</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.registry</span> <span class="kn">import</span> <span class="n">BENCHMARKS</span>
+      <span class="n">func</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">minimize</span><span class="p">:</span>
+         <span class="n">h</span> <span class="o">=</span> <span class="n">func</span>
+         <span class="n">func</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="o">-</span><span class="n">h</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;display&#39;</span><span class="p">):</span>
+      <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">printOut</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;display&#39;</span><span class="p">]</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">save</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;save&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;save&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="bp">False</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dimension</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">bounded</span> <span class="o">=</span> <span class="bp">False</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;constraint&#39;</span><span class="p">):</span>
+      <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">in_bounds</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;constraint&#39;</span><span class="p">]</span>
+      <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">bounded</span> <span class="o">=</span> <span class="bp">True</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;initial&#39;</span><span class="p">):</span>
+      <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">initialDistribution</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;initial&#39;</span><span class="p">]</span>
+   <span class="k">elif</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">bounded</span><span class="p">:</span>
+      <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">initialDistribution</span> <span class="o">=</span> <span class="n">FixedCube</span><span class="p">(</span><span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="p">)</span>
+   <span class="k">if</span> <span class="n">minimize</span><span class="p">:</span>
+     <span class="n">optfunc</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="o">-</span><span class="n">func</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+   <span class="k">else</span><span class="p">:</span>
+     <span class="n">optfunc</span> <span class="o">=</span> <span class="n">func</span>
+   <span class="n">alg</span> <span class="o">=</span> <span class="n">configurator</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="n">generations</span><span class="p">,</span> <span class="n">population</span><span class="p">,</span> <span class="n">dimension</span><span class="p">,</span> <span class="n">optfunc</span><span class="p">)</span>
+   <span class="n">alg</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">,</span><span class="n">optfunc</span><span class="p">)</span>
+   <span class="n">trainer</span> <span class="o">=</span> <span class="n">alg</span><span class="o">.</span><span class="n">trainer</span>
+   <span class="k">return</span> <span class="n">trainer</span><span class="o">.</span><span class="n">maxOrg</span><span class="p">,</span> <span class="n">minimize</span> <span class="ow">and</span> <span class="o">-</span><span class="n">trainer</span><span class="o">.</span><span class="n">maxScore</span> <span class="ow">or</span> <span class="n">trainer</span><span class="o">.</span><span class="n">maxScore</span>
+
+<div class="viewcode-block" id="differential_evolution"><a class="viewcode-back" href="../../index.html#pyec.optimize.differential_evolution">[docs]</a><span class="k">def</span> <span class="nf">differential_evolution</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply differential evolution (DE) to optimize a function. See &lt;http://en.wikipedia.org/wiki/Differential_evolution&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * CR -- The crossover probability for DE, default 0.2.</span>
+<span class="sd">      * F -- The learning rate for DE, default 0.5.</span>
+<span class="sd">      * variance -- The standard deviation for DE to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">DEConfigurator</span><span class="p">()</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">crossoverProb</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;CR&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;CR&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="o">.</span><span class="mi">2</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">learningRate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;F&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;F&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="o">.</span><span class="mi">5</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;variance&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="mf">1.0</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`differential_evolution`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">differential_evolution</span>
+
+<div class="viewcode-block" id="cmaes"><a class="viewcode-back" href="../../index.html#pyec.optimize.cmaes">[docs]</a><span class="k">def</span> <span class="nf">cmaes</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply Correlated Matrix Adaptation Evolution Strategy (CMA-ES) to optimize a function. See &lt;http://en.wikipedia.org/wiki/CMA-ES&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * muProportion -- The percentage of the population to use as parents, default 0.5.</span>
+<span class="sd">      * variance -- The standard deviation for CMA-ES to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">CmaesConfigurator</span><span class="p">()</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;variance&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="mf">1.0</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">muProportion</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;parents&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;parents&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="o">.</span><span class="mi">5</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+   </div>
+<div class="viewcode-block" id="nelder_mead"><a class="viewcode-back" href="../../index.html#pyec.optimize.nelder_mead">[docs]</a><span class="k">def</span> <span class="nf">nelder_mead</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply Nelder-Mead method to optimize a function. See &lt;http://en.wikipedia.org/wiki/Nelder-Mead_method&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * convergence -- The tolerance on the simplex before restarting; default 1e-10.</span>
+<span class="sd">      * variance -- The standard deviation for CMA-ES to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.</span>
+<span class="sd">      * alpha, beta, gamma, delta -- standard parameters for Nelder-Mead.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">NMConfigurator</span><span class="p">()</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;variance&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="mf">1.0</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;convergence&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">restartTolerance</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;convergence&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;alpha&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;alpha&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;beta&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;beta&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;gamma&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">gamma</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;gamma&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;delta&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">delta</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;delta&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synomnym for :func:`nelder_mead`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">nm</span> <span class="o">=</span> <span class="n">nelder_mead</span>
+
+<div class="viewcode-block" id="generating_set_search"><a class="viewcode-back" href="../../index.html#pyec.optimize.generating_set_search">[docs]</a><span class="k">def</span> <span class="nf">generating_set_search</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply a basic generating set search to optimize a function. See &lt;http://smartfields.stanford.edu/documents/080403_kolda.pdf&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Uses no search heuristic, and uses the d+1 size basis in dimension d.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * convergence -- The tolerance on the simplex before restarting; default 1e-10.</span>
+<span class="sd">      * penalty_func -- A penalty function for the objective.</span>
+<span class="sd">      * expansion_factor -- Multiplicative expansion factor to use when a new best solution is found; default is 1.1.</span>
+<span class="sd">      * contraction_factor -- Multiplicative contraction factor to use when no new best is found; default is 0.95.</span>
+<span class="sd">      * initial_step -- The initial step.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">GSSConfigurator</span><span class="p">()</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;convergence&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">tolerance</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;convergence&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;penalty_func&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">penalty</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;penalty_func&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;expansion_factor&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">expandStep</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;expansion_factor&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;contraction_factor&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">contractStep</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;contract_step&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;initial_step&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">stepInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;initial_step&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`generating_set_search`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">gss</span> <span class="o">=</span> <span class="n">generating_set_search</span>   
+
+<div class="viewcode-block" id="simulated_annealing"><a class="viewcode-back" href="../../index.html#pyec.optimize.simulated_annealing">[docs]</a><span class="k">def</span> <span class="nf">simulated_annealing</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply simulated annealing to optimize a function. See &lt;http://en.wikipedia.org/wiki/Simulated_annealing&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * schedule -- One of (log, linear) for a logarithmic or linear cooling schedule, or a function T(n) to return the temperature at time n.</span>
+<span class="sd">      * learning_rate -- The temperature will be divided by the learning rate is a logarithmic or linear schedule is used.</span>
+<span class="sd">      * proposal -- The proposal distribution; a Gaussian with adaptive variance is used by default.</span>
+<span class="sd">      * variance -- Initial standard deviation for the default Gaussian.</span>
+<span class="sd">      * restart_prob -- A probability to restart simulated annealing; 0.001 by default.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">SAConfigurator</span><span class="p">()</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;schedule&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;schedule&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;proposal&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">proposal</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;proposal&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;learning_rate&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">learningRate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;schedule_divisor&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">divisor</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;schedule_divisor&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;variance&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;restart_prob&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">restartProb</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;restart_prob&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`simulated_annealing`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">sa</span> <span class="o">=</span> <span class="n">simulated_annealing</span>
+
+<div class="viewcode-block" id="particle_swarm_optimization"><a class="viewcode-back" href="../../index.html#pyec.optimize.particle_swarm_optimization">[docs]</a><span class="k">def</span> <span class="nf">particle_swarm_optimization</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply particle swarm optmization to optimize a function. See &lt;http://en.wikipedia.org/wiki/Particle_swarm_optimization&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * omega -- The velocity decay.</span>
+<span class="sd">      * phi_g -- The global best influence parameter.</span>
+<span class="sd">      * phi_p -- The local best influence parameter.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">PSOConfigurator</span><span class="p">()</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;omega&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">omega</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;omega&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;phi_g&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">phig</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;phi_g&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;phi_p&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">phip</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;phi_p&#39;</span><span class="p">]</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`particle_swarm_optimization`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">pso</span> <span class="o">=</span> <span class="n">particle_swarm_optimization</span>
+
+<div class="viewcode-block" id="evolutionary_annealing"><a class="viewcode-back" href="../../index.html#pyec.optimize.evolutionary_annealing">[docs]</a><span class="k">def</span> <span class="nf">evolutionary_annealing</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Apply evolutionary annealing to optimize a function. See Chapter 11 of &lt;http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf&gt;.</span>
+<span class="sd">      </span>
+<span class="sd">      Calls :func:`__optimize__`. </span>
+<span class="sd">      </span>
+<span class="sd">      Extra keyword arguments</span>
+<span class="sd">      * learning_rate -- A scaling factor controlling the temperature schedule; smaller numbers search more slowly and thoroughly, larger numbers search faster and less thoroughly. </span>
+<span class="sd">      * variance -- The initial standard deviation of the Gaussian mutation distribution, i.e. how locally the search is spaced. Defaults to 1.0, and probably does not need to be changed.</span>
+<span class="sd">      * space_scale -- For unconstrained optimization, the standard deviation of the initial Gaussian and of the Gaussian warping in the space. Should match a general notion of the size or scale of the function in the search domain.</span>
+<span class="sd">      </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   
+   <span class="n">configurator</span> <span class="o">=</span> <span class="n">REAConfigurator</span><span class="p">()</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;learning_rate&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">learningRate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+   <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;variance&#39;</span><span class="p">):</span> <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;variance&#39;</span><span class="p">]</span>
+   <span class="n">configurator</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">spaceScale</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;space_scale&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;space_scale&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="mf">1.0</span>
+   <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;save&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+   <span class="k">return</span> <span class="n">__optimize__</span><span class="p">(</span><span class="n">configurator</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Synonym for :func:`evolutionary_annealing`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">evoanneal</span> <span class="o">=</span> <span class="n">evolutionary_annealing</span>
+
+<div class="viewcode-block" id="Constraint"><a class="viewcode-back" href="../../index.html#pyec.optimize.Constraint">[docs]</a><span class="k">class</span> <span class="nc">Constraint</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A constraint region for optimization. The ``__call__`` method of the object should return whether an object satisfies the constrains, and the ``extent`` method should specify parameters for a hypercube completely containing the constraint region.</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Check whether a potential solution satisfies a constraint.</span>
+<span class="sd">         </span>
+<span class="sd">         :param y: The object to check.</span>
+<span class="sd">         :type y: varied, usually :class:`numpy.ndarray`</span>
+<span class="sd">         :returns: Whether the point is inside of the region.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="bp">True</span>
+      
+<div class="viewcode-block" id="Constraint.extent"><a class="viewcode-back" href="../../index.html#pyec.optimize.Constraint.extent">[docs]</a>   <span class="k">def</span> <span class="nf">extent</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">         Return parameters for a hypercube containing the constraint region.</span>
+<span class="sd">         </span>
+<span class="sd">         If the return values are (center, scale), then the hypercube has a center at *center* and a side length of 2 times *scale*.</span>
+<span class="sd">         </span>
+<span class="sd">         :returns: The (center, scale) parameters for a hypercube.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">10.</span>
+</div></div>
+<div class="viewcode-block" id="Hyperrectangle"><a class="viewcode-back" href="../../index.html#pyec.optimize.Hyperrectangle">[docs]</a><span class="k">class</span> <span class="nc">Hyperrectangle</span><span class="p">(</span><span class="n">Constraint</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A Hyperrectangle constraint region.</span>
+<span class="sd">      </span>
+<span class="sd">      :param center: The center point for the hyperrectangle.</span>
+<span class="sd">      :type center: :class:`numpy.ndarray`</span>
+<span class="sd">      :param scale: The distance to the sides for the hyperrectangle.</span>
+<span class="sd">      :type scale: :class:`numpy.ndarray`</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">scale</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">center</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span>
+
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+      
+   <span class="k">def</span> <span class="nf">extent</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span>
+   </div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

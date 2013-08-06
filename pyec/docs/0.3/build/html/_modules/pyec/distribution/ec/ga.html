@@ -1,0 +1,285 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.ec.ga &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.ec.ga</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">ConfigBuilder</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.convolution</span> <span class="kn">import</span> <span class="n">Convolution</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">Gaussian</span> <span class="k">as</span> <span class="n">SimpleGaussian</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">BernoulliTernary</span> <span class="k">as</span> <span class="n">SimpleBernoulli</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution</span> <span class="kn">import</span> <span class="n">FixedCube</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.mutators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyec.distribution.ec.selectors</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RGAConfigurator"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.ga.RGAConfigurator">[docs]</a><span class="k">class</span> <span class="nc">RGAConfigurator</span><span class="p">(</span><span class="n">ConfigBuilder</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A :class:`ConfigBuilder` for a real-coded Genetic Algorithm.</span>
+<span class="sd">      </span>
+<span class="sd">      See the source code for defaults (uniform crossover, ranking selection, gaussian mutation).</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="n">alg</span> <span class="o">=</span> <span class="n">GeneticAlgorithm</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+         <span class="n">alg</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">RGAConfigurator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">alg</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">elitist</span> <span class="o">=</span> <span class="bp">False</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">selection</span> <span class="o">=</span> <span class="s">&quot;ranking&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">rankingMethod</span> <span class="o">=</span> <span class="s">&quot;linear&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">selectionPressure</span> <span class="o">=</span> <span class="mf">1.8</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">crossover</span> <span class="o">=</span> <span class="s">&quot;uniform&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">crossoverOrder</span> <span class="o">=</span> <span class="mi">2</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">space</span> <span class="o">=</span> <span class="s">&quot;real&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">mutation</span> <span class="o">=</span> <span class="s">&quot;gauss&quot;</span>
+
+</div>
+<div class="viewcode-block" id="GAConfigurator"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.ga.GAConfigurator">[docs]</a><span class="k">class</span> <span class="nc">GAConfigurator</span><span class="p">(</span><span class="n">RGAConfigurator</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A :class:`ConfigBuilder` for a standard genetic algorithm (binary encoding) to search in real spaces.</span>
+<span class="sd">      </span>
+<span class="sd">      See source code for defaults (16-bit representation, mutation rate .05).</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GAConfigurator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">space</span> <span class="o">=</span> <span class="s">&quot;binary&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">activeField</span> <span class="o">=</span> <span class="s">&quot;binary&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">binaryDepth</span> <span class="o">=</span> <span class="mi">16</span>
+
+   <span class="k">def</span> <span class="nf">postConfigure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">rawdim</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">dim</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">rawscale</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">scale</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">rawcenter</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">center</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">dim</span> <span class="o">*</span> <span class="n">cfg</span><span class="o">.</span><span class="n">binaryDepth</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+      <span class="n">cfg</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span> 
+      <span class="n">cfg</span><span class="o">.</span><span class="n">bitFlipProbs</span> <span class="o">=</span> <span class="o">.</span><span class="mo">05</span>
+
+</div>
+<div class="viewcode-block" id="GeneticAlgorithm"><a class="viewcode-back" href="../../../../index.html#pyec.distribution.ec.ga.GeneticAlgorithm">[docs]</a><span class="k">class</span> <span class="nc">GeneticAlgorithm</span><span class="p">(</span><span class="n">Convolution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A genetic algorithm for optimization of real functions on Euclidean spaces.</span>
+<span class="sd">      </span>
+<span class="sd">      Support various selection, crossover, and mutation methods.</span>
+<span class="sd">      Supports binary and real encodings.</span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters</span>
+<span class="sd">      * elitist = One of (True, False), whether to keep the best solution so far in the population.</span>
+<span class="sd">      * selection = One of (proportional, tournament, ranking), different selection methods.</span>
+<span class="sd">      * rankingMethod = One of (linear, nonlinear), when using ranking selection.</span>
+<span class="sd">      * crossover = One of (none, uniform, onePoint, twoPoint, intermediate, onePointDual), the type of crossover to use.</span>
+<span class="sd">      * crossoverOrder = Integer, the number of parents for recombination (default 2).</span>
+<span class="sd">      * space = One of (real, binary); the type of encoding.</span>
+<span class="sd">      * mutation = One of (gauss, cauchyOne), the type of mutation in real encodings (binary uses a standard Bernoulli mutation).</span>
+<span class="sd">      * varInit = float or float array, standard deviation (for real space).</span>
+<span class="sd">      * bitFlipProbs = float or float array, mutation probability (for binary space).</span>
+<span class="sd">      </span>
+<span class="sd">      Binary encoding uses other parameters to encode/decode the parameters</span>
+<span class="sd">      * rawdim -- The number of real dimensions.</span>
+<span class="sd">      * rawscale -- The scale of the space in real dimensions.</span>
+<span class="sd">      * rawcenter -- The center of the space in real dimensions.</span>
+<span class="sd">      * binaryDepth -- The number of bits to use for each real parameter.  </span>
+<span class="sd">      </span>
+<span class="sd">      Generic config parameters</span>
+<span class="sd">      * dim -- The dimension of the search domain (for binary, the total number of bits)</span>
+<span class="sd">      * center -- The center of the search domain (.5 for binary)</span>
+<span class="sd">      * scale -- The scale of the search domain (.5 for binary)</span>
+<span class="sd">      * bounded -- Whether the optimization is constrained. </span>
+<span class="sd">      </span>
+<span class="sd">      :params config: The configuration parameters.</span>
+<span class="sd">      :type config: :class:`Config`</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">         Config options:</span>
+<span class="sd">             elitist = (True, False)</span>
+<span class="sd">             selection = (proportional, tournament, ranking)</span>
+<span class="sd">             rankingMethod = (linear, nonlinear)</span>
+<span class="sd">             crossover = (none, uniform, onePoint, twoPoint, intermediate, onePointDual)</span>
+<span class="sd">             crossoverOrder = integer</span>
+<span class="sd">             space = (real, binary)</span>
+<span class="sd">             mutation = (gauss, cauchyOne)</span>
+<span class="sd">             varInit = float or float array, standard deviation (for real space)</span>
+<span class="sd">             bitFlipProbs = float or float array, mutation probability (for binary space)</span>
+
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;elitist&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">elitist</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Elitist</span><span class="p">())</span>
+      <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;selection&#39;</span><span class="p">):</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&#39;proportional&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Proportional</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&#39;tournament&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Tournament</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&#39;esp&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ESPSelectionPrimary</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&#39;ranking&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;rankingMethod&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">rankingMethod</span> <span class="o">==</span> <span class="s">&#39;nonlinear&#39;</span><span class="p">:</span>
+               <span class="n">config</span><span class="o">.</span><span class="n">ranker</span> <span class="o">=</span> <span class="n">NonlinearRanker</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">selectionPressure</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">populationSize</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+               <span class="n">config</span><span class="o">.</span><span class="n">ranker</span> <span class="o">=</span> <span class="n">LinearRanker</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">selectionPressure</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Ranking</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;Unknown selection method&quot;</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="c">#config.ranker = LinearRanker(1.8)</span>
+         <span class="c">#self.selectors.append(Ranking(config))</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Proportional</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">selector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">selector</span> <span class="o">=</span> <span class="n">Convolution</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">,</span> <span class="n">passScores</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span> <span class="o">=</span> <span class="p">[]</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;crossover&#39;</span><span class="p">):</span>
+         <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">=</span> <span class="s">&quot;uniform&quot;</span>
+      <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">!=</span> <span class="s">&quot;none&quot;</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;uniform&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">UniformCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;onePoint&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">OnePointCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;onePointDual&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">OnePointDualCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;twoPoint&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">TwoPointCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">crossover</span> <span class="o">==</span> <span class="s">&#39;intermediate&#39;</span><span class="p">:</span>
+            <span class="n">crosser</span> <span class="o">=</span> <span class="n">IntermediateCrosser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;Unknown crossover method&quot;</span>
+         <span class="n">order</span> <span class="o">=</span> <span class="mi">2</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;crossoverOrder&#39;</span><span class="p">):</span>
+            <span class="n">order</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">crossoverOrder</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">selection</span> <span class="o">==</span> <span class="s">&quot;esp&quot;</span><span class="p">:</span>
+            <span class="n">secondary</span> <span class="o">=</span> <span class="n">ESPSelectionSecondary</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">secondary</span> <span class="o">=</span> <span class="n">secondary</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">secondary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selector</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Crossover</span><span class="p">(</span><span class="n">secondary</span><span class="p">,</span> <span class="n">crosser</span><span class="p">,</span> <span class="n">order</span><span class="p">))</span>
+      <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">space</span> <span class="o">==</span> <span class="s">&#39;real&#39;</span><span class="p">:</span>
+         <span class="n">variance</span> <span class="o">=</span> <span class="o">.</span><span class="mo">05</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;varInit&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">varInit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">variance</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">varInit</span>
+         <span class="n">config</span><span class="o">.</span><span class="n">stddev</span> <span class="o">=</span> <span class="n">variance</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">mutation</span> <span class="o">==</span> <span class="s">&quot;cauchyOne&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OnePointCauchy</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Gaussian</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">bounded</span><span class="p">:</span>
+            <span class="n">initial</span> <span class="o">=</span> <span class="n">FixedCube</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleGaussian</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">space</span> <span class="o">==</span> <span class="s">&#39;binary&#39;</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Bernoulli</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+         <span class="n">initial</span> <span class="o">=</span> <span class="n">SimpleBernoulli</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;Unknown space&quot;</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mutator</span> <span class="o">=</span> <span class="n">Convolution</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="p">)</span>
+      
+      <span class="n">passScores</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selectors</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GeneticAlgorithm</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selectors</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mutators</span><span class="p">,</span> <span class="n">initial</span><span class="p">,</span> <span class="n">passScores</span><span class="o">=</span><span class="n">passScores</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span> <span class="o">==</span> <span class="s">&quot;binary&quot;</span><span class="p">:</span>
+         <span class="n">ns</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">binaryDepth</span><span class="p">)]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rawdim</span><span class="p">)</span>
+         <span class="n">ms</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span> <span class="o">**</span> <span class="n">ns</span>
+         <span class="n">y</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">ms</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">binaryDepth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rawdim</span><span class="p">))</span>
+         <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rawdim</span><span class="p">)</span>
+         <span class="k">return</span> <span class="n">y</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rawscale</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rawcenter</span>
+      <span class="k">return</span> <span class="n">x</span>
+         
+   <span class="nd">@classmethod</span>
+   <span class="k">def</span> <span class="nf">configurator</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">GAConfigurator</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>      </div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

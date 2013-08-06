@@ -1,0 +1,370 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.gss &mdash; PyEC 0.3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.3.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.gss</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copyright (C) 2012 Alan J Lockett</span>
+
+<span class="sd">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</span>
+
+<span class="sd">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</span>
+
+<span class="sd">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Based on Kolda, Lewis, and Torczon, Optimization by Direct Search: New Perspectives on Some Classical and Modern Methods (2003)</span>
+<span class="sd">   </span>
+<span class="sd">    Primarily implemented to enable MADS (Audet and Dennis, 2006)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">pyec.distribution.basic</span> <span class="kn">import</span> <span class="n">Distribution</span><span class="p">,</span> <span class="n">PopulationDistribution</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">pyec.history</span> <span class="kn">import</span> <span class="n">History</span>
+<span class="kn">from</span> <span class="nn">pyec.space</span> <span class="kn">import</span> <span class="n">Euclidean</span>
+
+<span class="n">GSS_INIT</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">GSS_SEARCH</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">GSS_POLL</span> <span class="o">=</span> <span class="mi">2</span>
+
+<span class="k">class</span> <span class="nc">GeneratingSetSearchHistory</span><span class="p">(</span><span class="n">History</span><span class="p">):</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GeneratingSetSearchHistory</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">attrs</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">([</span><span class="s">&quot;dim&quot;</span><span class="p">,</span><span class="s">&quot;center&quot;</span><span class="p">,</span><span class="s">&quot;state&quot;</span><span class="p">,</span> <span class="s">&quot;_score&quot;</span><span class="p">,</span> <span class="s">&quot;step&quot;</span><span class="p">,</span> <span class="s">&quot;stepInit&quot;</span><span class="p">,</span>
+                         <span class="s">&quot;generators&quot;</span><span class="p">,</span><span class="s">&quot;directions&quot;</span><span class="p">])</span>
+      <span class="n">dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">dim</span>
+      <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">scale</span>
+      <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">step</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_INIT</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">generators</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">identity</span><span class="p">(</span><span class="n">dim</span><span class="p">),</span> 
+                                  <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="n">dim</span><span class="p">))</span>
+                                  <span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dim</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">directions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span><span class="n">dim</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">stepInit</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="n">scale</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stepInit</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_score</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
+
+
+   <span class="k">def</span> <span class="nf">accept</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">score</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_score</span> <span class="o">=</span> <span class="n">score</span>
+         <span class="k">return</span> <span class="bp">True</span>
+      
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">better</span><span class="p">(</span><span class="n">score</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">penalty</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_score</span><span class="p">):</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_score</span> <span class="o">=</span> <span class="n">score</span> 
+         <span class="k">return</span> <span class="bp">True</span>
+      
+      <span class="k">return</span> <span class="bp">False</span>
+
+   <span class="k">def</span> <span class="nf">penalty</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+      <span class="sd">&quot;&quot;&quot;A penalty to apply during acceptance testing, used to accept</span>
+<span class="sd">      non-optimal points (or to reject new points that do not provide</span>
+<span class="sd">      enough improvement). By default, non-optimal points are not</span>
+<span class="sd">      accepted.</span>
+<span class="sd">      </span>
+<span class="sd">      :param step: The current step size</span>
+<span class="sd">      :type step: ``float``</span>
+<span class="sd">      </span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="mf">0.0</span>
+
+   <span class="k">def</span> <span class="nf">expandStep</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">expand</span>
+
+   <span class="k">def</span> <span class="nf">contractStep</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">contract</span>
+
+   <span class="k">def</span> <span class="nf">updateGenerators</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pop</span><span class="p">):</span>   
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">updateDirections</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pop</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">internalUpdate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pop</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">GSS_INIT</span><span class="p">:</span>
+         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_SEARCH</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_POLL</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">accept</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">pop</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">GSS_SEARCH</span><span class="p">:</span>
+         <span class="n">accepted</span> <span class="o">=</span> <span class="bp">False</span>
+         <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">pop</span><span class="p">:</span>
+            <span class="n">accepted</span> <span class="o">=</span> <span class="n">accepted</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">accept</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">s</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">accepted</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">expandStep</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateGenerators</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateDirections</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_POLL</span>
+      <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">GSS_POLL</span><span class="p">:</span>
+         <span class="n">accepted</span> <span class="o">=</span> <span class="bp">False</span>
+         <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">pop</span><span class="p">:</span>
+            <span class="n">accepted</span> <span class="o">=</span> <span class="n">accepted</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">accept</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">s</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">accepted</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_SEARCH</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">expandStep</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateGenerators</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateDirections</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">directions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">GSS_SEARCH</span>
+               
+            <span class="bp">self</span><span class="o">.</span><span class="n">contractStep</span><span class="p">()</span>
+            <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">tol</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+               <span class="k">return</span>
+            <span class="c">#   #self.step = self.config.stepInit * self.config.scale</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateGenerators</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateDirections</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&quot;missing state &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="GeneratingSetSearch"><a class="viewcode-back" href="../../../index.html#pyec.distribution.gss.GeneratingSetSearch">[docs]</a><span class="k">class</span> <span class="nc">GeneratingSetSearch</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   Based on Kolda, Lewis, and Torczon, Optimization by Direct Search: New Perspectives on Some Classical and Modern Methods (2003)</span>
+<span class="sd">   </span>
+<span class="sd">    Primarily implemented to enable MADS (Audet and Dennis, 2006)</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+   <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">tol</span><span class="o">=</span><span class="mf">1e-50</span><span class="p">,</span>              <span class="c"># tolerance before restart</span>
+                   <span class="n">expand</span> <span class="o">=</span> <span class="mf">1.1</span><span class="p">,</span>           <span class="c"># multiplier for expansion</span>
+                   <span class="n">contract</span> <span class="o">=</span> <span class="o">.</span><span class="mi">95</span><span class="p">,</span>         <span class="c"># multiplier for contraction</span>
+                   <span class="n">step</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span><span class="p">,</span>              <span class="c"># initial step</span>
+                   <span class="n">history</span> <span class="o">=</span> <span class="n">GeneratingSetSearchHistory</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">GeneratingSetSearch</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="p">,</span> <span class="n">Euclidean</span><span class="p">):</span>
+         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Cannot use Nelder-Mead in non-Euclidean spaces.&quot;</span><span class="p">)</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span> <span class="o">=</span> <span class="mi">1</span>
+      
+   <span class="k">def</span> <span class="nf">compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">history</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">GeneratingSetSearchHistory</span><span class="p">)</span>
+      
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">step</span>
+
+   <span class="k">def</span> <span class="nf">poll</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">center</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">step</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">generators</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      for i, row in enumerate(raw):</span>
+<span class="sd">         while (abs(row - self.config.center) &gt; self.config.scale).any():</span>
+<span class="sd">            row -= self.center</span>
+<span class="sd">            row *= .5</span>
+<span class="sd">            row += self.center</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">raw</span>
+
+   <span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">directions</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+         <span class="k">return</span> <span class="p">[]</span>
+      <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">center</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">step</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">directions</span>
+      <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      for i, row in enumerate(raw):</span>
+<span class="sd">         while (abs(row - self.config.center) &gt; self.config.scale).any():</span>
+<span class="sd">            row -= self.center</span>
+<span class="sd">            row *= .5</span>
+<span class="sd">            row += self.center</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+      <span class="k">return</span> <span class="n">raw</span>
+
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">history</span><span class="o">.</span><span class="n">state</span>
+      <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="n">GSS_SEARCH</span><span class="p">:</span>
+         <span class="n">pop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pop</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">pop</span>
+      <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">GSS_POLL</span><span class="p">:</span> <span class="c"># GSS_POLL</span>
+         <span class="n">state</span> <span class="o">=</span> <span class="n">GSS_POLL</span>
+         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+      <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">GSS_INIT</span><span class="p">:</span> 
+         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span><span class="p">,</span> <span class="n">Distribution</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initial</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">space</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+      <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Unknown state in GSS: {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+
+
+</div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">class MADSHistory(GeneratingSetSearchHistory):</span>
+<span class="sd">   &quot;&quot;&quot;</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">   Based on Audet &amp; Dennis 2006. May not be working yet; please verify/fix</span>
+<span class="s">   if you need it.</span>
+<span class="s">   &quot;&quot;&quot;&quot;&quot;&quot;</span>
+<span class="s">   def __init__(self, config):</span>
+<span class="s">      super(MeshAdaptiveDirectSearch, self).__init__(config)</span>
+<span class="s">      self.searchStep = self.step</span>
+<span class="s">      self.root = {}</span>
+<span class="s">      self.rootIdx = {}</span>
+<span class="s">    </span>
+<span class="s">   def ell(self):</span>
+<span class="s">      ell = np.int(-np.log(self.searchStep) * np.log(4))</span>
+<span class="s">      if ell &gt; 30: ell = 30</span>
+<span class="s">      return ell</span>
+<span class="s">   </span>
+<span class="s">   def rootDirection(self):</span>
+<span class="s">      ell = self.ell()</span>
+<span class="s">      if self.root.has_key(ell):</span>
+<span class="s">         return</span>
+<span class="s">      i = np.random.randint(0, self.config.dim)</span>
+<span class="s">      bnd = 2 ** ell</span>
+<span class="s">      root = np.random.randint(-bnd+1, bnd, self.config.dim)</span>
+<span class="s">      if np.random.random_sample() &lt; .5:</span>
+<span class="s">         root[i] = -bnd</span>
+<span class="s">      else:</span>
+<span class="s">         root[i] = bnd</span>
+<span class="s">      self.root[ell] = root</span>
+<span class="s">      self.rootIdx[ell] = i</span>
+<span class="s">      </span>
+<span class="s">   def expandStep(self):</span>
+<span class="s">      self.searchStep *= self.config.expand</span>
+<span class="s">      if self.searchStep &gt; self.stepInit:</span>
+<span class="s">         self.searchStep = self.stepInit</span>
+<span class="s">      </span>
+<span class="s">   def contractStep(self):</span>
+<span class="s">      self.searchStep *= self.config.contract </span>
+<span class="s">      if self.searchStep &gt; self.stepInit:</span>
+<span class="s">         self.searchStep = self.stepInit</span>
+<span class="s">      </span>
+<span class="s">   def updateGenerators(self, pop):</span>
+<span class="s">      ell = self.ell()</span>
+<span class="s">      self.rootDirection()</span>
+<span class="s">      root = self.root[ell]</span>
+<span class="s">      idx = self.rootIdx[ell]</span>
+<span class="s">      bnd = 2 ** ell</span>
+<span class="s">      dim1 = self.config.dim - 1</span>
+<span class="s">      below = np.tri(dim1, k=-1) * np.random.randint(-bnd+1, bnd, (dim1,dim1))</span>
+<span class="s">      diagonal = (np.random.binomial(1, .5, dim1) * 2. - 1.) * bnd</span>
+<span class="s">      lower = below + bnd * np.diag(diagonal)</span>
+<span class="s">      indexes = np.arange(dim1)</span>
+<span class="s">      np.random.shuffle(indexes)</span>
+<span class="s">      basis = np.zeros((self.config.dim, self.config.dim))</span>
+<span class="s">      for i in xrange(self.config.dim):</span>
+<span class="s">         for j in xrange(dim1):</span>
+<span class="s">            if i == idx:</span>
+<span class="s">               basis[i,j] = 0</span>
+<span class="s">            else:</span>
+<span class="s">               i2 = i</span>
+<span class="s">               if i2 &gt; idx:</span>
+<span class="s">                  i2 -= 1</span>
+<span class="s">               k = indexes[i2]</span>
+<span class="s">               if k &gt;= idx:</span>
+<span class="s">                  k += 1 </span>
+<span class="s">               basis[k,j] = lower[i2,j]</span>
+<span class="s">      basis[idx,:] = 0.0</span>
+<span class="s">      basis[:,dim1] = root</span>
+<span class="s">      indexes2 = np.arange(self.config.dim + 1)</span>
+<span class="s">      basis2 = np.zeros_like(basis)</span>
+<span class="s">      for j in xrange(self.config.dim):</span>
+<span class="s">         basis2[:,indexes2[j]] = basis[:,j]</span>
+<span class="s">      extra = basis2.sum(axis=1).reshape((1,self.config.dim))</span>
+<span class="s">      self.generators = np.append(basis2, -extra, axis=0)</span>
+<span class="s">      self.step = self.config.dim * np.sqrt(self.searchStep)</span>
+<span class="s">      if self.step &gt; 1.: self.step = 1.</span>
+<span class="s">      </span>
+<span class="s">&quot;&quot;&quot;</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.3.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Alan J Lockett.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

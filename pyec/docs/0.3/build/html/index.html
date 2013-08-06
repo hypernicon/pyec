@@ -1,0 +1,1719 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Introduction to PyEC &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="#" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="#">PyEC 0.2.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="introduction-to-pyec">
+<h1>Introduction to PyEC<a class="headerlink" href="#introduction-to-pyec" title="Permalink to this headline">¶</a></h1>
+<p>PyEC provides an implementation of several well-known optimization methods with a particular focus on methods of evolutionary computation or natural computation. If you are just interested in optimizing functions, see the section on <cite>Basic Usage</cite> below.</p>
+<p>For the time being, this code is in an experimental stage and will likely change substantially with the next few minor versions.</p>
+<div class="section" id="who-is-pyec-for">
+<h2>Who is PyEC for?<a class="headerlink" href="#who-is-pyec-for" title="Permalink to this headline">¶</a></h2>
+<p>PyEC is intended for three main groups of people:</p>
+<p><strong>Anyone who needs to optimize functions.</strong> PyEC can be used as a drop-in module to perform optimization quickly and accurately. The most common optimization methods have been packaged in an easily accessible form for this purpose, as described in <cite>Basic Usage</cite> below.</p>
+<p><strong>Researchers in Evolutionary Computation.</strong> PyEC contains tools to construct, modify, and parameterize optimization methods. It can be used as a toolbox for the researcher in evolutionary computation to construct evolutionary algorithms on complex search domains, or to test new genetic operators or new combinations of existing evolutionary components. These features are not well documented yet, but the class-specific <cite>Documentation</cite> should help you get started.</p>
+<p><strong>Anyone interested in Stochastic Optimization.</strong> PyEC efficiently implements the most common methods in stochastic optimization. It can be used to test and experiment how different algorithms work, and what effects different parameter settings can have.</p>
+</div>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>PyEC is distributed to PyPi and can be downloaded with <strong>setuptools</strong> using the name <tt class="docutils literal"><span class="pre">pyec</span></tt>, like so:</p>
+<div class="highlight-python"><pre>$ easy_install pyec</pre>
+</div>
+<p>PyEC has dependencies on the linear algebra package <cite>NumPy&lt;http://numpy.scipy.org/&gt;</cite> and the scientific computing package <cite>SciPy&lt;http://www.scipy.org/&gt;</cite>.</p>
+<div class="toctree-wrapper compound">
+<ul class="simple">
+</ul>
+</div>
+</div>
+<div class="section" id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Permalink to this headline">¶</a></h2>
+<p>PyEC provides various optimization methods. If you just want to optimize, the following examples should help. PyEC provides easily accessible optimization routines for Evolutionary Annealing, Differential Evolution, Nelder-Mead, Generating Set Search, CMA-ES, Particle Swarm Optimization, and Simulated Annealing.</p>
+<p>Suppose we start a Python terminal session as follows:</p>
+<div class="highlight-python"><pre>Python 2.6.5 (r265:79359, Mar 24 2010, 01:32:55)
+[GCC 4.0.1 (Apple Inc. build 5493)] on darwin
+Type "help", "copyright", "credits" or "license" for more information.
+&gt;&gt;&gt; import pyec.optimize
+&gt;&gt;&gt; from numpy import *
+&gt;&gt;&gt; def branin(x):
+...    return (x[1] - (5.1/(4*(pi**2)))*(x[0]**2) + (5./pi)*x[0] - 6.)**2 + 10 * (1. - 1./(8.*pi))*cos(x[0])+10.
+...</pre>
+</div>
+<p>To start with, we are going to optimize Branin&#8217;s function. This is a real function in two dimensions. It is defined as</p>
+<div class="math">
+\[f(x,y) = \left(y-\frac{5.1}{4\pi^2}x^2+\frac{5}{\pi}x-6\right)^2 + 10\left(1-\frac{1}{8\pi}\right)\cos(x) + 10\]</div>
+<p>and it has three global optima with <span class="math">\(f(-\pi, 12.275) = f(\pi, 2.275) = f(9.42478, 2.475) = 0.39788735\)</span>. Usually, the optimization is constrained by <span class="math">\(-5 &lt; x &lt; 10\)</span> and <span class="math">\(0 &lt; y &lt; 15\)</span>.</p>
+<p>Here are some examples of PyEC on Branin&#8217;s function with no constraints, on about 2,500 function evaluations (default):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">evolutionary_annealing</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.14159266,  2.27500002]), 0.39788735772973816)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">differential_evolution</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.14100091,  2.25785439]), 0.39819904998361366)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">cmaes</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.14159266,  2.27500001]), 0.39788735772973816)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">nelder_mead</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.14159308,  2.27499873]), 0.39788735773149675)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">generating_set_search</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.12552433,  2.29660443]), 0.39920864246465015)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">particle_swarm_optimization</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.1282098 ,  2.26735578]), 0.39907497646047574)</span>
+</pre></div>
+</div>
+<p>In these examples, all we had to do was to pass our function to one of PyEC&#8217;s optimizers along with the dimension (Branin&#8217;s has 2 inputs variables), and these methods used default configurations in order to locate the global minimum (<tt class="xref py py-func docutils literal"><span class="pre">evolutionary_annealing()</span></tt> requires the <tt class="docutils literal"><span class="pre">space_scale</span></tt> parameter for unconstrained optimization). The return values are a tuple with two items. The first element is the best solution found so far, and the second element is the function value at that solution. In this case, many of the optimizers were not particularly accurate. Some methods missed the global minimum by an error on the order of 0.01, which is much larger than we would prefer, especially for this simple problem. Most of these methods can be made more accurate by replacing some of the default parameters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">differential_evolution</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">CR</span><span class="o">=.</span><span class="mi">2</span><span class="p">,</span> <span class="n">F</span><span class="o">=.</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ 3.14159085,  2.27498739]), 0.39788735794177654)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">generating_set_search</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">expansion_factor</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">initial_step</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="go">(array([ 3.1386125 ,  2.27810758]), 0.3979306095569175)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">particle_swarm_optimization</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">omega</span><span class="o">=-</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">phi_p</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="go">(array([ 3.14159258,  2.27500003]), 0.39788735772976125)</span>
+</pre></div>
+</div>
+<p>Now all but one of the methods have found the global optimum accurately up to eight decimal places.</p>
+<p>If we had wished to find the maximum values rather than the minimum values of the function, we could have passed the parameter <tt class="docutils literal"><span class="pre">minimize=False</span></tt> to any of these optimizers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">differential_evolution</span><span class="p">(</span><span class="n">branin</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">minimize</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In general, a function <span class="math">\(f(x)\)</span> can be maximized by minimizing the alternate function <span class="math">\(-f(x)\)</span> instead, which is what PyEC does internally when <tt class="docutils literal"><span class="pre">minimize=False</span></tt>.</p>
+<p>Branin&#8217;s function is relatively easy to optimize; we would like to try a harder function. PyEC ships with several benchmark multimodal functions, many of which are defined in higher dimensions as well. These benchmarks can be referenced by name when calling PyEC&#8217;s optimizers. One example is Rastrigin&#8217;s function (see &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Rastrigin_function">http://en.wikipedia.org/wiki/Rastrigin_function</a>&gt;):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">rastrigin</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+   <span class="k">return</span> <span class="mi">10</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">x</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Rastrigin&#8217;s has a minimum at the origin, where its function value is 0. PyEC&#8217;s optimizers can find this minimum with a little tweaking:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">differential_evolution</span><span class="p">(</span><span class="s">&quot;rastrigin&quot;</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">2500</span><span class="p">,</span> <span class="n">population</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">CR</span><span class="o">=.</span><span class="mi">2</span><span class="p">,</span> <span class="n">F</span><span class="o">=.</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">(array([ -3.09226981e-05,   2.19169568e-05,   4.46486498e-06,</span>
+<span class="go">         -1.50452001e-05,   6.03987807e-05,  -6.17905562e-06,</span>
+<span class="go">          4.82476074e-05,  -1.02580314e-05,  -2.07212921e-05,</span>
+<span class="go">          9.15748483e-06]), 1.6496982624403245e-06)</span>
+</pre></div>
+</div>
+<p>PyEC&#8217;s optimizers are stochastic; that is, they search the space randomly. No two runs of any optimizer are the same. You can get widely varying results from different runs of the same algorithm, so it&#8217;s best to run an algorithm a few times if you&#8217;re not satisfied with the results:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">cmaes</span><span class="p">(</span><span class="s">&quot;rastrigin&quot;</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">2500</span><span class="p">,</span><span class="n">population</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+<span class="go">(array([  1.48258949e-03,   2.25335429e-04,  -5.35427662e-04,</span>
+<span class="go">         -2.74244483e-03,   3.20044246e-03,  -4.59549462e-03,</span>
+<span class="go">         -2.09654701e-03,   9.93491865e-01,   8.95951435e-04,</span>
+<span class="go">         -9.95219709e-01]), 1.9996060669315057)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">cmaes</span><span class="p">(</span><span class="s">&quot;rastrigin&quot;</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">2500</span><span class="p">,</span><span class="n">population</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+<span class="go">(array([ -4.26366209e-04,  -7.29513508e-04,   5.97365406e-04,</span>
+<span class="go">         -9.93842635e-01,   4.47482962e-04,  -3.32484925e-03,</span>
+<span class="go">         -3.98886672e-03,   4.06692711e-04,  -1.49134732e-03,</span>
+<span class="go">          3.80257643e-03]), 1.0041502969750979)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">cmaes</span><span class="p">(</span><span class="s">&quot;rastrigin&quot;</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="mi">2500</span><span class="p">,</span><span class="n">population</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+<span class="go">(array([ -4.24651080e-04,   7.78200373e-04,   4.80037528e-03,</span>
+<span class="go">          1.06188871e-03,   2.50392639e-04,  -3.00255770e-03,</span>
+<span class="go">         -9.91998151e-01,   5.52063421e-03,  -3.44827888e-03,</span>
+<span class="go">         -9.97582491e-01]), 2.0081777356006967)</span>
+</pre></div>
+</div>
+<p>Every optimizer performs best on some set of problems, and performs worse on others. Here, <tt class="xref py py-func docutils literal"><span class="pre">differential_evolution()</span></tt> performs well on rastrigin, whereas CMA-ES is less reliable on this function. The opposite situation can hold true for other optimization problems.</p>
+</div>
+<div class="section" id="constrained-optimization">
+<h2>Constrained Optimization<a class="headerlink" href="#constrained-optimization" title="Permalink to this headline">¶</a></h2>
+<p>PyEC supports constrained optimization as well. <a class="reference internal" href="#pyec.optimize.Hyperrectangle" title="pyec.optimize.Hyperrectangle"><tt class="xref py py-class docutils literal"><span class="pre">pyec.optimize.Hyperrectangle</span></tt></a> boundaries can be implemented by:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">evolutionary_annealing</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">constraint</span><span class="o">=</span><span class="n">pyec</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">Hyperrectangle</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="mf">2.5</span><span class="p">))</span>
+<span class="go">(array([ 2.5,  7.5]), -5.0)</span>
+</pre></div>
+</div>
+<p>Other constraints can be implemented by creating a subclass of <a class="reference internal" href="#pyec.optimize.Constraint" title="pyec.optimize.Constraint"><tt class="xref py py-class docutils literal"><span class="pre">pyec.optimize.Constraint</span></tt></a> and passing it to the optimizer via the keyword argument <em>constraint</em>.</p>
+</div>
+<div class="section" id="release-notes">
+<h2>Release Notes<a class="headerlink" href="#release-notes" title="Permalink to this headline">¶</a></h2>
+<p>Version 0.2 has changed substantially from version 0.1. Here are some of the changes:</p>
+<ul class="simple">
+<li>Thinned out experimental code</li>
+<li>Added more documentation</li>
+<li>Replaced the 1996 (obsolete) version of CMA-ES with the modern version</li>
+<li>Improved evolutionary annealing; added <tt class="xref py py-class docutils literal"><span class="pre">pyec.distributions.ec.selectors.TournamentAnnealing</span></tt></li>
+<li>Removed dependency on Django</li>
+<li>Removed database support for algorithm results</li>
+<li>Added <a class="reference internal" href="#module-pyec.optimize" title="pyec.optimize"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.optimize</span></tt></a> to provide easy access to optimization routines</li>
+<li>Removed numerous command line scripts</li>
+<li>Improved support for Bayesian networks and greedy structure searching</li>
+<li>Support for Bayesian structure search with Evolutionary Annealing and Simulated Annealing</li>
+</ul>
+<p>The following changes are planned for Version 0.3:</p>
+<ul class="simple">
+<li>Each optimizer should publish its configuration parameter requirements in a code-accessible form.</li>
+<li>Standardize configuration parameters across components.</li>
+<li>Better documentation of each method, especially the componential construction of optimizers in PyEC.</li>
+<li>Basic support for neural networks and neuroevolution.</li>
+<li>Algebraic operators for optimizers, e.g. <tt class="docutils literal"><span class="pre">SimpleGeneticAlgorithm</span> <span class="pre">=</span> <span class="pre">ProportionalSelection</span> <span class="pre">*</span> <span class="pre">-ProportionalSelection</span> <span class="pre">*</span> <span class="pre">OnePointCrossover</span> <span class="pre">*</span> <span class="pre">GaussianMutation[p=-0.1]</span></tt>.</li>
+<li>New training framework derived from self-convolution</li>
+<li>Better support for different search spaces.</li>
+<li>Better support for complex constraint regions.</li>
+<li>Automatic function-specific configuration of some parameters for the main algorithms.</li>
+</ul>
+<p>Release 0.2 is a transitional release, and substantial changes will be made to the internal components for the next few releases.</p>
+</div>
+</div>
+<div class="section" id="documentation">
+<h1>Documentation<a class="headerlink" href="#documentation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-pyec.optimize">
+<span id="optimization"></span><h2>Optimization<a class="headerlink" href="#module-pyec.optimize" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyec.optimize.Constraint">
+<em class="property">class </em><tt class="descclassname">pyec.optimize.</tt><tt class="descname">Constraint</tt><a class="reference internal" href="_modules/pyec/optimize.html#Constraint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.Constraint" title="Permalink to this definition">¶</a></dt>
+<dd><p>A constraint region for optimization. The <tt class="docutils literal"><span class="pre">__call__</span></tt> method of the object should return whether an object satisfies the constrains, and the <tt class="docutils literal"><span class="pre">extent</span></tt> method should specify parameters for a hypercube completely containing the constraint region.</p>
+<dl class="method">
+<dt id="pyec.optimize.Constraint.extent">
+<tt class="descname">extent</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#Constraint.extent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.Constraint.extent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return parameters for a hypercube containing the constraint region.</p>
+<p>If the return values are (center, scale), then the hypercube has a center at <em>center</em> and a side length of 2 times <em>scale</em>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The (center, scale) parameters for a hypercube.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.optimize.Hyperrectangle">
+<em class="property">class </em><tt class="descclassname">pyec.optimize.</tt><tt class="descname">Hyperrectangle</tt><big>(</big><em>center</em>, <em>scale</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#Hyperrectangle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.Hyperrectangle" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Hyperrectangle constraint region.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>center</strong> (<tt class="xref py py-class docutils literal"><span class="pre">numpy.ndarray</span></tt>) &#8211; The center point for the hyperrectangle.</li>
+<li><strong>scale</strong> (<tt class="xref py py-class docutils literal"><span class="pre">numpy.ndarray</span></tt>) &#8211; The distance to the sides for the hyperrectangle.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.cmaes">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">cmaes</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#cmaes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.cmaes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply Correlated Matrix Adaptation Evolution Strategy (CMA-ES) to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/CMA-ES">http://en.wikipedia.org/wiki/CMA-ES</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>parents &#8211; The percentage of the population to use as parents, default 0.5.</li>
+<li>variance &#8211; The standard deviation for CMA-ES to use during initialization, if Gaussian initialization is used (only unconstrained optimization); default is 1.0.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.de">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">de</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.de" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply differential evolution (DE) to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Differential_evolution">http://en.wikipedia.org/wiki/Differential_evolution</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>CR &#8211; The crossover probability for DE, default 0.2.</li>
+<li>F &#8211; The learning rate for DE, default 0.5.</li>
+<li>variance &#8211; The standard deviation for DE to use during unconstrained initialization, default 1.0.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.differential_evolution">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">differential_evolution</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#differential_evolution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.differential_evolution" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply differential evolution (DE) to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Differential_evolution">http://en.wikipedia.org/wiki/Differential_evolution</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>CR &#8211; The crossover probability for DE, default 0.2.</li>
+<li>F &#8211; The learning rate for DE, default 0.5.</li>
+<li>variance &#8211; The standard deviation for DE to use during unconstrained initialization, default 1.0.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.evoanneal">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">evoanneal</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.evoanneal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply evolutionary annealing to optimize a function. See Chapter 11 of &lt;<a class="reference external" href="http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf">http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>learning_rate &#8211; A scaling factor controlling the temperature schedule; smaller numbers search more slowly and thoroughly, larger numbers search faster and less thoroughly.</li>
+<li>variance &#8211; The initial standard deviation of the Gaussian mutation distribution, i.e. how locally the search is spaced. Defaults to 1.0, does not need to be changed.</li>
+<li>space_scale &#8211; For unconstrained optimization, the standard deviation of the initial Gaussian and of the Gaussian warping in the space. Should match a general notion of the size or scale of the function in the search domain.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.evolutionary_annealing">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">evolutionary_annealing</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#evolutionary_annealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.evolutionary_annealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply evolutionary annealing to optimize a function. See Chapter 11 of &lt;<a class="reference external" href="http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf">http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>learning_rate &#8211; A scaling factor controlling the temperature schedule; smaller numbers search more slowly and thoroughly, larger numbers search faster and less thoroughly.</li>
+<li>variance &#8211; The initial standard deviation of the Gaussian mutation distribution, i.e. how locally the search is spaced. Defaults to 1.0, does not need to be changed.</li>
+<li>space_scale &#8211; For unconstrained optimization, the standard deviation of the initial Gaussian and of the Gaussian warping in the space. Should match a general notion of the size or scale of the function in the search domain.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.generating_set_search">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">generating_set_search</tt><big>(</big><em>func</em>, <em>generations=500</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#generating_set_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.generating_set_search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a basic generating set search to optimize a function. See &lt;<a class="reference external" href="http://smartfields.stanford.edu/documents/080403_kolda.pdf">http://smartfields.stanford.edu/documents/080403_kolda.pdf</a>&gt;.</p>
+<p>Uses no search heuristic, and uses the d+1 size basis in dimension d.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>convergence &#8211; The tolerance on the simplex before restarting; default 1e-10.</li>
+<li>penalty_func &#8211; A penalty function for the objective.</li>
+<li>expansion_factor &#8211; Multiplicative expansion factor to use when a new best solution is found; default is 1.1.</li>
+<li>contraction_factor &#8211; Multiplicative contraction factor to use when no new best is found; default is 0.95.</li>
+<li>initial_step &#8211; The initial step.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.gss">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">gss</tt><big>(</big><em>func</em>, <em>generations=500</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.gss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a basic generating set search to optimize a function. See &lt;<a class="reference external" href="http://smartfields.stanford.edu/documents/080403_kolda.pdf">http://smartfields.stanford.edu/documents/080403_kolda.pdf</a>&gt;.</p>
+<p>Uses no search heuristic, and uses the d+1 size basis in dimension d.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>convergence &#8211; The tolerance on the simplex before restarting; default 1e-10.</li>
+<li>penalty_func &#8211; A penalty function for the objective.</li>
+<li>expansion_factor &#8211; Multiplicative expansion factor to use when a new best solution is found; default is 1.1.</li>
+<li>contraction_factor &#8211; Multiplicative contraction factor to use when no new best is found; default is 0.95.</li>
+<li>initial_step &#8211; The initial step.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.nelder_mead">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">nelder_mead</tt><big>(</big><em>func</em>, <em>generations=500</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#nelder_mead"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.nelder_mead" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply Nelder-Mead method to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Nelder-Mead_method">http://en.wikipedia.org/wiki/Nelder-Mead_method</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>convergence &#8211; The tolerance on the simplex before restarting; default 1e-10.</li>
+<li>variance &#8211; The standard deviation for CMA-ES to use during initialization; default is 1.0 (unconstrained spaces).</li>
+<li>alpha, beta, gamma, delta &#8211; standard parameters for Nelder-Mead.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.nm">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">nm</tt><big>(</big><em>func</em>, <em>generations=500</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.nm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply Nelder-Mead method to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Nelder-Mead_method">http://en.wikipedia.org/wiki/Nelder-Mead_method</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>convergence &#8211; The tolerance on the simplex before restarting; default 1e-10.</li>
+<li>variance &#8211; The standard deviation for CMA-ES to use during initialization; default is 1.0 (unconstrained spaces).</li>
+<li>alpha, beta, gamma, delta &#8211; standard parameters for Nelder-Mead.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.optimize">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">optimize</tt><big>(</big><em>configurator</em>, <em>func</em>, <em>dimension=5</em>, <em>population=25</em>, <em>generations=100</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.optimize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Configure and run an optimizer on a function using a <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> object in order to instantiate the optimizer.</p>
+<p>By default the function will be minimize, but maximization can be performed by setting the keyword argument <em>minimize</em> to <tt class="docutils literal"><span class="pre">False</span></tt>.</p>
+<p>Benchmark functions can be optimized by name. The following names are supported:</p>
+<ul class="simple">
+<li>ackley &#8211; A checker-board like oscillator, minimum is -13.37 in 5 dimensions.</li>
+<li>ackley2 &#8211; Exponentiated and centered version of ackley, minimum is 0 at 0.</li>
+<li>griewank &#8211; Oscillator with large scale, minimum at 0.</li>
+<li>langerman &#8211; Sparse, rough, multi-modal. Minimum is 0.98 in five dimensions.</li>
+<li>rosenbrock &#8211; Standard benchmark.</li>
+<li>rastrigin &#8211; Oscillator. Minimum at</li>
+<li>salomon &#8211; Ring oscillation. Minimum 0 at 0.</li>
+<li>schwefel &#8211; Deceptive multimodal function. Minimum is -418 on (-512,512).</li>
+<li>shekel2 &#8211; Shekel&#8217;s foxholes, modified. Minimum is -10.4 in five dimensions.</li>
+<li>sphere &#8211; A spherical paraboloid, minimum is 0 at 0</li>
+<li>whitley &#8211; Complex, fractal like shape with small relevant area. Minimum is 0.0.</li>
+<li>weierstrass &#8211; Everywhere continuous, nowhere differentiable; minimum is 0 at 0.</li>
+</ul>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>configurator</strong> (<tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt>) &#8211; A builder used to generate a parameterized optimizer.</li>
+<li><strong>func</strong> (<em>any callable object or str</em>) &#8211; The function to be optimized, or a lookup key for a benchmark.</li>
+<li><strong>dimension</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The vector dimension in the search domain</li>
+<li><strong>population</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The population size (sample size) for the optimizer.</li>
+<li><strong>generations</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The number of populations to build (number of samples) during optimization.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A tuple (best solution, best value) where the first element is the <em>best solution</em> located during optimization and <em>best value</em> is the value of the function at <em>best solution</em>.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Keyword arguments:</p>
+<ul class="simple">
+<li>minimize &#8211; Whether to minimize the function, otherwise maximize; default is True.</li>
+<li>initial &#8211; A callable (no arguments) that returns random starting points for the initial distribution of the optimizer.</li>
+<li>display &#8211; Show progress information once every second.</li>
+<li>constraint &#8211; A <tt class="xref py py-class docutils literal"><span class="pre">Boundary</span></tt> object implementing a constraint region (default is unconstrained).</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.particle_swarm_optimization">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">particle_swarm_optimization</tt><big>(</big><em>func</em>, <em>generations=100</em>, <em>population=25</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#particle_swarm_optimization"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.particle_swarm_optimization" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply particle swarm optmization to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Particle_swarm_optimization">http://en.wikipedia.org/wiki/Particle_swarm_optimization</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>omega &#8211; The velocity decay.</li>
+<li>phi_g &#8211; The global best influence parameter.</li>
+<li>phi_p &#8211; The local best influence parameter.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.pso">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">pso</tt><big>(</big><em>func</em>, <em>generations=100</em>, <em>population=25</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.pso" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply particle swarm optmization to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Particle_swarm_optimization">http://en.wikipedia.org/wiki/Particle_swarm_optimization</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>omega &#8211; The velocity decay.</li>
+<li>phi_g &#8211; The global best influence parameter.</li>
+<li>phi_p &#8211; The local best influence parameter.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.sa">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">sa</tt><big>(</big><em>func</em>, <em>generations=1000</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#pyec.optimize.sa" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply simulated annealing to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Simulated_annealing">http://en.wikipedia.org/wiki/Simulated_annealing</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>schedule &#8211; One of (log, linear) for a logarithmic or linear cooling schedule, or a function T(n) to return the temperature at time n.</li>
+<li>learning_rate &#8211; The temperature will be divided by the learning rate is a logarithmic or linear schedule is used.</li>
+<li>proposal &#8211; The proposal distribution; a Gaussian with adaptive variance is used by default.</li>
+<li>variance &#8211; Initial standard deviation for the default Gaussian.</li>
+<li>restart_prob &#8211; A probability to restart simulated annealing; 0.001 by default.</li>
+</ul>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyec.optimize.simulated_annealing">
+<tt class="descclassname">pyec.optimize.</tt><tt class="descname">simulated_annealing</tt><big>(</big><em>func</em>, <em>generations=1000</em>, <em>population=1</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/optimize.html#simulated_annealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.optimize.simulated_annealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply simulated annealing to optimize a function. See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Simulated_annealing">http://en.wikipedia.org/wiki/Simulated_annealing</a>&gt;.</p>
+<p>Calls <a class="reference internal" href="#pyec.optimize.optimize" title="pyec.optimize.optimize"><tt class="xref py py-func docutils literal"><span class="pre">optimize()</span></tt></a>.</p>
+<p>Extra keyword arguments:</p>
+<ul class="simple">
+<li>schedule &#8211; One of (log, linear) for a logarithmic or linear cooling schedule, or a function T(n) to return the temperature at time n.</li>
+<li>learning_rate &#8211; The temperature will be divided by the learning rate is a logarithmic or linear schedule is used.</li>
+<li>proposal &#8211; The proposal distribution; a Gaussian with adaptive variance is used by default.</li>
+<li>variance &#8211; Initial standard deviation for the default Gaussian.</li>
+<li>restart_prob &#8211; A probability to restart simulated annealing; 0.001 by default.</li>
+</ul>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyec">
+<span id="basics"></span><h2>Basics<a class="headerlink" href="#module-pyec" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-pyec.config">
+<span id="configuration"></span><h3>Configuration<a class="headerlink" href="#module-pyec.config" title="Permalink to this headline">¶</a></h3>
+<dl class="attribute">
+<dt id="pyec.config.Config">
+<tt class="descclassname">pyec.config.</tt><tt class="descname">Config</tt><a class="reference internal" href="_modules/pyec/config.html#Config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.config.Config" title="Permalink to this definition">¶</a></dt>
+<dd><p>A configuration object for an optimization algorithm. Each optimizer is created with a configuration object that is used to parameterize the optimizer instance. A configuration object may have arbitrary properties and methods. Default versions of methods used by several optimizers are provided.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.config.ConfigBuilder">
+<em class="property">class </em><tt class="descclassname">pyec.config.</tt><tt class="descname">ConfigBuilder</tt><big>(</big><em>algcls</em><big>)</big><a class="reference internal" href="_modules/pyec/config.html#ConfigBuilder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.config.ConfigBuilder" title="Permalink to this definition">¶</a></dt>
+<dd><p>A builder to generate configuration objects with certain parameters.</p>
+<p>A builder creates a specific configuration object for a specific optimization method. Its <tt class="docutils literal"><span class="pre">__init__</span></tt> method is used to set the optimization class and the default parameters. The <tt class="docutils literal"><span class="pre">cfg</span></tt> property can then be modified to replace the defaults, and then <tt class="docutils literal"><span class="pre">configure</span></tt> can be called to generate an optimizer with the desired configuration. When an optimizer is instantiated, a copy of the default configuration is used, so the the builder can be reused.</p>
+<p>Several default training parameters are placed into the <a class="reference internal" href="#pyec.config.Config" title="pyec.config.Config"><tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt></a> object; view the source for details.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>algcls</strong> (<em>class</em>) &#8211; A class object or other generator that produces a <tt class="xref py py-class docutils literal"><span class="pre">PopulationDistribution</span></tt> instance when called.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyec.config.ConfigBuilder.configure">
+<tt class="descname">configure</tt><big>(</big><em>generations</em>, <em>populationSize</em>, <em>dimension=1</em>, <em>function=None</em><big>)</big><a class="reference internal" href="_modules/pyec/config.html#ConfigBuilder.configure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.config.ConfigBuilder.configure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates an optimizer instance and applies the built configuration
+to the optimizer.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>generations</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The number of generations (samples) to take during optimization</li>
+<li><strong>populationSize</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The size of each population per generation (number of proposed solutions per sample)</li>
+<li><strong>dimension</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The dimension of the object, for vector optimization (binary or real); default <cite>1</cite>.</li>
+<li><strong>function</strong> (<em>any callable object</em>) &#8211; A function to be maximized; the fitness function or objective. This function will be placed in the <a class="reference internal" href="#pyec.config.Config" title="pyec.config.Config"><tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt></a> object so that the optimizer can access it as necessary.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The configured optimizer instance, usually a <tt class="xref py py-class docutils literal"><span class="pre">PopulationDistribution</span></tt> instance.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.config.ConfigBuilder.postConfigure">
+<tt class="descname">postConfigure</tt><big>(</big><em>cfg</em><big>)</big><a class="reference internal" href="_modules/pyec/config.html#ConfigBuilder.postConfigure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.config.ConfigBuilder.postConfigure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called by <cite>configure</cite> to install any final properties into the
+<a class="reference internal" href="#pyec.config.Config" title="pyec.config.Config"><tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt></a> object after it has been copied. Properties that 
+are changed by <cite>postConfigure</cite> are not shared among different 
+optimizer instances. This method should be used to install 
+any objects that contain state that is specific to an optimizer.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>cfg</strong> (<a class="reference internal" href="#pyec.config.Config" title="pyec.config.Config"><tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt></a>) &#8211; The copied <a class="reference internal" href="#pyec.config.Config" title="pyec.config.Config"><tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt></a> object.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyec.trainer">
+<span id="trainer"></span><h3>Trainer<a class="headerlink" href="#module-pyec.trainer" title="Permalink to this headline">¶</a></h3>
+<dl class="exception">
+<dt id="pyec.trainer.BadAlgorithm">
+<em class="property">exception </em><tt class="descclassname">pyec.trainer.</tt><tt class="descname">BadAlgorithm</tt><a class="reference internal" href="_modules/pyec/trainer.html#BadAlgorithm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.BadAlgorithm" title="Permalink to this definition">¶</a></dt>
+<dd><p>An Exception to indicate that an optimizer provided as an argument
+cannot be run by <a class="reference internal" href="#pyec.trainer.Trainer" title="pyec.trainer.Trainer"><tt class="xref py py-class docutils literal"><span class="pre">Trainer</span></tt></a>.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.trainer.RunStats">
+<em class="property">class </em><tt class="descclassname">pyec.trainer.</tt><tt class="descname">RunStats</tt><a class="reference internal" href="_modules/pyec/trainer.html#RunStats"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.RunStats" title="Permalink to this definition">¶</a></dt>
+<dd><p>A simple stats recording tool that can be used to aggregate teh amount of time spent in various methods of an optimizer. Keeps track of variables by key names and outputs the time spent between <cite>start</cite> and <cite>stop</cite> for each key. For a recorded key, the average time spent between <cite>start</cite> and <cite>stop</cite> can be retrieved by [], like so:</p>
+<div class="highlight-python"><pre>def checkStats():     
+   stats = RunStats()
+   # start the timer
+   stats.start("test")
+   .. .
+   # stop the timer
+   stats.stop("test")
+   # print just the key "test"
+   print stats["test"]
+   # print all
+   print stats</pre>
+</div>
+<dl class="method">
+<dt id="pyec.trainer.RunStats.start">
+<tt class="descname">start</tt><big>(</big><em>key</em><big>)</big><a class="reference internal" href="_modules/pyec/trainer.html#RunStats.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.RunStats.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start recording time for <cite>key</cite>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>key</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; A name for the key.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.trainer.RunStats.stop">
+<tt class="descname">stop</tt><big>(</big><em>key</em><big>)</big><a class="reference internal" href="_modules/pyec/trainer.html#RunStats.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.RunStats.stop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop recording time for <cite>key</cite>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>key</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The previously started key that is to be stopped.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.trainer.Trainer">
+<em class="property">class </em><tt class="descclassname">pyec.trainer.</tt><tt class="descname">Trainer</tt><big>(</big><em>fitness</em>, <em>optimizer</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/trainer.html#Trainer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.Trainer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tool to run an population-based optimizer on a problem.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>fitness</strong> (<em>any callable object</em>) &#8211; A function to be maximized; the fitness function or objective.</li>
+<li><strong>optimizer</strong> (<tt class="xref py py-class docutils literal"><span class="pre">PopulationDistribution</span></tt>) &#8211; An optimizer to use to optimize the function.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="attribute">
+<dt id="pyec.trainer.Trainer.data">
+<tt class="descname">data</tt><em class="property"> = []</em><a class="headerlink" href="#pyec.trainer.Trainer.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>An int indicating how to group the data.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.trainer.Trainer.train">
+<tt class="descname">train</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/pyec/trainer.html#Trainer.train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.trainer.Trainer.train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the optimizer for <cite>optimizer.config.generations</cite> generations, each with population size <cite>optimizer.config.populationSize</cite>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A tuple with two elements containing the best solution found and the maximal fitness (objective value).</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="module-pyec.distribution">
+<span id="distributions"></span><h2>Distributions<a class="headerlink" href="#module-pyec.distribution" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-pyec.distribution.basic"></span><dl class="class">
+<dt id="pyec.distribution.basic.Bernoulli">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">Bernoulli</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#Bernoulli"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.Bernoulli" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Bernoulli distribution over the binary cube. Returns a <tt class="xref py py-class docutils literal"><span class="pre">numpy.ndarray</span></tt> with values of 0.0 or 1.0.</p>
+<p>Uses <tt class="docutils literal"><span class="pre">config.dim</span></tt> to determine the number of bits. The probability of bit being on is given by <tt class="docutils literal"><span class="pre">config.bitFlipProb</span></tt>, which defaults to 0.5.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.BernoulliTernary">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">BernoulliTernary</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#BernoulliTernary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.BernoulliTernary" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Bernoulli distribution that allows for missing variables.
+Generates a <tt class="xref py py-class docutils literal"><span class="pre">TernaryString</span></tt> with all bits filled in randomly.
+The variable <tt class="docutils literal"><span class="pre">config.dim</span></tt> is used to determine the number of bits.
+The probability of a bit being on is 0.50. More complicated 
+distributions over <tt class="xref py py-class docutils literal"><span class="pre">TernaryString</span></tt> are available in 
+<a class="reference internal" href="#module-pyec.distribution.ec.mutators" title="pyec.distribution.ec.mutators"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.mutators</span></tt></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.Distribution">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">Distribution</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#Distribution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.Distribution" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Distribution that can be sampled.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; A set of configuration parameters for the distribution.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyec.distribution.basic.Distribution.batch">
+<tt class="descname">batch</tt><big>(</big><em>sampleSize</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#Distribution.batch"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.Distribution.batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a sample from the distribution.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>sampleSize</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The size of the sample to generate.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.FixedCube">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">FixedCube</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#FixedCube"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.FixedCube" title="Permalink to this definition">¶</a></dt>
+<dd><p>A uniform distribution over a fixed cube in Euclidean space. Used as an 
+initial distribution for constrained optimization problems.</p>
+<p>Uses <tt class="docutils literal"><span class="pre">config.dim</span></tt> to determine the dimension.</p>
+<p>Checks <tt class="docutils literal"><span class="pre">config.in_bounds</span></tt> to verify that the produced points
+are inside of the constrained region.</p>
+<p>Uses <tt class="docutils literal"><span class="pre">config.in_bounds.extent</span></tt> to determine the size of the
+hypercube to generate points for. If this function does not exist, <tt class="docutils literal"><span class="pre">config.center</span></tt> and <tt class="docutils literal"><span class="pre">config.scale</span></tt> are used instead.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.Gaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">Gaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#Gaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.Gaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Gaussian Proposal Distribution. Used as an initial distribution
+by several algorithms, and as a proposal distribution by Simulated Annealing.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.PopulationDistribution">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">PopulationDistribution</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution" title="Permalink to this definition">¶</a></dt>
+<dd><p>A distribution governing a population-based optimizer.</p>
+<p>This is the parent class for optimizers in PyEC. Its core methods are <tt class="docutils literal"><span class="pre">batch</span></tt>, inherited from <a class="reference internal" href="#pyec.distribution.basic.Distribution" title="pyec.distribution.basic.Distribution"><tt class="xref py py-class docutils literal"><span class="pre">Distribution</span></tt></a>, and <tt class="docutils literal"><span class="pre">update</span></tt>, which reports the population and the scores after a generation is complete.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+<dl class="classmethod">
+<dt id="pyec.distribution.basic.PopulationDistribution.configurator">
+<em class="property">classmethod </em><tt class="descname">configurator</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution.configurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution.configurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ConfigurationBuilder</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="pyec.distribution.basic.PopulationDistribution.configure">
+<em class="property">classmethod </em><tt class="descname">configure</tt><big>(</big><em>generations</em>, <em>populationSize</em>, <em>dimension=1</em>, <em>function=None</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution.configure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution.configure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a Config object</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.basic.PopulationDistribution.convert">
+<tt class="descname">convert</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution.convert"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution.convert" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a point to a scorable representation. Deprecated. Use <tt class="docutils literal"><span class="pre">Config.convert</span></tt> instead.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params x:</th><td class="field-body">The candidate solution</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.basic.PopulationDistribution.run">
+<tt class="descname">run</tt><big>(</big><em>segment='test'</em>, <em>fitness=None</em>, <em>extraArgs=None</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a <tt class="xref py py-class docutils literal"><span class="pre">Trainer</span></tt> object and run this <a class="reference internal" href="#pyec.distribution.basic.PopulationDistribution" title="pyec.distribution.basic.PopulationDistribution"><tt class="xref py py-class docutils literal"><span class="pre">PopulationDistribution</span></tt></a> instance to maximize a fitness function.</p>
+<p>After running this method, the property <tt class="docutils literal"><span class="pre">PopulationDistribution.trainer</span></tt> will contain the <tt class="xref py py-class docutils literal"><span class="pre">Trainer</span></tt> object used to optimize the function.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>segment</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; A name for storing in the database. Deprecated.</li>
+<li><strong>fitness</strong> (<em>any callable object</em>) &#8211; The fitness function (objective) to be maximized. If <tt class="docutils literal"><span class="pre">None</span></tt>, then the function will be looked up from <tt class="docutils literal"><span class="pre">pyec.util.registry.BENCHMARKS</span></tt> based on the <tt class="docutils literal"><span class="pre">function</span></tt> property of the <tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>.</li>
+<li><strong>extraArgs</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#list" title="(in Python v2.7)"><em>list</em></a>) &#8211; Any extra args to be passed to <tt class="docutils literal"><span class="pre">pyec.util.registry.BENCHMARKS</span></tt>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The maximum score discovered during optimization.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.basic.PopulationDistribution.update">
+<tt class="descname">update</tt><big>(</big><em>n</em>, <em>population</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#PopulationDistribution.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.PopulationDistribution.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the state of the <a class="reference internal" href="#pyec.distribution.basic.PopulationDistribution" title="pyec.distribution.basic.PopulationDistribution"><tt class="xref py py-class docutils literal"><span class="pre">PopulationDistribution</span></tt></a> with the latest population and its fitness scores.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name" colspan="2">Params population:</th></tr>
+<tr><td>&nbsp;</td><td class="field-body">The previous population with its fitness scores. If <tt class="docutils literal"><span class="pre">self.config.sorted</span></tt> is <tt class="docutils literal"><span class="pre">True</span></tt>, the list will be sorted by descending score by <tt class="xref py py-class docutils literal"><span class="pre">Trainer</span></tt>. Outside of a <tt class="xref py py-class docutils literal"><span class="pre">Trainer</span></tt> instance, the caller must ensure that the population is sorted (or not sorted) as necessary.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.basic.ProposalDistribution">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.basic.</tt><tt class="descname">ProposalDistribution</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#ProposalDistribution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.ProposalDistribution" title="Permalink to this definition">¶</a></dt>
+<dd><p>A proposal distribution for e.g. simulated annealing.</p>
+<dl class="method">
+<dt id="pyec.distribution.basic.ProposalDistribution.adjust">
+<tt class="descname">adjust</tt><big>(</big><em>rate</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#ProposalDistribution.adjust"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.ProposalDistribution.adjust" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given the current acceptance rate, alter the distribution as needed.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.basic.ProposalDistribution.densityRatio">
+<tt class="descname">densityRatio</tt><big>(</big><em>x1</em>, <em>x2</em>, <em>i=None</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/basic.html#ProposalDistribution.densityRatio"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.basic.ProposalDistribution.densityRatio" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given two points, give the ratio of the densities p(x1) / p(x2).</p>
+</dd></dl>
+
+</dd></dl>
+
+<div class="section" id="module-pyec.distribution.ec">
+<span id="evolutionary-computation"></span><h3>Evolutionary Computation<a class="headerlink" href="#module-pyec.distribution.ec" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="module-pyec.distribution.ec.ga"></span><dl class="class">
+<dt id="pyec.distribution.ec.ga.GAConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.ga.</tt><tt class="descname">GAConfigurator</tt><big>(</big><em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/ga.html#GAConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.ga.GAConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for a standard genetic algorithm (binary encoding) to search in real spaces.</p>
+<p>See source code for defaults (16-bit representation, mutation rate .05).</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.ga.GeneticAlgorithm">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.ga.</tt><tt class="descname">GeneticAlgorithm</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/ga.html#GeneticAlgorithm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.ga.GeneticAlgorithm" title="Permalink to this definition">¶</a></dt>
+<dd><p>A genetic algorithm for optimization of real functions on Euclidean spaces.</p>
+<p>Support various selection, crossover, and mutation methods.
+Supports binary and real encodings.</p>
+<p>Config parameters
+* elitist = One of (True, False), whether to keep the best solution so far in the population.
+* selection = One of (proportional, tournament, ranking), different selection methods.
+* rankingMethod = One of (linear, nonlinear), when using ranking selection.
+* crossover = One of (none, uniform, onePoint, twoPoint, intermediate, onePointDual), the type of crossover to use.
+* crossoverOrder = Integer, the number of parents for recombination (default 2).
+* space = One of (real, binary); the type of encoding.
+* mutation = One of (gauss, cauchyOne), the type of mutation in real encodings (binary uses a standard Bernoulli mutation).
+* varInit = float or float array, standard deviation (for real space).
+* bitFlipProbs = float or float array, mutation probability (for binary space).</p>
+<p>Binary encoding uses other parameters to encode/decode the parameters
+* rawdim &#8211; The number of real dimensions.
+* rawscale &#8211; The scale of the space in real dimensions.
+* rawcenter &#8211; The center of the space in real dimensions.
+* binaryDepth &#8211; The number of bits to use for each real parameter.</p>
+<p>Generic config parameters
+* dim &#8211; The dimension of the search domain (for binary, the total number of bits)
+* center &#8211; The center of the search domain (.5 for binary)
+* scale &#8211; The scale of the search domain (.5 for binary)
+* bounded &#8211; Whether the optimization is constrained.</p>
+<p>See <a class="reference internal" href="#module-pyec.distribution.ec.selectors" title="pyec.distribution.ec.selectors"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.selectors</span></tt></a> for selection methods and <a class="reference internal" href="#module-pyec.distribution.ec.mutators" title="pyec.distribution.ec.mutators"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.mutators</span></tt></a> for mutation distributions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params config:</th><td class="field-body">The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.ga.RGAConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.ga.</tt><tt class="descname">RGAConfigurator</tt><big>(</big><em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/ga.html#RGAConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.ga.RGAConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for a real-coded Genetic Algorithm.</p>
+<p>See the source code for defaults (uniform crossover, ranking selection, gaussian mutation).</p>
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.ec.es"></span><dl class="class">
+<dt id="pyec.distribution.ec.es.ESConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.es.</tt><tt class="descname">ESConfigurator</tt><big>(</big><em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/es.html#ESConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.es.ESConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for a standard (mu/rho +, lambda)&#8211;ES.</p>
+<p>By default:</p>
+<ul class="simple">
+<li>mu = 10</li>
+<li>lambda = 50</li>
+<li>rho = 1 (no crossover)</li>
+<li>&#8220;Plus&#8221; style selection is used.</li>
+<li>If rho &gt; 1, dominant crossover is used.</li>
+<li>Adaptive mutation is used.</li>
+</ul>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.es.EvolutionStrategy">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.es.</tt><tt class="descname">EvolutionStrategy</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/es.html#EvolutionStrategy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.es.EvolutionStrategy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements a configurable Evolution Strategy.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Evolution_strategy">http://en.wikipedia.org/wiki/Evolution_strategy</a>&gt; for details and references.</p>
+<p>Config parameters:</p>
+<ul class="simple">
+<li>mu &#8211; The number of parents to create the next generation</li>
+<li>rho &#8211; The number of parents for crossover</li>
+<li>selection &#8211; The type of selection, either &#8220;plus&#8221; or &#8220;comma&#8221;</li>
+<li>crossover &#8211; The type of crossover, either &#8220;dominant&#8221; or &#8220;intermediate&#8221;</li>
+<li>mutation &#8211; Either &#8220;cma&#8221; or &#8220;es&#8221;; &#8220;es&#8221; is default.</li>
+<li>dim &#8211; The dimension of the binary or real space being optimized</li>
+<li>space &#8211; Either &#8220;real&#8221; or &#8220;binary&#8221;; the type of vector space being optimized</li>
+<li>bounded &#8211; Whether the search domain is constrained.</li>
+<li>populationSize &#8211; The size of the population for each generation.</li>
+</ul>
+<p>The parameter &#8220;lambda&#8221; is determined by the populationSize and mu, along with the choice of selection (plus or comma).</p>
+<p>In real space, initial distribution is either a <tt class="xref py py-class docutils literal"><span class="pre">FixedCube</span></tt> if the search is constrained, or a <tt class="xref py py-class docutils literal"><span class="pre">Gaussian</span></tt> if not. In binary space, the initial distribution is a random <tt class="xref py py-class docutils literal"><span class="pre">Bernoulli</span></tt>.</p>
+<p>Standard mutation (&#8220;es&#8221;) adapts the mutation parameters for each
+member of the population. If mutation is &#8220;cma&#8221;, then the algorithm of 
+Hansen and Ostermeier (1996) is used. Note that the 1996 algorithm 
+for CMA differs from the modern version (2001) and maintains
+separate mutation parameters for each solution.</p>
+<p>Adaptive parameters are not implemented for binary spaces.</p>
+<p>Extra parameters for CMA:</p>
+<ul class="simple">
+<li>cmaCumulation (.025)</li>
+<li>cmaCorrelation (.025)</li>
+<li>cmaDamping (.00005)</li>
+</ul>
+<p>See <a class="reference internal" href="#module-pyec.distribution.ec.selectors" title="pyec.distribution.ec.selectors"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.selectors</span></tt></a> for selection methods and <a class="reference internal" href="#module-pyec.distribution.ec.mutators" title="pyec.distribution.ec.mutators"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.mutators</span></tt></a> for mutation distributions.</p>
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.ec.evoanneal"></span><dl class="class">
+<dt id="pyec.distribution.ec.evoanneal.BEAConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.evoanneal.</tt><tt class="descname">BEAConfigurator</tt><a class="reference internal" href="_modules/pyec/distribution/ec/evoanneal.html#BEAConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.evoanneal.BEAConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for a binary-encoded evolutionary annealing instance.</p>
+<p>See souce for defaults (Tournament annealing selection, uniform crossover, 16-bit conversions, area-sensitive bernoulli mutation).</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.evoanneal.BayesEAConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.evoanneal.</tt><tt class="descname">BayesEAConfigurator</tt><a class="reference internal" href="_modules/pyec/distribution/ec/evoanneal.html#BayesEAConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.evoanneal.BayesEAConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for an evolutionary annealing structure search for a Bayesian network.</p>
+<p>See source for defaults (Tournament annealing, DAGs, area-sensitive structure proposals).</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.evoanneal.EvolutionaryAnnealing">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.evoanneal.</tt><tt class="descname">EvolutionaryAnnealing</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/evoanneal.html#EvolutionaryAnnealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.evoanneal.EvolutionaryAnnealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>The evolutionary annealing algorithm as described in</p>
+<p>&lt;<a class="reference external" href="http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf">http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf</a>&gt;</p>
+<p>Lockett, Alan. General-Purpose Optimization Through Information Maximization. Ph.D. Thesis (2011).</p>
+<p>Config parameters:
+* learningRate &#8211; A multiplier for the annealed cooling schedule
+* selection &#8211; One of (proportional, tournament), the type of annealed selection to use
+* crossover &#8211; One of (none, uniform, onePoint, twoPoint, intermediate, merge, crossbayes), the type of crossover to use.
+* mutation &#8211; One of (gauss, uniform, uniformBinary, cauchy, bernoulli, structure), the type of mutation to use. Must match the space being searched.
+* passArea &#8211; Whether to use area-sensitive mutation distributions.
+* varInit &#8211; Scaling factor for standard deviation in Gaussian spaces. Defaults to 1.0.
+* initialDistribution &#8211; The initial distribution to sample.</p>
+<p>See <a class="reference internal" href="#module-pyec.distribution.ec.selectors" title="pyec.distribution.ec.selectors"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.selectors</span></tt></a> for selection methods and <a class="reference internal" href="#module-pyec.distribution.ec.mutators" title="pyec.distribution.ec.mutators"><tt class="xref py py-mod docutils literal"><span class="pre">pyec.distribution.ec.mutators</span></tt></a> for mutation distributions.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.evoanneal.REAConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.evoanneal.</tt><tt class="descname">REAConfigurator</tt><a class="reference internal" href="_modules/pyec/distribution/ec/evoanneal.html#REAConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.evoanneal.REAConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> for Real-Space Evolutionary Annealing.</p>
+<p>See source for defaults (Tournament annealing selection, area-sensitive gaussian mutation, learning rate = 1, no crossover).</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyec.distribution.ec.selectors">
+<span id="evolutionary-operators"></span><h3>Evolutionary Operators<a class="headerlink" href="#module-pyec.distribution.ec.selectors" title="Permalink to this headline">¶</a></h3>
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Annealing">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Annealing</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Annealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Annealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base class for annealed selection. See e.g.</p>
+<p>Lockett, A. and Miikkulainen, R. Real-space Evolutionary Annealing, 2011.</p>
+<p>For a more up-to-date version, see Chapters 11-13 of</p>
+<p>&lt;<a class="reference external" href="http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf">http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf</a>&gt;.</p>
+<p>Config parameters
+* taylorCenter &#8211; Center for Taylor approximation to annealing densities.
+* taylorDepth &#8211; The number of coefficients to use for Taylor approximation of the annealing density.
+* activeField &#8211; One of (point, binary, bayes, other); refers to the properties of <tt class="xref py py-class docutils literal"><span class="pre">pyec.util.partitions.Point</span></tt> and differs according to the space being searched. Future versions will deprecate this aspect.  
+* initialDistribution &#8211; A distribution used to select central points in the first generation.
+* anneal &#8211; Whether to apply annealing or use a constant temperature of 1.0; defaults to <tt class="docutils literal"><span class="pre">True</span></tt>.
+* segment &#8211; The name of the <tt class="xref py py-class docutils literal"><span class="pre">pyec.util.partitions.Segment</span></tt> object that refers to the points and partitions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyec.distribution.ec.selectors.Annealing.sample">
+<tt class="descname">sample</tt><big>(</big><big>)</big><a class="headerlink" href="#pyec.distribution.ec.selectors.Annealing.sample" title="Permalink to this definition">¶</a></dt>
+<dd><p>Child classes should override this method in order to select a point
+from the active segment in <tt class="xref py py-class docutils literal"><span class="pre">pyec.util.partitions.Point</span></tt>.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.BestSelection">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">BestSelection</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#BestSelection"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.BestSelection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Select the best member of the population.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Elitist">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Elitist</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Elitist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Elitist" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements elitism by replacing the worst member of the population
+with the best solution seen so far. If the best solution is a member
+of the current population, nothing is changed.</p>
+<p>Elitism can be applied to an algorithm by convolving elitism with the 
+algorithm.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.EvolutionStrategySelection">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">EvolutionStrategySelection</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#EvolutionStrategySelection"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.EvolutionStrategySelection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements standard selection for evolution strategies.</p>
+<p>The property <tt class="docutils literal"><span class="pre">config.selection</span></tt> determines the type of selection, either &#8220;plus&#8221; or &#8220;comma&#8221;.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyec.distribution.ec.selectors.EvolutionStrategySelection.update">
+<tt class="descname">update</tt><big>(</big><em>generation</em>, <em>population</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#EvolutionStrategySelection.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.EvolutionStrategySelection.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>the population is ordered by score, take the first mu as parents</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.LinearRanker">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">LinearRanker</tt><big>(</big><em>pressure</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#LinearRanker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.LinearRanker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the probability of selecting a solution from a population using linear ranking selection.</p>
+<p>See e.g. &lt;<a class="reference external" href="http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html">http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html</a>&gt;</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.NonlinearRanker">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">NonlinearRanker</tt><big>(</big><em>pressure</em>, <em>popSize</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#NonlinearRanker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.NonlinearRanker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the probability of selecting a solution from a population using nonlinear ranking selection.</p>
+<p>See e.g. &lt;<a class="reference external" href="http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html">http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html</a>&gt;</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Proportional">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Proportional</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Proportional"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Proportional" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fitness proportional selection (roulette wheel selection).</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Fitness_proportionate_selection">http://en.wikipedia.org/wiki/Fitness_proportionate_selection</a>&gt;.</p>
+<p>Fitness values must be nonnegative.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.ProportionalAnnealing">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">ProportionalAnnealing</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#ProportionalAnnealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.ProportionalAnnealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Proportional Annealing, as described in</p>
+<p>Lockett, A. And Miikkulainen, R. Real-space Evolutionary Annealing (2011).</p>
+<p>See <a class="reference internal" href="#pyec.distribution.ec.selectors.Annealing" title="pyec.distribution.ec.selectors.Annealing"><tt class="xref py py-class docutils literal"><span class="pre">Annealing</span></tt></a> for more details.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Ranker">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Ranker</tt><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Ranker"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Ranker" title="Permalink to this definition">¶</a></dt>
+<dd><p>A policy to allocate selection probabilities under ranking selection.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Ranking">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Ranking</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Ranking"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Ranking" title="Permalink to this definition">¶</a></dt>
+<dd><p>Ranking selection, e.g. &lt;<a class="reference external" href="http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html">http://www.pohlheim.com/Papers/mpga_gal95/gal2_3.html</a>&gt;</p>
+<p>Takes a ranking function which weights individuals according to rank
+Rank is 1 for lowest, K for highest in population of size K</p>
+<p>Config parameters
+* ranker &#8211; A <a class="reference internal" href="#pyec.distribution.ec.selectors.Ranker" title="pyec.distribution.ec.selectors.Ranker"><tt class="xref py py-class docutils literal"><span class="pre">Ranker</span></tt></a> instance for the ranking policy.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Selection">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Selection</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Selection"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Selection" title="Permalink to this definition">¶</a></dt>
+<dd><p>A selection method (Abstract class)</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.Tournament">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">Tournament</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#Tournament"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.Tournament" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tournament selection on the entire population.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Tournament_selection">http://en.wikipedia.org/wiki/Tournament_selection</a>&gt;.</p>
+<p>Config parameters:
+* selectionPressure &#8211; The probability of choosing the best member of the population.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.selectors.TournamentAnnealing">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.selectors.</tt><tt class="descname">TournamentAnnealing</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/selectors.html#TournamentAnnealing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.selectors.TournamentAnnealing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tournament Annealing, as described in Chapter 11 of</p>
+<p>&lt;<a class="reference external" href="http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf">http://nn.cs.utexas.edu/downloads/papers/lockett.thesis.pdf</a>&gt;</p>
+<p>See <a class="reference internal" href="#pyec.distribution.ec.selectors.Annealing" title="pyec.distribution.ec.selectors.Annealing"><tt class="xref py py-class docutils literal"><span class="pre">Annealing</span></tt></a> for more details.</p>
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.ec.mutators"></span><dl class="class">
+<dt id="pyec.distribution.ec.mutators.AreaSensitiveBernoulli">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">AreaSensitiveBernoulli</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#AreaSensitiveBernoulli"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.AreaSensitiveBernoulli" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#pyec.distribution.ec.mutators.AreaSensitiveGaussian" title="pyec.distribution.ec.mutators.AreaSensitiveGaussian"><tt class="xref py py-class docutils literal"><span class="pre">AreaSensitiveGaussian</span></tt></a> but with a Bernoulli. The bit flipping prob decays with the logarithm of the area of a partition region, i.e.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">bf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">varInit</span> <span class="o">/</span> <span class="p">(</span><span class="o">-</span><span class="n">log</span><span class="p">(</span><span class="n">area</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>where <tt class="docutils literal"><span class="pre">area</span></tt> is the volume of a partition region.</p>
+<p>Config parameters
+* varInit &#8211; The scaling factor for the bit flipping probability.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.AreaSensitiveGaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">AreaSensitiveGaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#AreaSensitiveGaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.AreaSensitiveGaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gaussian mutation with a variance that depends on the size of a
+partition of the space (see <tt class="xref py py-class docutils literal"><span class="pre">pyec.util.partitions.Partition</span></tt>).</p>
+<p>Config parameters:
+* varInit &#8211; Scaling factor for the standard deviation; defaults to 1.0.
+* scale &#8211; The scale of the space (half the width).
+* spaceScale &#8211; A scaling factor for the space size.</p>
+<p>Standard deviation is determined by:</p>
+<div class="highlight-python"><pre>sd = (varInit * scale * (area ** (1/dim)) / sqrt(generation)</pre>
+</div>
+<p>where <tt class="docutils literal"><span class="pre">dim</span></tt> is the dimension of the space (<tt class="docutils literal"><span class="pre">config.dim</span></tt>) and 
+<tt class="docutils literal"><span class="pre">area</span></tt> is the volume of the partition region for the object being mutated.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Bernoulli">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Bernoulli</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Bernoulli"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Bernoulli" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bernoulli mutation on a <tt class="xref py py-class docutils literal"><span class="pre">TernaryString</span></tt> object. Randomly flips bits on a fully specified binary string.</p>
+<p>Config parameters
+* bitFlipProbs &#8211; The probability of flipping a bit.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Cauchy">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Cauchy</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Cauchy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Cauchy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cauchy mutation.</p>
+<p>Config parameters
+* stddev &#8211; The width parameter of the Cauchy (pi)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">CorrelatedEndogeneousGaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#CorrelatedEndogeneousGaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements an old (1996) version of mutation for the 
+Correlated Matrix Adaption method of Hansen and Ostermeier.</p>
+<p>This method is obsolete and is very different from the modern version.</p>
+<dl class="method">
+<dt id="pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.pack">
+<tt class="descname">pack</tt><big>(</big><em>mat</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#CorrelatedEndogeneousGaussian.pack"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.pack" title="Permalink to this definition">¶</a></dt>
+<dd><p>take a N x N matrix and make a N(N-1)/2 array</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.unpack">
+<tt class="descname">unpack</tt><big>(</big><em>sig</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#CorrelatedEndogeneousGaussian.unpack"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.CorrelatedEndogeneousGaussian.unpack" title="Permalink to this definition">¶</a></dt>
+<dd><p>take a N(N-1)/2 array and make a N x N matrix</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Crosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Crosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Crosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Crosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base class to perform recombination on a given list of organisms.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Crossover">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Crossover</tt><big>(</big><em>selector</em>, <em>crossFunc</em>, <em>order=2</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Crossover"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Crossover" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs recombination using a crossover policy given by
+a <a class="reference internal" href="#pyec.distribution.ec.mutators.Crosser" title="pyec.distribution.ec.mutators.Crosser"><tt class="xref py py-class docutils literal"><span class="pre">Crosser</span></tt></a> instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>selector</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Selector</span></tt>) &#8211; A selector to use for choosing the &#8220;mother&#8221; organism(s).</li>
+<li><strong>crossFunc</strong> &#8211; A crossover policy.</li>
+<li><strong>order</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The number of parents; default is 2.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.DecayedBernoulli">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">DecayedBernoulli</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#DecayedBernoulli"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.DecayedBernoulli" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#pyec.distribution.ec.mutators.DecayedGaussian" title="pyec.distribution.ec.mutators.DecayedGaussian"><tt class="xref py py-class docutils literal"><span class="pre">DecayedGaussian</span></tt></a>, but with a Bernoulli distribution instead of a Gaussian; the bit flipping probability decays to zero.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.DecayedCauchy">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">DecayedCauchy</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#DecayedCauchy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.DecayedCauchy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#pyec.distribution.ec.mutators.DecayedGaussian" title="pyec.distribution.ec.mutators.DecayedGaussian"><tt class="xref py py-class docutils literal"><span class="pre">DecayedGaussian</span></tt></a>, except with a Cauchy distribution.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.DecayedGaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">DecayedGaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#DecayedGaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.DecayedGaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gaussian mutation with a variance that decreases over time according to fixed formula.</p>
+<p>Config parameters
+* varInit &#8211; A scale factor on the standard deviation.
+* varDecay &#8211; A multiplicative decay factor.
+* varExp &#8211; An exponential decay factor.</p>
+<p>Standard deviation is determined by:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">sd</span> <span class="o">=</span> <span class="n">varInit</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">generation</span> <span class="o">*</span> <span class="n">varDecay</span><span class="p">)</span> <span class="o">**</span> <span class="n">varExp</span><span class="p">)</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.DominantCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">DominantCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#DominantCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.DominantCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cross multiple organisms using generalized uniform crossover.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.EndogeneousGaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">EndogeneousGaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#EndogeneousGaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.EndogeneousGaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gaussian mutation for evolution strategies, where the adaptive mutation parameters are encoded with the organism.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Gaussian">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Gaussian</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Gaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Gaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gaussian mutation. Randomly mutates a random selection of components
+of a real vector.</p>
+<p>Config parameters
+* stddev &#8211; The standard deviation to use. 
+* mutationProb &#8211; The probability of mutating each component; defaults to 1.0</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.IntermediateCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">IntermediateCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#IntermediateCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.IntermediateCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cross multiple organisms by averaging their values component-wise.</p>
+<p>Normally used by evolution strategies.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.Mutation">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">Mutation</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Mutation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Mutation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base class for mutation operators. Provides a method <tt class="docutils literal"><span class="pre">mutate</span></tt> that performs mutation on a single member of a population.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyec.distribution.ec.mutators.Mutation.mutate">
+<tt class="descname">mutate</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#Mutation.mutate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.Mutation.mutate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform mutation on a single organism.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>x</strong> (<em>varied</em>) &#8211; The organism to mutate.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The mutated organism.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.OnePointCauchy">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">OnePointCauchy</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#OnePointCauchy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.OnePointCauchy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mutates just one random component of an organism with a Cauchy distribution.</p>
+<p>Config parameter
+* stddev &#8211; The width parameter of the Cauchy (pi)
+* mutationProb &#8211; The probability of applying the mutation.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.OnePointCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">OnePointCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#OnePointCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.OnePointCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cross two organisms at one point and return only one crossed version.</p>
+<p>Unlike <a class="reference internal" href="#pyec.distribution.ec.mutators.OnePointDualCrosser" title="pyec.distribution.ec.mutators.OnePointDualCrosser"><tt class="xref py py-class docutils literal"><span class="pre">OnePointDualCrosser</span></tt></a>, this discards the second variant.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm">http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm</a>)#One-point_crossover&gt;.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.OnePointDualCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">OnePointDualCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#OnePointDualCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.OnePointDualCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>One point crossover, mixes two individuals to create two new individuals by splicing them together at a random index.</p>
+<p>So:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">xxxxxx</span>
+<span class="n">oooooo</span>
+</pre></div>
+</div>
+<p>might become:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">xxoooo</span>
+<span class="n">ooxxxx</span>
+</pre></div>
+</div>
+<p>And both items are returned.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm">http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm</a>)#One-point_crossover&gt;.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.TwoPointCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">TwoPointCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#TwoPointCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.TwoPointCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cross two organism by wrapping them into a circle, picking two indices, and combining the two rings.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm">http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm</a>)#Two-point_crossover&gt;.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.UniformArea">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">UniformArea</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#UniformArea"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.UniformArea" title="Permalink to this definition">¶</a></dt>
+<dd><p>Uniform mutation within a partition region. The region is determined by the organism being mutated.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.UniformAreaBernoulli">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">UniformAreaBernoulli</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#UniformAreaBernoulli"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.UniformAreaBernoulli" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#pyec.distribution.ec.mutators.UniformArea" title="pyec.distribution.ec.mutators.UniformArea"><tt class="xref py py-class docutils literal"><span class="pre">UniformArea</span></tt></a>, but in a binary space. Flips the bits on an organism so that after the mutation, the object remains in the same partition region, and is uniformly chosen within the partition region. See <tt class="xref py py-class docutils literal"><span class="pre">pyec.util.partitions.Partition</span></tt>.</p>
+<p>Config params
+* varInit &#8211; Scaling factor for the bit flipping probability.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>config</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration parameters.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.ec.mutators.UniformCrosser">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.ec.mutators.</tt><tt class="descname">UniformCrosser</tt><big>(</big><em>config</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/ec/mutators.html#UniformCrosser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.ec.mutators.UniformCrosser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Uniform crossover.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm">http://en.wikipedia.org/wiki/Crossover_(genetic_algorithm</a>)#Uniform_Crossover_and_Half_Uniform_Crossover&gt;</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyec.distribution.de">
+<span id="natural-computation"></span><h3>Natural Computation<a class="headerlink" href="#module-pyec.distribution.de" title="Permalink to this headline">¶</a></h3>
+<dl class="class">
+<dt id="pyec.distribution.de.DEConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.de.</tt><tt class="descname">DEConfigurator</tt><big>(</big><em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/de.html#DEConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.de.DEConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> object to create a <a class="reference internal" href="#pyec.distribution.de.DifferentialEvolution" title="pyec.distribution.de.DifferentialEvolution"><tt class="xref py py-class docutils literal"><span class="pre">DifferentialEvolution</span></tt></a> instance.</p>
+<p>Default parameters are CR = .2, F = .5; these can be changed
+by editing the <cite>cfg</cite> property of this object.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.de.DifferentialEvolution">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.de.</tt><tt class="descname">DifferentialEvolution</tt><big>(</big><em>cfg</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/de.html#DifferentialEvolution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.de.DifferentialEvolution" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements Differential Evolution (DE) as described by:</p>
+<p>Storn, Ranier and Price, Kenneth. Differential Evolution &#8211; A simple and efficient adaptive scheme for global optimization over continuous spaces. 1995.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/Differential_evolution">http://en.wikipedia.org/wiki/Differential_evolution</a>&gt; for algorithm details.</p>
+<p>See &lt;<a class="reference external" href="http://www.hvass-labs.org/people/magnus/publications/pedersen10good-de.pdf">http://www.hvass-labs.org/people/magnus/publications/pedersen10good-de.pdf</a>&gt; for a good discussion of parameter settings for DE.</p>
+<p>Config parameters:</p>
+<ul class="simple">
+<li>CR &#8211; crossover probability</li>
+<li>F &#8211; the learning rate</li>
+<li>initialDistribution &#8211; the initial distribution to generate the first population</li>
+<li>populationSize &#8211; the population size</li>
+<li>center &#8211; the center of the space</li>
+<li>scale &#8211; the scale of the space</li>
+<li>dim &#8211; the number of real dimensions in the space</li>
+</ul>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>cfg</strong> (<tt class="xref py py-class docutils literal"><span class="pre">Config</span></tt>) &#8211; The configuration object for Differential Evolution.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.cmaes"></span><dl class="class">
+<dt id="pyec.distribution.cmaes.Cmaes">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.cmaes.</tt><tt class="descname">Cmaes</tt><big>(</big><em>cfg</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/cmaes.html#Cmaes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.cmaes.Cmaes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The Correlated Matrix Adaptation Evolution Strategy algorithm as described by:</p>
+<p>Hansen, N. and Ostermeier, A. Completely derandomized self-adaptation in evolution strategies. In Evolutionary Computation 9(2), pp 159&#8211;195, 2001.</p>
+<p>See &lt;<a class="reference external" href="http://en.wikipedia.org/wiki/CMA-ES">http://en.wikipedia.org/wiki/CMA-ES</a>&gt; for details.</p>
+<p>A fast-converging population-based optimizer that finds reasonably good
+solutions with relatively few resources. In general, each population is sampled from a multi-variate Gaussian whose parameters are altered to optimize the probability of finding good solutions.</p>
+<p>Akimoto (2010) proved that CMA-ES is an instance of Natural Evolution Strategies (Wierstra, 2008), which implements a gradient-following method at the population level.</p>
+<p>Config parameters 
+* muProportion &#8211; the ratio of <cite>mu</cite> to <cite>lambda</cite>, i.e. the proportion of solutions from each generation used as parents for the next. By default equal to 0.5.
+* initialDistribution &#8211; the distribution used to sample the initial mean
+* populationSize &#8211; the size of the population for each generation
+* scale &#8211; the scale of the space, used to initialize the variance of the Gaussian
+* dim &#8211; the dimension of the real vector space being searched.
+* restart &#8211; whether to restart when the distribution collapses; defaults to <tt class="docutils literal"><span class="pre">True</span></tt> (see e.g. <a href="#id1"><span class="problematic" id="id2">`</span></a>Auger and Hansen, 2005)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Params cfg:</th><td class="field-body">The configuration object for CMA-ES.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyec.distribution.cmaes.CmaesConfigurator">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.cmaes.</tt><tt class="descname">CmaesConfigurator</tt><big>(</big><em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/cmaes.html#CmaesConfigurator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.cmaes.CmaesConfigurator" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <tt class="xref py py-class docutils literal"><span class="pre">ConfigBuilder</span></tt> object to construct the 
+Correlated Matrix Adaption Evolution Strategy (CMA-ES).</p>
+<p>By default, sets the ratio of <cite>mu</cite> over <cite>lambda</cite> to .5</p>
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.pso"></span><span class="target" id="module-pyec.distribution.eda"></span></div>
+<div class="section" id="module-pyec.distribution.neldermead">
+<span id="direct-search"></span><h3>Direct Search<a class="headerlink" href="#module-pyec.distribution.neldermead" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="module-pyec.distribution.gss"></span><p>Based on Kolda, Lewis, and Torczon, Optimization by Direct Search: New Perspectives on Some Classical and Modern Methods (2003)</p>
+<blockquote>
+<div>Primarily implemented to enable MADS (Audet and Dennis, 2006)</div></blockquote>
+</div>
+<div class="section" id="module-pyec.distribution.bayes">
+<span id="bayesian-networks"></span><h3>Bayesian Networks<a class="headerlink" href="#module-pyec.distribution.bayes" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="module-pyec.distribution.bayes.net"></span><span class="target" id="module-pyec.distribution.bayes.variables"></span><span class="target" id="module-pyec.distribution.bayes.sample"></span><span class="target" id="module-pyec.distribution.bayes.score"></span><span class="target" id="module-pyec.distribution.bayes.structure"></span><span class="target" id="module-pyec.distribution.bayes.structure.greedy"></span><span class="target" id="module-pyec.distribution.bayes.structure.proposal"></span></div>
+<div class="section" id="module-pyec.distribution.boltzmann">
+<span id="boltzmann-machines"></span><h3>Boltzmann Machines<a class="headerlink" href="#module-pyec.distribution.boltzmann" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="module-pyec.distribution.boltzmann.bm"></span><span class="target" id="module-pyec.distribution.boltzmann.rbm"></span><dl class="class">
+<dt id="pyec.distribution.boltzmann.rbm.rbm">
+<em class="property">class </em><tt class="descclassname">pyec.distribution.boltzmann.rbm.</tt><tt class="descname">rbm</tt><big>(</big><em>vsize</em>, <em>hsize</em>, <em>lr=0.01</em>, <em>mo=0.90000000000000002</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm" title="Permalink to this definition">¶</a></dt>
+<dd><p>a binary rbm</p>
+<dl class="method">
+<dt id="pyec.distribution.boltzmann.rbm.rbm.bucket">
+<tt class="descname">bucket</tt><big>(</big><em>sample</em>, <em>Z=1.0</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm.bucket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm.bucket" title="Permalink to this definition">¶</a></dt>
+<dd><p>build a dictionary containing a histogram</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.boltzmann.rbm.rbm.energy">
+<tt class="descname">energy</tt><big>(</big><em>x</em>, <em>useAlternate=False</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm.energy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm.energy" title="Permalink to this definition">¶</a></dt>
+<dd><p>compute the energy function</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.boltzmann.rbm.rbm.energy2">
+<tt class="descname">energy2</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm.energy2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm.energy2" title="Permalink to this definition">¶</a></dt>
+<dd><p>compute the energy function</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.boltzmann.rbm.rbm.partition">
+<tt class="descname">partition</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm.partition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm.partition" title="Permalink to this definition">¶</a></dt>
+<dd><p>compute the partition function - only for small dimension !!!</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyec.distribution.boltzmann.rbm.rbm.trainAutonomous">
+<tt class="descname">trainAutonomous</tt><big>(</big><em>data</em>, <em>epochs</em>, <em>nchains=100</em>, <em>nsteps=1</em><big>)</big><a class="reference internal" href="_modules/pyec/distribution/boltzmann/rbm.html#rbm.trainAutonomous"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.distribution.boltzmann.rbm.rbm.trainAutonomous" title="Permalink to this definition">¶</a></dt>
+<dd><p>data is 3-d
+d1 = batch num
+d2 = example num
+d3 = input index</p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-pyec.distribution.boltzmann.sample"></span></div>
+</div>
+<div class="section" id="module-pyec.util">
+<span id="utilities"></span><h2>Utilities<a class="headerlink" href="#module-pyec.util" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-pyec.util.TernaryString"></span><dl class="class">
+<dt id="pyec.util.TernaryString.TernaryString">
+<em class="property">class </em><tt class="descclassname">pyec.util.TernaryString.</tt><tt class="descname">TernaryString</tt><big>(</big><em>base</em>, <em>known</em><big>)</big><a class="reference internal" href="_modules/pyec/util/TernaryString.html#TernaryString"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.util.TernaryString.TernaryString" title="Permalink to this definition">¶</a></dt>
+<dd><p>A ternary string with three values: True, False, and Unknown</p>
+<dl class="method">
+<dt id="pyec.util.TernaryString.TernaryString.distance">
+<tt class="descname">distance</tt><big>(</big><em>x</em>, <em>upTo</em><big>)</big><a class="reference internal" href="_modules/pyec/util/TernaryString.html#TernaryString.distance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.util.TernaryString.TernaryString.distance" title="Permalink to this definition">¶</a></dt>
+<dd><p>hamming distance</p>
+</dd></dl>
+
+</dd></dl>
+
+<span class="target" id="module-pyec.util.cache"></span><span class="target" id="module-pyec.util.partitions"></span><span class="target" id="module-pyec.util.registry"></span><span class="target" id="module-pyec.util.benchmark"></span><dl class="class">
+<dt id="pyec.util.benchmark.mix">
+<em class="property">class </em><tt class="descclassname">pyec.util.benchmark.</tt><tt class="descname">mix</tt><big>(</big><em>code</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/pyec/util/benchmark.html#mix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyec.util.benchmark.mix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take convex combo of two benchmarks, e.g.</p>
+<p>.2_shekel2_langerman</p>
+<p>Only works if optimizers have the same center, scale</p>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
+<li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
+<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Introduction to PyEC</a><ul>
+<li><a class="reference internal" href="#who-is-pyec-for">Who is PyEC for?</a></li>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#basic-usage">Basic Usage</a></li>
+<li><a class="reference internal" href="#constrained-optimization">Constrained Optimization</a></li>
+<li><a class="reference internal" href="#release-notes">Release Notes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#documentation">Documentation</a><ul>
+<li><a class="reference internal" href="#module-pyec.optimize">Optimization</a></li>
+<li><a class="reference internal" href="#module-pyec">Basics</a><ul>
+<li><a class="reference internal" href="#module-pyec.config">Configuration</a></li>
+<li><a class="reference internal" href="#module-pyec.trainer">Trainer</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-pyec.distribution">Distributions</a><ul>
+<li><a class="reference internal" href="#module-pyec.distribution.ec">Evolutionary Computation</a></li>
+<li><a class="reference internal" href="#module-pyec.distribution.ec.selectors">Evolutionary Operators</a></li>
+<li><a class="reference internal" href="#module-pyec.distribution.de">Natural Computation</a></li>
+<li><a class="reference internal" href="#module-pyec.distribution.neldermead">Direct Search</a></li>
+<li><a class="reference internal" href="#module-pyec.distribution.bayes">Bayesian Networks</a></li>
+<li><a class="reference internal" href="#module-pyec.distribution.boltzmann">Boltzmann Machines</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-pyec.util">Utilities</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="#">PyEC 0.2.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

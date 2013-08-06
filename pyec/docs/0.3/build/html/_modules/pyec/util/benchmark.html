@@ -1,0 +1,575 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.util.benchmark &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.util.benchmark</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">time</span> <span class="kn">import</span> <span class="n">time</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="k">class</span> <span class="nc">Fitness</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+<div class="viewcode-block" id="mix"><a class="viewcode-back" href="../../../index.html#pyec.util.benchmark.mix">[docs]</a><span class="k">class</span> <span class="nc">mix</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      Take convex combo of two benchmarks, e.g.</span>
+<span class="sd">      </span>
+<span class="sd">      .2_shekel2_langerman</span>
+<span class="sd">      </span>
+<span class="sd">      Only works if optimizers have the same center, scale</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">code</span>
+      <span class="kn">from</span> <span class="nn">pyec.util.registry</span> <span class="kn">import</span> <span class="n">BENCHMARKS</span>
+      <span class="n">alpha</span><span class="p">,</span> <span class="n">bm1</span><span class="p">,</span> <span class="n">bm2</span> <span class="o">=</span> <span class="n">code</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;_&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bm1</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">bm1</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">bm2</span> <span class="o">=</span> <span class="n">BENCHMARKS</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">bm2</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">bm1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">bm2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">code</span>
+      
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">center</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bm1</span><span class="o">.</span><span class="n">center</span>
+
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">scale</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bm1</span><span class="o">.</span><span class="n">scale</span>
+</div>
+<span class="k">class</span> <span class="nc">zero</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;zero&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">30</span>
+   
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="mf">0.0</span>
+
+<span class="k">class</span> <span class="nc">triangle</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;triangle&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">30</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="mi">30</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">brownian</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;brownian&#39;</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+   <span class="n">npoints</span> <span class="o">=</span> <span class="mi">100000</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">npoints</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">points</span> <span class="o">=</span> <span class="n">append</span><span class="p">(</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)),</span> <span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">npoints</span> <span class="p">)</span><span class="o">*</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">))</span><span class="o">.</span><span class="n">cumsum</span><span class="p">())</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">max</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+      <span class="k">print</span> <span class="s">&quot;OPTIMA: &quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">optima</span>
+
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">optima</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">argmax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">npoints</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span>
+      
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npoints</span><span class="p">))</span>
+      <span class="n">low</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+      <span class="k">if</span> <span class="n">idx</span><span class="o">+</span><span class="mi">1</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="p">):</span>
+         <span class="k">return</span> <span class="n">low</span>
+      <span class="n">high</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="p">[</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+      <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">low</span> <span class="o">+</span> <span class="p">(</span><span class="n">high</span><span class="o">-</span><span class="n">low</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">idx</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">npoints</span><span class="p">))</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npoints</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">sphere</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;sphere&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">1.24653389732</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">12.5517407446</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">84.4811682744</span><span class="p">}</span>
+   
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">ellipsoid</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;ellipsoid&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">((</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">array</span><span class="p">([(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))]))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">rotatedEllipsoid</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;rotatedEllipsoid&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="n">array</span><span class="p">([(</span><span class="n">x</span><span class="p">[:</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">**</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))])</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">rosenbrock</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;rosenbrock&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">100.254411334</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">2926.19681132</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">64226.1129662</span><span class="p">}</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="p">(((</span><span class="n">x</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">1</span> <span class="o">-</span> <span class="n">x</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">rastrigin</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;rastrigin&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">16.5666569839</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">70.0783885545</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">272.726670512</span><span class="p">}</span>
+   
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">x</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">rotatedRastrigin</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;rotatedRastrigin&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">rotation</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">y</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">y</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">miscaledRastrigin</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;miscaledRastrigin&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">exponent</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span> <span class="n">i</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))])</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="p">(</span><span class="mi">10</span> <span class="o">**</span> <span class="n">exponent</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">y</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">y</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">rotatedMiscaledRastrigin</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;rotatedMiscaledRastrigin&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">rotation</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">z</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+      <span class="n">exponent</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span> <span class="n">i</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">))])</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">z</span> <span class="o">*</span> <span class="p">(</span><span class="mi">10</span> <span class="o">**</span> <span class="n">exponent</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">y</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">y</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">schwefel</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span><span class="o">=</span><span class="s">&#39;schwefel&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">418.982887272433799807913601398</span><span class="p">,</span> <span class="mf">420.968746</span><span class="p">)</span>
+   <span class="n">constraints</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">512</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">99.0700267949</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">187.057745911</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">270.419068269</span><span class="p">}</span>
+   
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">ret</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="o">-</span><span class="n">x</span> <span class="o">*</span> <span class="n">sin</span><span class="p">(</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">))))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">ret</span>
+
+
+<span class="k">class</span> <span class="nc">rotatedSchwefel</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;rotatedSchwefel&#39;</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">512</span>
+   
+   
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">optima</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span>  <span class="p">(</span><span class="o">-</span><span class="mf">418.982887272433799807913601398</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation</span><span class="p">,</span> <span class="mf">420.968746</span><span class="p">))</span>
+   
+   <span class="n">constraints</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">rotation</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rotation</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="o">-</span><span class="n">y</span> <span class="o">*</span> <span class="n">sin</span><span class="p">(</span><span class="n">sqrt</span><span class="p">(</span><span class="n">y</span><span class="p">)))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">salomon</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;salomon&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">30</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">0.927447772137</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">2.45340291359</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">5.73966936808</span><span class="p">}</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">dist</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="o">-</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="o">*</span><span class="n">dist</span><span class="p">)</span> <span class="o">+</span> <span class="o">.</span><span class="mi">1</span> <span class="o">*</span> <span class="n">dist</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">whitley</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;whitley&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+   <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">5.12</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">43.9978162421</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">20726.1396051</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">5018118.90275</span><span class="p">}</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">i</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+      <span class="n">j</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)),</span> <span class="n">x</span><span class="p">)</span>
+      <span class="n">z</span> <span class="o">=</span> <span class="mi">100</span> <span class="o">*</span> <span class="p">(((</span><span class="n">i</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">j</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">1</span> <span class="o">-</span> <span class="n">j</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">((</span><span class="n">z</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">/</span><span class="mi">4000</span> <span class="o">-</span> <span class="n">cos</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">ackley</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;ackley&#39;</span>
+   <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span><span class="mi">30</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">30</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">0.39327698875</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">24.2500919966</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">184.940661429</span><span class="p">}</span>
+ 
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="mi">2</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">4.59010163415866756508876278531</span><span class="p">,</span> <span class="p">[</span><span class="n">array</span><span class="p">([</span><span class="mf">1.5096201</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.7548651</span><span class="p">]),</span> <span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">1.5096201</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.7548651</span><span class="p">])]),</span>
+      <span class="mi">5</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">13.37957500565419</span><span class="p">,</span> <span class="p">[</span><span class="n">array</span><span class="p">([</span><span class="mf">1.5157285</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1151432</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1096511</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1038473</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.7471183</span><span class="p">]),</span> <span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">1.5157285</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1151432</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1096511</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.1038473</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.7471183</span><span class="p">])]),</span>
+      <span class="mi">10</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">2.79702225e+01</span><span class="p">,</span> <span class="p">[</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">10</span><span class="p">)])]),</span>
+      <span class="mi">25</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">71.718032647654681</span><span class="p">,</span> <span class="p">[</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">25</span><span class="p">)])])</span>
+   <span class="p">}</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="n">exp</span><span class="p">(</span><span class="o">-.</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">x</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> \
+              <span class="o">+</span> <span class="mi">3</span> <span class="o">*</span> <span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">x</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">sin</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:])))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">ackley2</span><span class="p">(</span><span class="n">ackley</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;ackley2&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">2.44160814804</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">4.05947132414</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">5.50904625047</span><span class="p">}</span>
+   
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="o">-</span><span class="mi">20</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-.</span><span class="mo">02</span> <span class="o">*</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="p">)</span> \
+       <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">+</span> <span class="mi">20</span> <span class="o">+</span> <span class="n">e</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">langerman</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;langerman&#39;</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">5</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">10</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">0.745930648524</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">0.964946108148</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">0.0</span><span class="p">}</span>
+   <span class="n">A</span> <span class="o">=</span> <span class="n">array</span><span class="p">(</span>
+      <span class="p">[</span>
+         <span class="p">[</span><span class="mf">9.681</span><span class="p">,</span> <span class="mf">0.667</span><span class="p">,</span> <span class="mf">4.783</span><span class="p">,</span> <span class="mf">9.095</span><span class="p">,</span> <span class="mf">3.517</span><span class="p">,</span> <span class="mf">9.325</span><span class="p">,</span> <span class="mf">6.544</span><span class="p">,</span> <span class="mf">0.211</span><span class="p">,</span> <span class="mf">5.122</span><span class="p">,</span> <span class="mf">2.020</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">9.400</span><span class="p">,</span> <span class="mf">2.041</span><span class="p">,</span> <span class="mf">3.788</span><span class="p">,</span> <span class="mf">7.931</span><span class="p">,</span> <span class="mf">2.882</span><span class="p">,</span> <span class="mf">2.672</span><span class="p">,</span> <span class="mf">3.568</span><span class="p">,</span> <span class="mf">1.284</span><span class="p">,</span> <span class="mf">7.033</span><span class="p">,</span> <span class="mf">7.374</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.025</span><span class="p">,</span> <span class="mf">9.152</span><span class="p">,</span> <span class="mf">5.114</span><span class="p">,</span> <span class="mf">7.621</span><span class="p">,</span> <span class="mf">4.564</span><span class="p">,</span> <span class="mf">4.711</span><span class="p">,</span> <span class="mf">2.996</span><span class="p">,</span> <span class="mf">6.126</span><span class="p">,</span> <span class="mf">0.734</span><span class="p">,</span> <span class="mf">4.982</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">2.196</span><span class="p">,</span> <span class="mf">0.415</span><span class="p">,</span> <span class="mf">5.649</span><span class="p">,</span> <span class="mf">6.979</span><span class="p">,</span> <span class="mf">9.510</span><span class="p">,</span> <span class="mf">9.166</span><span class="p">,</span> <span class="mf">6.304</span><span class="p">,</span> <span class="mf">6.054</span><span class="p">,</span> <span class="mf">9.377</span><span class="p">,</span> <span class="mf">1.426</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.074</span><span class="p">,</span> <span class="mf">8.777</span><span class="p">,</span> <span class="mf">3.467</span><span class="p">,</span> <span class="mf">1.863</span><span class="p">,</span> <span class="mf">6.708</span><span class="p">,</span> <span class="mf">6.349</span><span class="p">,</span> <span class="mf">4.534</span><span class="p">,</span> <span class="mf">0.276</span><span class="p">,</span> <span class="mf">7.633</span><span class="p">,</span> <span class="mf">1.567</span><span class="p">]</span>
+      <span class="p">]</span>
+   <span class="p">)</span>
+   
+   <span class="n">c</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span>
+      <span class="mf">0.806</span><span class="p">,</span> <span class="mf">0.517</span><span class="p">,</span> <span class="mf">0.100</span><span class="p">,</span> <span class="mf">0.908</span><span class="p">,</span> <span class="mf">0.965</span>
+   <span class="p">])</span>
+   
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="mi">2</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.08093846723926811925764468469</span><span class="p">,</span> <span class="n">array</span><span class="p">([</span><span class="mf">9.6810707</span><span class="p">,</span> <span class="mf">0.6666515</span><span class="p">])),</span>
+      <span class="mi">5</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.964999919793332</span><span class="p">,</span> <span class="n">array</span><span class="p">([</span><span class="mf">8.07400</span><span class="p">,</span> <span class="mf">8.777001</span><span class="p">,</span> <span class="mf">3.467004</span><span class="p">,</span> <span class="mf">1.863013</span><span class="p">,</span> <span class="mf">6.707995</span><span class="p">])),</span>
+      <span class="mi">10</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.965</span><span class="p">,</span> <span class="n">array</span><span class="p">([</span><span class="mf">0.0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">10</span><span class="p">)]))</span>
+   <span class="p">}</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="p">((</span><span class="n">outer</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">A</span><span class="p">[:</span><span class="mi">5</span><span class="p">,:</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+      <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">y</span> <span class="o">/</span> <span class="n">pi</span><span class="p">)</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">pi</span> <span class="o">*</span> <span class="n">y</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+      
+
+
+<span class="k">class</span> <span class="nc">shekelsFoxholes</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;shekelsFoxholes&#39;</span>
+   <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">15</span><span class="p">,</span><span class="mi">15</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">5</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">10</span>
+   <span class="n">A</span> <span class="o">=</span> <span class="n">array</span><span class="p">(</span>
+      <span class="p">[</span>
+         <span class="p">[</span><span class="mf">9.681</span><span class="p">,</span> <span class="mf">0.667</span><span class="p">,</span> <span class="mf">4.783</span><span class="p">,</span> <span class="mf">9.095</span><span class="p">,</span> <span class="mf">3.517</span><span class="p">,</span> <span class="mf">9.325</span><span class="p">,</span> <span class="mf">6.544</span><span class="p">,</span> <span class="mf">0.211</span><span class="p">,</span> <span class="mf">5.122</span><span class="p">,</span> <span class="mf">2.020</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">9.400</span><span class="p">,</span> <span class="mf">2.041</span><span class="p">,</span> <span class="mf">3.788</span><span class="p">,</span> <span class="mf">7.931</span><span class="p">,</span> <span class="mf">2.882</span><span class="p">,</span> <span class="mf">2.672</span><span class="p">,</span> <span class="mf">3.568</span><span class="p">,</span> <span class="mf">1.284</span><span class="p">,</span> <span class="mf">7.033</span><span class="p">,</span> <span class="mf">7.374</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.025</span><span class="p">,</span> <span class="mf">9.152</span><span class="p">,</span> <span class="mf">5.114</span><span class="p">,</span> <span class="mf">7.621</span><span class="p">,</span> <span class="mf">4.564</span><span class="p">,</span> <span class="mf">4.711</span><span class="p">,</span> <span class="mf">2.996</span><span class="p">,</span> <span class="mf">6.126</span><span class="p">,</span> <span class="mf">0.734</span><span class="p">,</span> <span class="mf">4.982</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">2.196</span><span class="p">,</span> <span class="mf">0.415</span><span class="p">,</span> <span class="mf">5.649</span><span class="p">,</span> <span class="mf">6.979</span><span class="p">,</span> <span class="mf">9.510</span><span class="p">,</span> <span class="mf">9.166</span><span class="p">,</span> <span class="mf">6.304</span><span class="p">,</span> <span class="mf">6.054</span><span class="p">,</span> <span class="mf">9.377</span><span class="p">,</span> <span class="mf">1.426</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.074</span><span class="p">,</span> <span class="mf">8.777</span><span class="p">,</span> <span class="mf">3.467</span><span class="p">,</span> <span class="mf">1.863</span><span class="p">,</span> <span class="mf">6.708</span><span class="p">,</span> <span class="mf">6.349</span><span class="p">,</span> <span class="mf">4.534</span><span class="p">,</span> <span class="mf">0.276</span><span class="p">,</span> <span class="mf">7.633</span><span class="p">,</span> <span class="mf">1.567</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">7.650</span><span class="p">,</span> <span class="mf">5.658</span><span class="p">,</span> <span class="mf">0.720</span><span class="p">,</span> <span class="mf">2.764</span><span class="p">,</span> <span class="mf">3.278</span><span class="p">,</span> <span class="mf">5.283</span><span class="p">,</span> <span class="mf">7.474</span><span class="p">,</span> <span class="mf">6.274</span><span class="p">,</span> <span class="mf">1.409</span><span class="p">,</span> <span class="mf">8.208</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">1.256</span><span class="p">,</span> <span class="mf">3.605</span><span class="p">,</span> <span class="mf">8.623</span><span class="p">,</span> <span class="mf">6.905</span><span class="p">,</span> <span class="mf">4.584</span><span class="p">,</span> <span class="mf">8.133</span><span class="p">,</span> <span class="mf">6.071</span><span class="p">,</span> <span class="mf">6.888</span><span class="p">,</span> <span class="mf">4.187</span><span class="p">,</span> <span class="mf">5.448</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.314</span><span class="p">,</span> <span class="mf">2.261</span><span class="p">,</span> <span class="mf">4.224</span><span class="p">,</span> <span class="mf">1.781</span><span class="p">,</span> <span class="mf">4.124</span><span class="p">,</span> <span class="mf">0.932</span><span class="p">,</span> <span class="mf">8.129</span><span class="p">,</span> <span class="mf">8.658</span><span class="p">,</span> <span class="mf">1.208</span><span class="p">,</span> <span class="mf">5.762</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">0.226</span><span class="p">,</span> <span class="mf">8.858</span><span class="p">,</span> <span class="mf">1.420</span><span class="p">,</span> <span class="mf">0.945</span><span class="p">,</span> <span class="mf">1.622</span><span class="p">,</span> <span class="mf">4.698</span><span class="p">,</span> <span class="mf">6.228</span><span class="p">,</span> <span class="mf">9.096</span><span class="p">,</span> <span class="mf">0.972</span><span class="p">,</span> <span class="mf">7.637</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">7.305</span><span class="p">,</span> <span class="mf">2.228</span><span class="p">,</span> <span class="mf">1.242</span><span class="p">,</span> <span class="mf">5.928</span><span class="p">,</span> <span class="mf">9.133</span><span class="p">,</span> <span class="mf">1.826</span><span class="p">,</span> <span class="mf">4.060</span><span class="p">,</span> <span class="mf">5.204</span><span class="p">,</span> <span class="mf">8.713</span><span class="p">,</span> <span class="mf">8.247</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">0.652</span><span class="p">,</span> <span class="mf">7.027</span><span class="p">,</span> <span class="mf">0.508</span><span class="p">,</span> <span class="mf">4.876</span><span class="p">,</span> <span class="mf">8.807</span><span class="p">,</span> <span class="mf">4.632</span><span class="p">,</span> <span class="mf">5.808</span><span class="p">,</span> <span class="mf">6.937</span><span class="p">,</span> <span class="mf">3.291</span><span class="p">,</span> <span class="mf">7.016</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">2.699</span><span class="p">,</span> <span class="mf">3.516</span><span class="p">,</span> <span class="mf">5.874</span><span class="p">,</span> <span class="mf">4.119</span><span class="p">,</span> <span class="mf">4.461</span><span class="p">,</span> <span class="mf">7.496</span><span class="p">,</span> <span class="mf">8.817</span><span class="p">,</span> <span class="mf">0.690</span><span class="p">,</span> <span class="mf">6.593</span><span class="p">,</span> <span class="mf">9.789</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.327</span><span class="p">,</span> <span class="mf">3.897</span><span class="p">,</span> <span class="mf">2.017</span><span class="p">,</span> <span class="mf">9.570</span><span class="p">,</span> <span class="mf">9.825</span><span class="p">,</span> <span class="mf">1.150</span><span class="p">,</span> <span class="mf">1.395</span><span class="p">,</span> <span class="mf">3.885</span><span class="p">,</span> <span class="mf">6.354</span><span class="p">,</span> <span class="mf">0.109</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">2.132</span><span class="p">,</span> <span class="mf">7.006</span><span class="p">,</span> <span class="mf">7.136</span><span class="p">,</span> <span class="mf">2.641</span><span class="p">,</span> <span class="mf">1.882</span><span class="p">,</span> <span class="mf">5.943</span><span class="p">,</span> <span class="mf">7.273</span><span class="p">,</span> <span class="mf">7.691</span><span class="p">,</span> <span class="mf">2.880</span><span class="p">,</span> <span class="mf">0.564</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">4.707</span><span class="p">,</span> <span class="mf">5.579</span><span class="p">,</span> <span class="mf">4.080</span><span class="p">,</span> <span class="mf">0.581</span><span class="p">,</span> <span class="mf">9.698</span><span class="p">,</span> <span class="mf">8.542</span><span class="p">,</span> <span class="mf">8.077</span><span class="p">,</span> <span class="mf">8.515</span><span class="p">,</span> <span class="mf">9.231</span><span class="p">,</span> <span class="mf">4.670</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.304</span><span class="p">,</span> <span class="mf">7.559</span><span class="p">,</span> <span class="mf">8.567</span><span class="p">,</span> <span class="mf">0.322</span><span class="p">,</span> <span class="mf">7.128</span><span class="p">,</span> <span class="mf">8.392</span><span class="p">,</span> <span class="mf">1.472</span><span class="p">,</span> <span class="mf">8.524</span><span class="p">,</span> <span class="mf">2.277</span><span class="p">,</span> <span class="mf">7.826</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.632</span><span class="p">,</span> <span class="mf">4.409</span><span class="p">,</span> <span class="mf">4.832</span><span class="p">,</span> <span class="mf">5.768</span><span class="p">,</span> <span class="mf">7.050</span><span class="p">,</span> <span class="mf">6.715</span><span class="p">,</span> <span class="mf">1.711</span><span class="p">,</span> <span class="mf">4.323</span><span class="p">,</span> <span class="mf">4.405</span><span class="p">,</span> <span class="mf">4.591</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">4.887</span><span class="p">,</span> <span class="mf">9.112</span><span class="p">,</span> <span class="mf">0.170</span><span class="p">,</span> <span class="mf">8.967</span><span class="p">,</span> <span class="mf">9.693</span><span class="p">,</span> <span class="mf">9.867</span><span class="p">,</span> <span class="mf">7.508</span><span class="p">,</span> <span class="mf">7.770</span><span class="p">,</span> <span class="mf">8.382</span><span class="p">,</span> <span class="mf">6.740</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">2.440</span><span class="p">,</span> <span class="mf">6.686</span><span class="p">,</span> <span class="mf">4.299</span><span class="p">,</span> <span class="mf">1.007</span><span class="p">,</span> <span class="mf">7.008</span><span class="p">,</span> <span class="mf">1.427</span><span class="p">,</span> <span class="mf">9.398</span><span class="p">,</span> <span class="mf">8.480</span><span class="p">,</span> <span class="mf">9.950</span><span class="p">,</span> <span class="mf">1.675</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">6.306</span><span class="p">,</span> <span class="mf">8.583</span><span class="p">,</span> <span class="mf">6.084</span><span class="p">,</span> <span class="mf">1.138</span><span class="p">,</span> <span class="mf">4.350</span><span class="p">,</span> <span class="mf">3.134</span><span class="p">,</span> <span class="mf">7.853</span><span class="p">,</span> <span class="mf">6.061</span><span class="p">,</span> <span class="mf">7.457</span><span class="p">,</span> <span class="mf">2.258</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">0.652</span><span class="p">,</span> <span class="mf">2.343</span><span class="p">,</span> <span class="mf">1.370</span><span class="p">,</span> <span class="mf">0.821</span><span class="p">,</span> <span class="mf">1.310</span><span class="p">,</span> <span class="mf">1.063</span><span class="p">,</span> <span class="mf">0.689</span><span class="p">,</span> <span class="mf">8.819</span><span class="p">,</span> <span class="mf">8.833</span><span class="p">,</span> <span class="mf">9.070</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">5.558</span><span class="p">,</span> <span class="mf">1.272</span><span class="p">,</span> <span class="mf">5.756</span><span class="p">,</span> <span class="mf">9.857</span><span class="p">,</span> <span class="mf">2.279</span><span class="p">,</span> <span class="mf">2.764</span><span class="p">,</span> <span class="mf">1.284</span><span class="p">,</span> <span class="mf">1.677</span><span class="p">,</span> <span class="mf">1.244</span><span class="p">,</span> <span class="mf">1.234</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">3.352</span><span class="p">,</span> <span class="mf">7.549</span><span class="p">,</span> <span class="mf">9.817</span><span class="p">,</span> <span class="mf">9.437</span><span class="p">,</span> <span class="mf">8.687</span><span class="p">,</span> <span class="mf">4.167</span><span class="p">,</span> <span class="mf">2.570</span><span class="p">,</span> <span class="mf">6.540</span><span class="p">,</span> <span class="mf">0.228</span><span class="p">,</span> <span class="mf">0.027</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">8.798</span><span class="p">,</span> <span class="mf">0.880</span><span class="p">,</span> <span class="mf">2.370</span><span class="p">,</span> <span class="mf">0.168</span><span class="p">,</span> <span class="mf">1.701</span><span class="p">,</span> <span class="mf">3.680</span><span class="p">,</span> <span class="mf">1.231</span><span class="p">,</span> <span class="mf">2.390</span><span class="p">,</span> <span class="mf">2.499</span><span class="p">,</span> <span class="mf">0.064</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">1.460</span><span class="p">,</span> <span class="mf">8.057</span><span class="p">,</span> <span class="mf">1.336</span><span class="p">,</span> <span class="mf">7.217</span><span class="p">,</span> <span class="mf">7.914</span><span class="p">,</span> <span class="mf">3.615</span><span class="p">,</span> <span class="mf">9.981</span><span class="p">,</span> <span class="mf">9.198</span><span class="p">,</span> <span class="mf">5.292</span><span class="p">,</span> <span class="mf">1.224</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">0.432</span><span class="p">,</span> <span class="mf">8.645</span><span class="p">,</span> <span class="mf">8.774</span><span class="p">,</span> <span class="mf">0.249</span><span class="p">,</span> <span class="mf">8.081</span><span class="p">,</span> <span class="mf">7.461</span><span class="p">,</span> <span class="mf">4.416</span><span class="p">,</span> <span class="mf">0.652</span><span class="p">,</span> <span class="mf">4.002</span><span class="p">,</span> <span class="mf">4.644</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">0.679</span><span class="p">,</span> <span class="mf">2.800</span><span class="p">,</span> <span class="mf">5.523</span><span class="p">,</span> <span class="mf">3.049</span><span class="p">,</span> <span class="mf">2.968</span><span class="p">,</span> <span class="mf">7.225</span><span class="p">,</span> <span class="mf">6.730</span><span class="p">,</span> <span class="mf">4.199</span><span class="p">,</span> <span class="mf">9.614</span><span class="p">,</span> <span class="mf">9.229</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">4.263</span><span class="p">,</span> <span class="mf">1.074</span><span class="p">,</span> <span class="mf">7.286</span><span class="p">,</span> <span class="mf">5.599</span><span class="p">,</span> <span class="mf">8.291</span><span class="p">,</span> <span class="mf">5.200</span><span class="p">,</span> <span class="mf">9.214</span><span class="p">,</span> <span class="mf">8.272</span><span class="p">,</span> <span class="mf">4.398</span><span class="p">,</span> <span class="mf">4.506</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">9.496</span><span class="p">,</span> <span class="mf">4.830</span><span class="p">,</span> <span class="mf">3.150</span><span class="p">,</span> <span class="mf">8.270</span><span class="p">,</span> <span class="mf">5.079</span><span class="p">,</span> <span class="mf">1.231</span><span class="p">,</span> <span class="mf">5.731</span><span class="p">,</span> <span class="mf">9.494</span><span class="p">,</span> <span class="mf">1.883</span><span class="p">,</span> <span class="mf">9.732</span><span class="p">],</span>
+         <span class="p">[</span><span class="mf">4.138</span><span class="p">,</span> <span class="mf">2.562</span><span class="p">,</span> <span class="mf">2.532</span><span class="p">,</span> <span class="mf">9.661</span><span class="p">,</span> <span class="mf">5.611</span><span class="p">,</span> <span class="mf">5.500</span><span class="p">,</span> <span class="mf">6.886</span><span class="p">,</span> <span class="mf">2.341</span><span class="p">,</span> <span class="mf">9.699</span><span class="p">,</span> <span class="mf">6.500</span><span class="p">]</span>
+      <span class="p">]</span>
+   <span class="p">)</span>
+   
+   <span class="n">c</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span>
+      <span class="mf">0.806</span><span class="p">,</span> <span class="mf">0.517</span><span class="p">,</span> <span class="mf">0.100</span><span class="p">,</span> <span class="mf">0.908</span><span class="p">,</span> <span class="mf">0.965</span><span class="p">,</span> <span class="mf">0.669</span><span class="p">,</span> <span class="mf">0.524</span><span class="p">,</span> <span class="mf">0.902</span><span class="p">,</span> <span class="mf">0.531</span><span class="p">,</span> <span class="mf">0.876</span><span class="p">,</span> <span class="mf">0.462</span><span class="p">,</span>
+      <span class="mf">0.491</span><span class="p">,</span> <span class="mf">0.463</span><span class="p">,</span> <span class="mf">0.714</span><span class="p">,</span> <span class="mf">0.352</span><span class="p">,</span> <span class="mf">0.869</span><span class="p">,</span> <span class="mf">0.813</span><span class="p">,</span> <span class="mf">0.811</span><span class="p">,</span> <span class="mf">0.828</span><span class="p">,</span> <span class="mf">0.964</span><span class="p">,</span> <span class="mf">0.789</span><span class="p">,</span> <span class="mf">0.360</span><span class="p">,</span>
+      <span class="mf">0.369</span><span class="p">,</span> <span class="mf">0.992</span><span class="p">,</span> <span class="mf">0.332</span><span class="p">,</span> <span class="mf">0.817</span><span class="p">,</span> <span class="mf">0.632</span><span class="p">,</span> <span class="mf">0.883</span><span class="p">,</span> <span class="mf">0.608</span><span class="p">,</span> <span class="mf">0.326</span>
+   <span class="p">])</span>
+   
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="mi">2</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">12.1190083797535965715042038937</span><span class="p">,</span> <span class="n">array</span><span class="p">([</span><span class="mf">8.0240653</span><span class="p">,</span> <span class="mf">9.1465340</span><span class="p">])),</span>
+      <span class="mi">5</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">10.40561723899245</span><span class="p">,</span> <span class="n">array</span><span class="p">([</span><span class="mf">8.02491489</span><span class="p">,</span> <span class="mf">9.15172576</span><span class="p">,</span> <span class="mf">5.11392781</span><span class="p">,</span> <span class="mf">7.62086096</span><span class="p">,</span> <span class="mf">4.56408839</span><span class="p">])),</span>
+      <span class="mi">10</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">10.2088</span><span class="p">,</span> <span class="n">array</span><span class="p">((</span><span class="mf">8.025</span><span class="p">,</span> <span class="mf">9.152</span><span class="p">,</span> <span class="mf">5.114</span><span class="p">,</span> <span class="mf">7.621</span><span class="p">,</span> <span class="mf">4.564</span><span class="p">,</span> <span class="mf">4.771</span><span class="p">,</span> <span class="mf">2.996</span><span class="p">,</span> <span class="mf">6.126</span><span class="p">,</span> <span class="mf">0.734</span><span class="p">,</span> <span class="mf">4.982</span><span class="p">)))</span>
+   <span class="p">}</span>
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+   
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="n">s</span> <span class="o">=</span> <span class="p">((</span><span class="n">outer</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">A</span><span class="p">[:</span><span class="mi">30</span><span class="p">,:</span><span class="n">dim</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+      <span class="n">s</span> <span class="o">=</span> <span class="n">s</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span>
+      <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">s</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+      
+   <span class="k">def</span> <span class="nf">derivative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+      <span class="n">k</span> <span class="o">=</span> <span class="p">((</span><span class="n">outer</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">A</span><span class="p">[:</span><span class="mi">30</span><span class="p">,:</span><span class="n">dim</span><span class="p">]))</span>
+      <span class="n">s</span> <span class="o">=</span> <span class="p">(</span><span class="n">k</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+      <span class="n">k</span> <span class="o">*=</span> <span class="mi">2</span>
+      <span class="n">s</span> <span class="o">=</span> <span class="n">s</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span>
+      <span class="n">s</span> <span class="o">=</span> <span class="n">s</span> <span class="o">**</span> <span class="mi">2</span>
+      <span class="k">return</span> <span class="p">(</span><span class="n">k</span> <span class="o">/</span> <span class="n">outer</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ones</span><span class="p">(</span><span class="n">dim</span><span class="p">)))</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      
+
+<span class="k">class</span> <span class="nc">shekel2</span><span class="p">(</span><span class="n">shekelsFoxholes</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;shekel2&#39;</span>
+   <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span><span class="mi">15</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">5</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">10</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">10.4721997402</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">10.2471390777</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">0.0</span><span class="p">}</span>
+      
+
+<span class="k">class</span> <span class="nc">rana</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;rana&#39;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">512.753162426239100568636786193</span><span class="p">,</span> <span class="o">-</span><span class="mf">514.041683</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">520</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+      
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">z</span> <span class="o">=</span> <span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">x</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="n">ym</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">z</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">x</span><span class="p">))</span>
+      <span class="n">yp</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">z</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span><span class="p">))</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">sin</span><span class="p">(</span><span class="n">ym</span><span class="p">)</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">yp</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">z</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">ym</span><span class="p">)</span> <span class="o">*</span> <span class="n">sin</span><span class="p">(</span><span class="n">yp</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">griewank</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;griewank&quot;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+   <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">600</span><span class="p">,</span> <span class="mi">600</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mi">600</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">5.12456687217</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">43.4793045397</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">290.635003793</span><span class="p">}</span>
+   
+   
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">y</span> <span class="o">=</span> <span class="n">x</span>
+      <span class="n">i</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))])</span>
+      <span class="k">return</span> <span class="o">-</span><span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="p">(</span><span class="n">y</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">/</span><span class="mf">4000.</span> <span class="o">-</span> <span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="n">y</span> <span class="o">/</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">i</span><span class="p">)))</span><span class="o">.</span><span class="n">prod</span><span class="p">())</span>
+
+<span class="k">class</span> <span class="nc">weierstrass</span><span class="p">(</span><span class="n">Fitness</span><span class="p">):</span>
+   <span class="n">name</span> <span class="o">=</span> <span class="s">&quot;weierstrass&quot;</span>
+   <span class="n">optima</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+   <span class="n">center</span> <span class="o">=</span> <span class="mi">0</span>
+   <span class="n">scale</span> <span class="o">=</span> <span class="mf">0.5</span>
+   <span class="n">norm</span> <span class="o">=</span> <span class="p">{</span><span class="mi">5</span><span class="p">:</span><span class="mf">3.24835198156</span><span class="p">,</span> <span class="mi">10</span><span class="p">:</span><span class="mf">10.2750794241</span><span class="p">,</span> <span class="mi">25</span><span class="p">:</span><span class="mf">34.1563137431</span><span class="p">}</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="k">pass</span>
+
+   <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">xk</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span>
+      <span class="n">k</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">20</span><span class="p">)])</span>
+      <span class="n">ak</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span> <span class="o">**</span> <span class="n">k</span>
+      <span class="n">bk</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">**</span> <span class="n">k</span>
+      <span class="n">c</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="n">ak</span><span class="p">,</span> <span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">outer</span><span class="p">(</span><span class="n">bk</span><span class="p">,</span> <span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="p">(</span><span class="n">xk</span> <span class="o">+</span> <span class="o">.</span><span class="mi">5</span><span class="p">))</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="n">ak</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">pi</span> <span class="o">*</span> <span class="n">bk</span><span class="p">)</span>
+      <span class="k">return</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">d</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

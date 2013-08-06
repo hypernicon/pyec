@@ -1,0 +1,267 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyec.distribution.cmaes &mdash; PyEC 0.2.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.2.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PyEC 0.2.1 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyec.distribution.cmaes</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">numpy.linalg</span> <span class="kn">import</span> <span class="n">cholesky</span><span class="p">,</span> <span class="n">eig</span><span class="p">,</span> <span class="n">inv</span><span class="p">,</span> <span class="n">det</span>
+<span class="kn">from</span> <span class="nn">basic</span> <span class="kn">import</span> <span class="n">PopulationDistribution</span><span class="p">,</span> <span class="n">FixedCube</span><span class="p">,</span> <span class="n">Gaussian</span>
+<span class="kn">from</span> <span class="nn">pyec.config</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">ConfigBuilder</span>
+
+
+<div class="viewcode-block" id="CmaesConfigurator"><a class="viewcode-back" href="../../../index.html#pyec.distribution.cmaes.CmaesConfigurator">[docs]</a><span class="k">class</span> <span class="nc">CmaesConfigurator</span><span class="p">(</span><span class="n">ConfigBuilder</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      A :class:`ConfigBuilder` object to construct the </span>
+<span class="sd">      Correlated Matrix Adaption Evolution Strategy (CMA-ES).</span>
+<span class="sd">      </span>
+<span class="sd">      By default, sets the ratio of `mu` over `lambda` to .5</span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">CmaesConfigurator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">Cmaes</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">muProportion</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">restart</span> <span class="o">=</span> <span class="bp">True</span>
+   
+   <span class="k">def</span> <span class="nf">postConfigure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">varInit</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">cfg</span><span class="o">.</span><span class="n">initialDistribution</span> <span class="o">=</span> <span class="n">FixedCube</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">cfg</span><span class="o">.</span><span class="n">usePrior</span> <span class="o">=</span> <span class="bp">False</span>
+         <span class="n">cfg</span><span class="o">.</span><span class="n">initialDistribution</span> <span class="o">=</span> <span class="n">Gaussian</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+
+   
+</div>
+<div class="viewcode-block" id="Cmaes"><a class="viewcode-back" href="../../../index.html#pyec.distribution.cmaes.Cmaes">[docs]</a><span class="k">class</span> <span class="nc">Cmaes</span><span class="p">(</span><span class="n">PopulationDistribution</span><span class="p">):</span>
+   <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">      The Correlated Matrix Adaptation Evolution Strategy algorithm as described by:</span>
+<span class="sd">      </span>
+<span class="sd">      Hansen, N. and Ostermeier, A. Completely derandomized self-adaptation in evolution strategies. In Evolutionary Computation 9(2), pp 159--195, 2001. </span>
+<span class="sd">   </span>
+<span class="sd">      See &lt;http://en.wikipedia.org/wiki/CMA-ES&gt; for details.</span>
+<span class="sd">   </span>
+<span class="sd">      A fast-converging population-based optimizer that finds reasonably good</span>
+<span class="sd">      solutions with relatively few resources. In general, each population is sampled from a multi-variate Gaussian whose parameters are altered to optimize the probability of finding good solutions. </span>
+<span class="sd">      </span>
+<span class="sd">      </span>
+<span class="sd">      Akimoto (2010) proved that CMA-ES is an instance of Natural Evolution Strategies (Wierstra, 2008), which implements a gradient-following method at the population level. </span>
+<span class="sd">      </span>
+<span class="sd">      Config parameters:</span>
+<span class="sd">      * muProportion -- the ratio of `mu` to `lambda`, i.e. the proportion of solutions from each generation used as parents for the next. By default equal to 0.5.</span>
+<span class="sd">      * initialDistribution -- the distribution used to sample the initial mean</span>
+<span class="sd">      * populationSize -- the size of the population for each generation</span>
+<span class="sd">      * scale -- the scale of the space, used to initialize the variance of the Gaussian</span>
+<span class="sd">      * dim -- the dimension of the real vector space being searched.</span>
+<span class="sd">      * restart -- whether to restart when the distribution collapses; defaults to ``True`` (see e.g. `Auger and Hansen, 2005&lt;http://www.google.com/url?sa=t&amp;rct=j&amp;q=ipop%20cma%20es&amp;source=web&amp;cd=1&amp;ved=0CE0QFjAA&amp;url=http%3A%2F%2Fciteseerx.ist.psu.edu%2Fviewdoc%2Fdownload%3Fdoi%3D10.1.1.97.8108%26rep%3Drep1%26type%3Dpdf&amp;ei=xBT_T5aHNueG2gX8o8XRBA&amp;usg=AFQjCNFKgH1YeysEfsu08_-AZa0JXhRq8A&gt;`_</span>
+<span class="sd">   </span>
+<span class="sd">      :params cfg: The configuration object for CMA-ES.</span>
+<span class="sd">      :type cfg: :class:`Config`</span>
+<span class="sd">   </span>
+<span class="sd">   &quot;&quot;&quot;</span>
+
+   <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+      <span class="nb">super</span><span class="p">(</span><span class="n">Cmaes</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span> <span class="o">*</span> <span class="o">.</span><span class="mi">5</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">ps</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">pc</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mu</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">populationSize</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">muProportion</span><span class="p">)</span>
+      
+      <span class="n">weights</span> <span class="o">=</span> <span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span> <span class="o">+</span> <span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="o">-</span> <span class="n">log</span><span class="p">(</span><span class="n">array</span><span class="p">([</span><span class="n">i</span><span class="o">+</span><span class="mf">1.</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">)]))</span>
+      <span class="n">weights</span> <span class="o">/=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+      <span class="n">muw</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="nb">sum</span><span class="p">(</span><span class="n">weights</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+      <span class="n">mueff</span> <span class="o">=</span> <span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">muw</span>
+      
+      <span class="n">cc</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span><span class="o">+</span><span class="n">mueff</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">mueff</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">);</span>
+      <span class="n">cs</span> <span class="o">=</span> <span class="p">(</span><span class="n">mueff</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="n">mueff</span> <span class="o">+</span> <span class="mf">5.</span><span class="p">)</span>
+      
+      <span class="n">c1</span> <span class="o">=</span> <span class="mf">2.</span> <span class="o">/</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mf">1.3</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">mueff</span><span class="p">)</span>
+      <span class="n">cmu</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">mueff</span> <span class="o">-</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">1.</span><span class="o">/</span><span class="n">mueff</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mf">2.</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">mueff</span><span class="p">)</span>
+      <span class="n">damps</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="nb">max</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="n">sqrt</span><span class="p">((</span><span class="n">mueff</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">cs</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">muw</span> <span class="o">=</span> <span class="n">muw</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mueff</span> <span class="o">=</span> <span class="n">mueff</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cc</span> <span class="o">=</span> <span class="n">cc</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cs</span> <span class="o">=</span> <span class="n">cs</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">c1</span> <span class="o">=</span> <span class="n">c1</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">cmu</span> <span class="o">=</span> <span class="n">cmu</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">damps</span> <span class="o">=</span> <span class="n">damps</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">chiN</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="mf">21.</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">eigeneval</span> <span class="o">=</span> <span class="mi">0</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">B</span> <span class="o">=</span> <span class="n">eye</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">D</span> <span class="o">=</span> <span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="n">diag</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">D</span> <span class="o">**</span> <span class="mi">2</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span><span class="o">.</span><span class="n">transpose</span><span class="p">()))</span> 
+      <span class="bp">self</span><span class="o">.</span><span class="n">active</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="n">diag</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">D</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span><span class="o">.</span><span class="n">transpose</span><span class="p">()))</span>
+
+
+   <span class="nd">@classmethod</span>
+   <span class="k">def</span> <span class="nf">configurator</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">CmaesConfigurator</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+   
+   <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="nb">next</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">active</span><span class="p">,</span> <span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">size</span><span class="p">))</span>
+      <span class="k">return</span> <span class="nb">next</span>
+            
+   <span class="k">def</span> <span class="nf">batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">popSize</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="ow">is</span>  <span class="bp">None</span><span class="p">:</span>
+         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span><span class="p">,</span> <span class="s">&#39;batch&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="n">popSize</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">initialDistribution</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+      <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">__call__</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">popSize</span><span class="p">)]</span>
+      
+   <span class="k">def</span> <span class="nf">density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+      <span class="n">diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">-</span> <span class="n">x</span>
+      <span class="nb">pow</span> <span class="o">=</span> <span class="o">-.</span><span class="mi">5</span> <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">dot</span><span class="p">(</span><span class="n">inv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">),</span> <span class="n">diff</span><span class="p">))</span>
+      <span class="n">d</span> <span class="o">=</span> <span class="p">((((</span><span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">det</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">))</span> <span class="o">**</span> <span class="o">-.</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="nb">pow</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">d</span>
+   
+   <span class="nd">@property</span>
+   <span class="k">def</span> <span class="nf">var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*</span> <span class="n">det</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">population</span><span class="p">):</span>
+      <span class="n">base</span> <span class="o">=</span> <span class="n">array</span><span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">population</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">]])</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span> 
+         <span class="n">oldMean</span> <span class="o">=</span> <span class="n">average</span><span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">population</span><span class="p">])</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">oldMean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="p">(</span><span class="n">outer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">,</span> <span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span> <span class="o">*</span> <span class="n">base</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+      <span class="n">cc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cc</span>
+      <span class="n">cs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cs</span>
+      <span class="n">muw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">muw</span>
+      <span class="n">mueff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mueff</span>
+      <span class="n">chiN</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chiN</span>
+      
+      <span class="bp">self</span><span class="o">.</span><span class="n">ps</span> <span class="o">*=</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">cs</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">ps</span> <span class="o">+=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">cs</span> <span class="o">*</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">-</span> <span class="n">cs</span><span class="p">)</span> <span class="o">*</span> <span class="n">mueff</span><span class="p">)</span> \
+       <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">active</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">-</span> <span class="n">oldMean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span>
+       
+      <span class="n">isonorm</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">ps</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+      <span class="n">hsig</span> <span class="o">=</span> <span class="n">isonorm</span> <span class="o">/</span> <span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">cs</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">*</span> <span class="n">n</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">population</span><span class="p">)))</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">chiN</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">pc</span> <span class="o">*=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">cc</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">hsig</span> <span class="o">&lt;</span> <span class="mf">1.4</span> <span class="o">+</span> <span class="mi">2</span><span class="o">/</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">pc</span> <span class="o">+=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">cc</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="n">cc</span><span class="p">)</span> <span class="o">*</span> <span class="n">mueff</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">-</span> <span class="n">oldMean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span>  
+         <span class="n">matfactor</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pc</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="n">matfactor</span> <span class="o">=</span> <span class="n">outer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pc</span><span class="p">)</span> <span class="o">+</span> <span class="n">cc</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="n">cc</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">covar</span>
+      
+      <span class="n">artmp</span> <span class="o">=</span> <span class="p">(</span><span class="n">base</span> <span class="o">-</span> <span class="n">oldMean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span>
+      <span class="n">oldCovar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">covar</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">*=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">c1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmu</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">c1</span> <span class="o">*</span> <span class="n">matfactor</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmu</span> <span class="o">*</span> <span class="n">dot</span><span class="p">(</span><span class="n">artmp</span><span class="o">.</span><span class="n">transpose</span><span class="p">(),</span> <span class="n">dot</span><span class="p">(</span><span class="n">diag</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">),</span><span class="n">artmp</span><span class="p">))</span>
+          
+      <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*=</span> <span class="n">exp</span><span class="p">((</span><span class="n">cs</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">damps</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">isonorm</span> <span class="o">/</span> <span class="n">chiN</span> <span class="o">-</span> <span class="mf">1.</span><span class="p">))</span>
+      
+      <span class="k">if</span> <span class="n">n</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">eigeneval</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">population</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">c1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmu</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dim</span> <span class="o">/</span> <span class="mf">10.</span><span class="p">:</span>
+         <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">eigenval</span> <span class="o">=</span> <span class="n">n</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">=</span> <span class="n">triu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">)</span> <span class="o">+</span> <span class="n">triu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">D</span> <span class="o">=</span> <span class="n">eig</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">D</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">diag</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">D</span><span class="p">)))</span>
+         
+            <span class="bp">self</span><span class="o">.</span><span class="n">active</span> <span class="o">=</span> <span class="n">cholesky</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">)</span> <span class="c"># dot(self.B, dot(diag(1. / self.D), self.B.transpose())) </span>
+         <span class="k">except</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">=</span> <span class="n">oldCovar</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span>
+      <span class="n">detcv</span> <span class="o">=</span> <span class="n">det</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*</span> <span class="n">detcv</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">/=</span> <span class="p">(</span><span class="n">detcv</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span><span class="p">)</span> 
+         <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">scale</span>
+    
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">restart</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*</span> <span class="n">detcv</span> <span class="o">&lt;</span> <span class="mf">1e-25</span><span class="p">:</span>
+      <span class="c">#   print &quot;restarting&quot;</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">PyEC 0.2.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Alan J Lockett.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
