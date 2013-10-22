@@ -75,4 +75,4 @@ else:
     else:
         print i, "did not complete"
         with open(fname, "ab") as f:
-            f.write("{0}\r\n".format(opt.history.maximal()[1]))
+            f.write("{0}\r\n".format(opt.history.maximal()))

@@ -50,7 +50,12 @@ class LayeredRnnSpace(LayeredSpace):
       
     def convert(self, x):
         if self.gpu:
-            return LayeredRnnGenotype.compileGpu(x)
+            try:
+                return LayeredRnnGenotype.compileGpu(x)
+            except:
+                import traceback
+                traceback.print_exc()
+                raise
         else:
             return LayeredRnnGenotype.compile(x)
       

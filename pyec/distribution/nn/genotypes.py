@@ -350,8 +350,22 @@ class LayeredRnnGenotype(object):
                             weightStack, activationStack)
 
     def compileGpu(self):
-        from .net_gpu import (RnnEvaluator, TIDENTITY, TLOGISTIC, THYPERBOLIC,
-                              TBIAS, TTHRESHOLD, TRADIAL)
+        from .net_gpu import RnnEvaluator
+        return RnnEvaluator(self.gpuRepresentation())
+
+    def gpuRepresentation(self):
+        try:
+            from .net_gpu import (TIDENTITY, TLOGISTIC, THYPERBOLIC,
+                                  TBIAS, TTHRESHOLD, TRADIAL)
+        except:
+            # in case theano import fails
+            TIDENTITY = 0
+            TLOGISTIC = 1
+            TTHRESHOLD = 2
+            TBIAS = 3
+            TRADIAL = 4
+            THYPERBOLIC = 5
+        
         weights = []
         for i, layer in enumerate(self.layers):
             ws = []
@@ -372,8 +386,14 @@ class LayeredRnnGenotype(object):
             isOutput = isinstance(layer, RnnLayerOutput)
             weights.append((layer.size, activator,
                             isInput, isOutput, ws))
-        return RnnEvaluator(weights)
+        
+        return weights
+    
 
+    def __str__(self):
+        return self.gpuRepresentation()
+    
+    __repr__ = __str__
 
     def hiddenLayers(self):
         hidden = lambda x: (not isinstance(x, RnnLayerInput) and

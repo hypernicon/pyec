@@ -48,7 +48,7 @@ else:
                 sumParts = []
                 for i, info in enumerate(weightFrame):
                     srcIdx, w = info
-                    sumParts.append(T.dot(w,states[srcIdx]))
+                    sumParts.append(T.dot(states[srcIdx], w.transpose()))
                 
                 if len(sumParts):
                     sumParts = T.stack(*sumParts)
@@ -80,12 +80,13 @@ else:
         def make_states(*inputs):
             states = []
             idx = 0
+            numPoints = len(inputs) and inputs[0].shape[0] or 1
             for neurons, activator, isInput, isOutput, weightFrame in weights:
                 if isInput:
                     states.append(inputs[idx])
                     idx += 1
                 else:
-                    states.append(T.ones((neurons,), dtype='float32'))
+                    states.append(T.ones((numPoints,neurons), dtype='float32'))
             return states
         
         def project_output(states):
@@ -97,7 +98,7 @@ else:
                 idx += 1
             return outputs
         
-        inputs = T.fvectors(numInputs)
+        inputs = T.fmatrices(numInputs)
         times = T.iscalar()
         netValue, updates = theano.scan(
             fn=evaluate_net,
