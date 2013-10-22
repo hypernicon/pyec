@@ -26,12 +26,12 @@ def concentric_spirals(net):
     total = 0.0
     size = float(len(concentric))
     try:
-        start = datetime.now()
+        #start = datetime.now()
         outputs = net([concentric], times=1024)
-        print (datetime.now() - start).total_seconds(), "sec"
-        start = datetime.now()
+        #print (datetime.now() - start).total_seconds(), "sec"
+        #start = datetime.now()
         ret = concentricAverage(outputs[0].reshape(len(concentric)))
-        print (datetime.now() - start).total_seconds(), "sec result: ", ret
+        #print (datetime.now() - start).total_seconds(), "sec result: ", ret
         return ret
     
         #start = datetime.now()
@@ -43,6 +43,6 @@ def concentric_spirals(net):
         #return total
         
     except:
-        import traceback
-        traceback.print_exc()
+        #import traceback
+        #traceback.print_exc()
         return -1.0

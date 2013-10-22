@@ -351,7 +351,12 @@ class LayeredRnnGenotype(object):
 
     def compileGpu(self):
         from .net_gpu import RnnEvaluator
-        return RnnEvaluator(self.gpuRepresentation())
+        
+        hiddenLayers = self.hiddenLayers()
+        sizes = [h.size for h in hiddenLayers]
+        connections = self.connectivity()
+        topo = tuple(sizes), tuple(connections)
+        return RnnEvaluator(self.gpuRepresentation(), topo)
 
     def gpuRepresentation(self):
         try:
