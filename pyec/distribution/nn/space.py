@@ -29,13 +29,15 @@ class LayeredRnnSpace(LayeredSpace):
     :type outputs: A list (or tuple) of ``int``
     
     """
-    def __init__(self, inputs, outputs, bias=True, activator=LOGISTIC, scale=1.0):
+    def __init__(self, inputs, outputs, bias=True, activator=LOGISTIC,
+                 scale=1.0, gpu=True):
         super(LayeredRnnSpace, self).__init__(LayeredRnnGenotype)
         self.inputs = inputs
         self.outputs = outputs
         self.bias = bias
         self.activator = activator
         self.scale = scale
+        self.gpu = gpu
    
     def random(self):
         return self.type.random(self.inputs, self.outputs,
@@ -47,7 +49,10 @@ class LayeredRnnSpace(LayeredSpace):
         return ",".join([str(pt) for pt in parts])
       
     def convert(self, x):
-        return LayeredRnnGenotype.compile(x)
+        if self.gpu:
+            return LayeredRnnGenotype.compileGpu(x)
+        else:
+            return LayeredRnnGenotype.compile(x)
       
     def area(self, **kwargs):
         return 1.0

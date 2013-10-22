@@ -294,14 +294,10 @@ class LayeredRnnGenotype(object):
         """
         convert = False
         try:
-            from .net_gpu import RnnEvaluator
-            return self.compileGpu()
+            from .cnet import RnnEvaluator
+            convert = True
         except:
-            try:
-                from .cnet import RnnEvaluator
-                convert = True
-            except:
-                from .net import RnnEvaluator
+            from .net import RnnEvaluator
         self.prune()
         slices = {}
         weightStack = []
@@ -360,7 +356,7 @@ class LayeredRnnGenotype(object):
         for i, layer in enumerate(self.layers):
             ws = []
             for j, source in enumerate(layer.inLinks):
-                ws.append((j,self.links[(source, layer)]))
+                ws.append((j,self.links[(source, layer)].astype(np.float32)))
             activator = TIDENTITY
             if layer.activator is LOGISTIC:
                 activator = TLOGISTIC
@@ -375,7 +371,7 @@ class LayeredRnnGenotype(object):
             isInput = isinstance(layer, RnnLayerInput)
             isOutput = isinstance(layer, RnnLayerOutput)
             weights.append((layer.size, activator,
-                            isInput, isOutput, ws.astype(np.float32)))
+                            isInput, isOutput, ws))
         return RnnEvaluator(weights)
 
 

@@ -1,7 +1,16 @@
 from pyec.distribution.ec.evoanneal import Neuroannealing
 from pyec.distribution.nn.genotypes import HYPERBOLIC
 from pyec.distribution.nn.space import LayeredRnnSpace
-from pyec.util.net_benchmarks import concentric_spirals
+
+use_gpu = True
+try:
+    if not use_gpu:
+        raise Exception("Skip GPU")
+    import theano
+    from pyec.util.net_gpu_benchmarks import concentric_spirals
+except:
+    use_gpu = False
+    from pyec.util.net_benchmarks import concentric_spirals
 
 import numpy as np
 import sys
@@ -50,8 +59,9 @@ else:
     observer = StepObserver()
     try:
         p = ((Neuroannealing)
-             (space=LayeredRnnSpace([3], [1], bias=False, activator=HYPERBOLIC,scale=1.0),
-              printEvery=10,
+             (space=LayeredRnnSpace([2], [1], bias=False, activator=HYPERBOLIC,
+                                    scale=1.0, gpu=use_gpu),
+              printEvery=1,
               observer=observer,
               populationSize=50,
               minimize=False,
