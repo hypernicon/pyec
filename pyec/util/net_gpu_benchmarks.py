@@ -16,8 +16,8 @@ def concentric_spirals(net):
     try:
         start = datetime.now()
         outputs = net([concentric], times=1024)
+        print (datetime.now() - start).total_seconds(), "sec"
         ret = np.average((outputs[0] >= 0.0) == concentricCorr)
-        print (datetime.now() - start).total_seconds(), "sec result: ", ret
         return ret
     
         #start = datetime.now()

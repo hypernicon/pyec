@@ -110,8 +110,8 @@ else:
         
         outputs = project_output(result)
         
-        profmode = theano.ProfileMode(optimizer='fast_run', linker=theano.gof.OpWiseCLinker()) 
-        net = theano.function(inputs + [times], outputs, mode=profmode)      
+        #profmode = theano.ProfileMode(optimizer='fast_run', linker=theano.gof.OpWiseCLinker()) 
+        net = theano.function(inputs + [times], outputs)#, mode=profmode)      
  
         def fix_inputs(inputs, times=5):
             reshape = False
@@ -120,7 +120,7 @@ else:
                 inputs = [np.reshape(i, (1,i.shape[0])) for i in inputs]
             args = list(inputs) + [times]
             outputs = net(*args)
-            profmode.print_summary()
+            #profmode.print_summary()
             if reshape:
                 return [o[0] for o in outputs]
             return outputs
