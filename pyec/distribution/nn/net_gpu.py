@@ -114,7 +114,14 @@ else:
         net = theano.function(inputs + [times], outputs)
         
         def fix_inputs(inputs, times=5):
+            reshape = False
+            if len(inputs) and (len(np.shape(inputs[0])) == 1):
+                reshape = True
+                inputs = [np.reshape(i, (1,i.shape[0])) for i in inputs]
             args = list(inputs) + [times]
-            return net(*args)
+            outputs = net(*args)
+            if reshape:
+                return [o[0] for o in outputs]
+            return outputs
         
         return fix_inputs
