@@ -294,12 +294,14 @@ class LayeredRnnGenotype(object):
         """
         convert = False
         try:
-            from .cnet import RnnEvaluator
-            convert = True
+            from .net_gpu import RnnEvaluator
+            return self.compileGpu()
         except:
-            raise
-            print "Fallback on pure python"
-            from .net import RnnEvaluator
+            try:
+                from .cnet import RnnEvaluator
+                convert = True
+            except:
+                from .net import RnnEvaluator
         self.prune()
         slices = {}
         weightStack = []
@@ -350,6 +352,32 @@ class LayeredRnnGenotype(object):
         
         return RnnEvaluator(numNeurons, inputs, outputs,
                             weightStack, activationStack)
+
+    def compileGpu(self):
+        from .net_gpu import (RnnEvaluator, TIDENTITY, TLOGISTIC, THYPERBOLIC,
+                              TBIAS, TTHRESHOLD, TRADIAL)
+        weights = []
+        for i, layer in enumerate(self.layers):
+            ws = []
+            for j, source in enumerate(layer.inLinks):
+                ws.append((j,self.links[(source, layer)]))
+            activator = TIDENTITY
+            if layer.activator is LOGISTIC:
+                activator = TLOGISTIC
+            elif layer.activator is HYPERBOLIC:
+                activator = THYPERBOLIC
+            elif layer.activator is BIAS:
+                activator = TBIAS
+            elif layer.activator is THRESHOLD:
+                activator = TTHRESHOLD
+            elif layer.activator is RADIAL:
+                activator = TRADIAL
+            isInput = isinstance(layer, RnnLayerInput)
+            isOutput = isinstance(layer, RnnLayerOutput)
+            weights.append((layer.size, activator,
+                            isInput, isOutput, ws.astype(np.float32)))
+        return RnnEvaluator(weights)
+
 
     def hiddenLayers(self):
         hidden = lambda x: (not isinstance(x, RnnLayerInput) and
