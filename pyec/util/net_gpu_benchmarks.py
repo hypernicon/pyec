@@ -1,6 +1,8 @@
 """Use theano to run net benchmarks on the GPU.
 
 """
+import theano
+import theano.tensor as T
 from datetime import datetime
 import numpy as np
 
@@ -10,6 +12,16 @@ concentric, concentricCorr = load_concentric()
 concentric = np.array([pt.astype(np.float32) for pt in concentric],
                       dtype=np.float32)
 
+try:
+    concentricOutput = T.fvector()
+    concentricCorrGpu = theano.shared((2.0 * concentricCorr - 1.0).astype(np.float32))
+    concentricCheck = T.mean(T.abs_((T.sgn(concentricOutput) - concentricCorrGpu))) / 2
+    concentricAverage = theano.function([concentricOutput],concentricCheck)
+except:
+    import traceback
+    traceback.print_exc()
+    raise
+
 def concentric_spirals(net):
     total = 0.0
     size = float(len(concentric))
@@ -17,7 +29,9 @@ def concentric_spirals(net):
         start = datetime.now()
         outputs = net([concentric], times=1024)
         print (datetime.now() - start).total_seconds(), "sec"
-        ret = np.average((outputs[0] >= 0.0) == concentricCorr)
+        start = datetime.now()
+        ret = concentricAverage(outputs[0].reshape(len(concentric)))
+        print (datetime.now() - start).total_seconds(), "sec result: ", ret
         return ret
     
         #start = datetime.now()
