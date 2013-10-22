@@ -371,11 +371,16 @@ class LayeredRnnGenotype(object):
             TRADIAL = 4
             THYPERBOLIC = 5
         
+        layerMap = {}
+        for i, layer in enumerate(self.layers):
+            layerMap[layer.id] = i
+        
         weights = []
         for i, layer in enumerate(self.layers):
             ws = []
             for j, source in enumerate(layer.inLinks):
-                ws.append((j,self.links[(source, layer)].astype(np.float32)))
+                ws.append((layerMap[source.id],
+                           self.links[(source, layer)].astype(np.float32)))
             activator = TIDENTITY
             if layer.activator is LOGISTIC:
                 activator = TLOGISTIC
