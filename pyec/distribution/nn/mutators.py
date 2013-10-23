@@ -144,7 +144,8 @@ class UniformRnnCrosser(Crosser):
                         w = self.crossLink(w1, w2)
                         net.connect(net.layers[i], net.layers[j], w)
                         net.changed = True
-        #net.checkLinks()
+        if self.config.netVerifyLinks:
+            net.checkLinks()
         return net
 
 
@@ -233,7 +234,8 @@ class AddNodeMutation(Mutation):
           net.connect(layer, outLayer, w)
       
       net.changed = True
-      #net.checkLinks()
+      if self.config.netVerifyLinks:
+          net.checkLinks()
       return net
  
 
@@ -282,7 +284,8 @@ class RemoveNodeMutation(Mutation):
           net.connect(layer, outLayer, w)
       
       net.changed = True
-      #net.checkLinks()
+      if self.config.netVerifyLinks:
+          net.checkLinks()
       return net
 
 
@@ -319,7 +322,8 @@ class AddLinkMutation(Mutation):
          w = self.config.sd * np.random.randn(target.size, source.size)
          net.connect(source, target, w)
          net.changed = True
-         #net.checkLinks()
+         if self.config.netVerifyLinks:
+             net.checkLinks()
       
       return net
 
@@ -354,7 +358,8 @@ class RemoveLinkMutation(Mutation):
          target = [layer for layer in net.layers if layer.id == target.id][0]
          net.disconnect(source, target)
          net.changed = True
-         #net.checkLinks()
+         if self.config.netVerifyLinks:
+             net.checkLinks()
       return net
 
 
@@ -395,7 +400,8 @@ class AddChainLayerMutation(Mutation):
         w = self.config.sd * np.random.randn(target.size, middle.size)
         net.connect(middle, target, w)
         net.changed = True
-        #net.checkLinks()
+        if self.config.netVerifyLinks:
+            net.checkLinks()
         return net
 
 
@@ -436,7 +442,8 @@ class AddRadialLayerMutation(Mutation):
         w = self.config.sd * np.random.randn(target.size, middle.size)
         net.connect(middle, target, w)
         net.changed = True
-        #net.checkLinks()
+        if self.config.netVerifyLinks:
+            net.checkLinks()
         return net
 
 
@@ -462,7 +469,8 @@ class RemoveLayerMutation(Mutation):
         toRemove = hiddenLayers[np.random.randint(0,len(hiddenLayers))]
         net.removeLayer(toRemove)
         net.changed = True
-        #net.checkLinks()
+        if self.config.netVerifyLinks:
+            net.checkLinks()
         return net
 
 
@@ -478,7 +486,8 @@ class WeightMutation(Mutation):
             if not isinstance(edge[1], RnnLayerInput):
                net.connect(edge[0], edge[1], self.mutateWeightMatrix(net, weights))
         net.changed = True
-        #net.checkLinks()
+        if self.config.netVerifyLinks:
+            net.checkLinks()
         return net
 
 

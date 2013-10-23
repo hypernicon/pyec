@@ -61,6 +61,7 @@ else:
         p = ((Neuroannealing)
              (space=LayeredRnnSpace([2], [1], bias=False, activator=HYPERBOLIC,
                                     scale=1.0, gpu=use_gpu),
+              netVerifyLinks=True,
               printEvery=1,
               observer=observer,
               populationSize=50,
