@@ -37,6 +37,8 @@ else:
         
         """
         #start = datetime.now()
+        #print topo
+        #print weights
         
         numLayers = len(weights)
         numInputs = 0
@@ -56,10 +58,12 @@ else:
                 weightArgs.append(w)
             parts.append(len(ws))
         
+        cacheHit = False
         if topo in topologyCache:
+            cacheHit = True
             net = topologyCache[topo]
         else:
-            #print "CACHE MISS! ", topo
+            print "CACHE MISS! ", topo
             
             def recast_weights(ws):
                 expanded = []
@@ -72,7 +76,7 @@ else:
             def evaluate_net(*args):
                 states = args[:numLayers]
                 pweights = recast_weights(args[numLayers:])
-                activations = T.fvectors(numLayers)
+                activations = T.fmatrices(numLayers)
                 idx = 0
                 for neurons, activator, isInput, isOutput, weightFrame in weights:
                     sumParts = []
@@ -154,7 +158,20 @@ else:
                 reshape = True
                 inputs = [np.reshape(i, (1,i.shape[0])) for i in inputs]
             args = list(inputs) + weightArgs + [times]
-            outputs = net(*args)
+            for i in xrange(10):
+                try:
+                    outputs = net(*args)
+                    break
+                except IndexError:
+                    if i < 9:
+                        continue
+                    else:
+                        raise
+                    #print "ARGS: ", args
+                    #print "TOPO: ", topo
+                    #print "WEIGHTS: ", weights
+                    #print "CACHED: ", cacheHit
+                   
             #profmode.print_summary()
             if reshape:
                 return [o[0] for o in outputs]
