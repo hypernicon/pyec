@@ -161,6 +161,17 @@ cdef class RnnEvaluator:
     cpdef int clear(self) except? -1:
         """Reset the state of the network."""
         self.state = np.zeros(self.numNeurons, dtype=float)
+        stack = self.activationStack
+        while stack is not None:
+            low = stack.val1
+            high = stack.val2
+            act = stack.val3
+            if act == CBIAS:
+                for k in xrange(low, high):
+                    self.state[k] = 1.0
+            
+            stack = stack.next
+        
         return 0
     
     @cython.boundscheck(False)    
