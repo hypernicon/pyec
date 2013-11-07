@@ -9,8 +9,10 @@ import numpy as np
 from .net_benchmark_util import load_concentric
 
 concentric, concentricCorr = load_concentric()
-concentric = np.array([pt.astype(np.float32) for pt in concentric],
-                      dtype=np.float32)
+concentricSize = float(len(concentric))
+concentric = concentric.astype(np.float32)
+#concentric = theano.shared(np.array([concentric.astype(np.float32)],
+#                                    dtype=np.float32))
 
 try:
     concentricOutput = T.fvector()
@@ -24,7 +26,7 @@ except:
 
 def concentric_spirals(net):
     total = 0.0
-    size = float(len(concentric))
+    size = concentricSize
     try:
         #start = datetime.now()
         outputs = net([concentric], times=128)

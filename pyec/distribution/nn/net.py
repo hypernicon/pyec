@@ -60,7 +60,11 @@ class RnnEvaluator(object):
         
     def clear(self):
         """Reset the state of the network."""
+        import genotypes
         self.state = np.zeros(self.numNeurons)
+        for low, high, act in self.activationStack:
+            if act == genotypes.BIAS:
+                self.state[low:high] = 1.0
         
     def setInputs(self, inputs):
         """Takes an array of arrays of floats and writes

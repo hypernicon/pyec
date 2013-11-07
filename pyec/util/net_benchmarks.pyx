@@ -27,22 +27,22 @@ cdef float best = 0.0
 cpdef float concentric_spirals(RnnEvaluator net) except? -1:
     global best
     cdef float total = 0.0
-    cdef float factor = (1./625.) #len(concentric))
+    cdef float factor = 1./len(concentric)
     cdef list output, pt
     cdef float netCorr
     cdef int i, size
     cdef np.ndarray grid
     size = len(concentric)
-    for i in xrange(25):#size):
-        for j in xrange(25):
-            k = i * 400 + j * 16
+    for i in xrange(size):
+        #for j in xrange(25):
+        #    k = i * 400 + j * 16
             net.clear()
-            pt = [concentric[k]]
+            pt = [concentric[i]]
             output = net.call(pt, 25)
             if output is None:
                 return -1
             netCorr = output[0][0] >= 0.0
-            total += (concentricCorr[k] == netCorr) * factor
+            total += (concentricCorr[i] == netCorr) * factor
     if total > best:
         grid = np.zeros(size)
         for i in xrange(size):

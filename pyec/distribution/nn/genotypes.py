@@ -333,9 +333,9 @@ class LayeredRnnGenotype(object):
                     activator = 5
                 elif layer.activator is not IDENTITY:
                     raise ValueError("Could not map activator to cython net")
-                if activator:
-                    stackItem = (idxs.start,idxs.stop, activator)
-                    activationStack.append(stackItem)
+                #if activator:
+                stackItem = (idxs.start,idxs.stop, activator)
+                activationStack.append(stackItem)
             else:
                 activationStack.append((idxs,layer.activator))
             for i, frmLayer in enumerate(layer.inLinks):
@@ -346,6 +346,11 @@ class LayeredRnnGenotype(object):
                                      "{0} but was {1}".format(w.shape, sh))
                 weightStack[i].append((w,slices[frmLayer],idxs))
         
+        #print "numNeurons: ", numNeurons
+        #print "inputs: ", inputs
+        #print "outputs: ", outputs
+        #print "weightStack: ", weightStack
+        #print "activationStack: ", activationStack
         return RnnEvaluator(numNeurons, inputs, outputs,
                             weightStack, activationStack)
 
@@ -401,7 +406,7 @@ class LayeredRnnGenotype(object):
     
 
     def __str__(self):
-        return self.gpuRepresentation()
+        return str(self.gpuRepresentation())
     
     __repr__ = __str__
 
