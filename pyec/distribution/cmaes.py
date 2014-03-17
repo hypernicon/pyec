@@ -170,10 +170,13 @@ class Cmaes(PopulationDistribution):
           err = err.format(self.config.space.type)
           raise ValueError(err)
                            
-      x = self.config.space.random()
+      x = self.config.space.convert(self.config.space.random())
       if not x.dtype == np.float:
           raise ValueError("CMA-ES expects numpy.ndarray with dtype float")
-      self.sigma = self.config.space.scale * .5
+      if hasattr(self.config.space, 'scale'):
+          self.sigma = self.config.space.scale * .5
+      else:
+          self.sigma = 1.0
       #if self.config.initial is None:
       #    self.mean = [self.config.space.random for i in xrange(popSize)]
       #elif hasattr(self.config.initial, 'batch'):

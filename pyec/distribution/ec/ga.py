@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 from pyec.config import Config as _
-from pyec.space import BinaryReal, Binary, Euclidean
+from pyec.space import BinaryReal, Binary, Euclidean, IntegerRectangle
 from pyec.distribution.bayes.mutators import *
 from pyec.distribution.bayes.space import BayesNetStructure
 from pyec.distribution.bayes.structure.proposal import StructureProposal
@@ -51,6 +51,14 @@ GeneticAlgorithm = (
    Tournament << ((Tournament >> 1) << Crossover) << Bernoulli
 )[_(space=Binary(dim=100))]
 
+
+"""`IntegerGeneticAlgorithm`` uses linear ranking selection, uniform crossover,
+and Poisson mutation.
+
+"""
+IntegerGeneticAlgorithm = (
+   Ranking << ((Ranking >> 1) << Crossover) << Poisson
+)[_(space=IntegerRectangle(np.zeros(5,np.int64), np.ones(5,np.int64)))]
 
 """``RealGeneticAlgorithm`` uses linear ranking selection, uniform crossover,
 and Gaussian mutation.

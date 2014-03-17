@@ -12,7 +12,7 @@ import copy as scopy
 from numpy import *
 from scipy.special import erf
 from pyec.config import Config
-from pyec.space import Hyperrectangle, BinaryRectangle, Complement, LayeredSpace
+from pyec.space import Hyperrectangle, IntegerRectangle, BinaryRectangle, Complement, LayeredSpace
 from pyec.util.TernaryString import TernaryString
 
 import traceback
@@ -104,6 +104,8 @@ class Point(object):
       
       sep = segment.config.separator(segment.config)
       for gp in points:
+         #segment.scoreTree.printTree(segment)
+         #segment.partitionTree.printTree(segment)
          if gp.score != gp.score:
             # don't insert NaN
             continue
@@ -121,7 +123,6 @@ class Point(object):
          except IndexError:
             segment.scoreTree.printTree(segment)
             
-      #segment.scoreTree.printTree(segment)
 
    @classmethod
    def sampleTournament(cls, segment, temp, config):
@@ -540,6 +541,36 @@ class LongestSideVectorSeparationAlgorithm(VectorSeparationAlgorithm):
       return newIndex, newDiff
 
 
+class LongestSideIntegerSeparationAlgorithm(LongestSideVectorSeparationAlgorithm):
+   def makeParts(self, point, pointrep, other, otherrep, newIndex, lower, upper):
+      if pointrep[newIndex] > otherrep[newIndex]:
+         upPoint = point
+         downPoint = other
+         midPoint = (otherrep[newIndex] 
+                     + (pointrep[newIndex] - otherrep[newIndex])/2)
+      else:
+         upPoint = other
+         downPoint = point
+         midPoint = (pointrep[newIndex] 
+                     + (otherrep[newIndex] - pointrep[newIndex])/2)
+      
+      downUpper = upper.copy()
+      downLower = lower.copy()
+      downUpper[newIndex] = midPoint
+      down = IntegerRectangle(downLower, downUpper)
+      down.parent = other.partition_node.bounds
+      down.owner = self.config.space
+      
+      upUpper = upper.copy()
+      upLower = lower.copy()
+      upLower[newIndex] = midPoint
+      up = IntegerRectangle(upLower, upUpper)
+      up.parent = other.partition_node.bounds
+      up.owner = self.config.space
+      
+      return down, up, downPoint, upPoint
+
+
 class BinarySeparationAlgorithm(VectorSeparationAlgorithm):
    def compatible(self, space):
       return space.type == TernaryString
@@ -835,7 +866,7 @@ class Partition(object):
          if current == last:
             print "partition.traverse looped, exception"
             print current.bounds.extent()
-            print point.point
+            print point
             raise Exception("Loop in partition.traverse!")
          last = current
          
@@ -879,7 +910,7 @@ class Partition(object):
    def printTree(self, segment, node=None, indent=""):
       if node is None:
          node = self.root
-      print indent, node.id, ": ", node.layer, node.index, node.bounds, node.area
+      print indent, node.id, ": ", node.layer, node.index, node.bounds, node.area, node.point and "leaf" or "branch"
       children = node.children
       for child in children:
          self.printTree(segment, child, indent + "\t")      
@@ -909,7 +940,8 @@ class ScoreTreeNode(object):
       self.children = []
       self.id = self.__class__.idgen
       self.__class__.idgen += 1
-      
+
+
 class ScoreTree(object):
    
    def __init__(self, segment, config):
@@ -942,6 +974,20 @@ class ScoreTree(object):
       if len(children) > 0:
          for child in sorted(children, key=lambda c: not c.left):
             self.printTree(segment, child, indent + '\t')
+
+   def best(self, node=None):
+      if node is None:
+         node = self.root
+      
+      children = node.children
+      while len(children) > 0:
+         for child in children:
+            if child.left:
+               node = child
+               children = node.children
+               break
+      
+      return node.max_score, node.point
 
    def checkBalance(self, node=None):
       if node is None:

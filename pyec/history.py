@@ -105,6 +105,7 @@ class History(object):
             return self.minimal()
         else:
             return self.maximal()
+        
     
     optimal = best
     

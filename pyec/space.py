@@ -271,6 +271,77 @@ class Hyperrectangle(Euclidean):
        return self.lower + 2 * self.scale * base
 
 
+class IntegerRectangle(Space):
+    """An integer space of fixed finite dimension and size.
+    
+    Uses a numpy array with dtype 64-bit integers.
+    
+    :param dim: The dimension of the space
+    :type dim: ``int``
+    :param scale: The scale for the space, integer or array
+    :type scale: ``int`` for spherical space, or ``numpy.ndarray``
+    
+    """
+    def __init__(self, lower, upper):
+        super(IntegerRectangle, self).__init__(np.ndarray)
+        dim = len(lower)
+        if (upper < lower).any():
+            raise ValueError("Upper boundary cannot be below lower boundary.")
+        if upper.dtype != np.int64 or lower.dtype != np.int64:
+            raise ValueError("Expected 64 bit integers for boundaries")
+        self.lower = lower
+        self.upper = upper
+        self.bound = (upper-lower).max() ** 2
+        self.scale = upper - lower
+        self._area = None
+        
+    def __str__(self):
+        return "{0} {1} {2}".format(self.__class__.__name__, list(self.lower), list(self.upper))
+    
+    def in_bounds(self, y, **kwargs):
+        if not isinstance(y, np.ndarray) or y.dtype != np.int64:
+            return False
+        if "index" in kwargs:
+            index = kwargs["index"]
+            return self.lower[index] <= y[index] <= self.upper[index]
+        return (self.lower <= y).all() and (y <= self.upper).all()
+   
+    def extent(self):
+        return self.lower, self.upper
+
+    def proportion(self, smaller, larger, index):
+        return smaller.scale[index] / float(larger.scale[index])
+
+    def area(self, **kwargs):
+        if self._area is not None:
+            return self._area
+        
+        if ("index" in kwargs and
+            self.parent is not None and
+            self.owner is not None):
+            self._area = (self.parent.area() *
+                          self.owner.proportion(self,
+                                                self.parent,
+                                                kwargs["index"]))
+        else:
+            # Lebesgue
+            #self._area = (2*self.scale).prod()
+            self._area = 1.0
+            
+        return self._area
+   
+    def random(self):
+       base = np.random.random_integers(0,self.bound,size=np.shape(self.lower))
+       return self.lower + (base % (self.scale))
+                
+    def hash(self, point):
+        parts = [((point+i)**2).sum() for i in np.arange(10)]
+        return ",".join([str(pt) for pt in parts])
+    
+    def copy(self, point):
+        return np.copy(point)
+
+
 class Binary(Space):
     """A binary space of fixed finite dimension.
     
@@ -594,7 +665,28 @@ class Product(Space):
     
     def hash(self, x):
         return "|:|".join([space.hash[y] for y,space in zip(x,self.spaces)])
+
+
+class NumpyProduct(Product):
+    def __init__(self, *spaces):
+        super(NumpyProduct, self).__init__(*spaces)
+        for space in spaces:
+            if not issubclass(space.type, np.ndarray):
+                raise ValueError("Numpy product space must be composed of spaces"
+                                 " with type numpy, not {0}".format(space.config.type))
+        self.type = np.ndarray
+
+    def convert(self, x):
+        return np.concatenate(x)
     
+    def extent(self):
+        lowers, uppers = super(NumpyProduct, self).extent()
+        return np.concatenate(lowers), np.concatenate(uppers)
+    
+    @property
+    def dim(self):
+        return sum([space.dim for space in self.spaces])
+
 
 class EndogeneousProduct(Product):
     """A product space for which only the first portion of the space is to be

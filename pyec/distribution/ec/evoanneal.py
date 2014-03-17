@@ -18,8 +18,10 @@ from pyec.distribution.ec.mutators import (Mutation,
                                            Bernoulli,
                                            Crossover,
                                            Gaussian,
+                                           Poisson,
                                            AreaSensitiveGaussian,
-                                           AreaSensitiveBernoulli)
+                                           AreaSensitiveBernoulli,
+                                           AreaSensitivePoisson)
 from pyec.distribution.nn.mutators import (AddChainLayerMutation,
                                            AddRadialLayerMutation,
                                            RemoveLayerMutation,
@@ -256,6 +258,14 @@ RealEvolutionaryAnnealingJogo2012 = RealEvolutionaryAnnealing[Config(
 
 CrossedRealEvolutionaryAnnealing = (
    AnnealingCrossover << Gaussian
+)[Config(separator=LongestSideVectorSeparationAlgorithm)]
+
+IntegerEvolutionaryAnnealing = (
+   TournamentAnnealing << AreaStripper << Poisson
+)[Config(separator=LongestSideVectorSeparationAlgorithm)]
+
+CrossedIntegerAnnealing = (
+   AnnealingCrossover << Poisson
 )[Config(separator=LongestSideVectorSeparationAlgorithm)]
 
 BinaryEvolutionaryAnnealing = (

@@ -292,6 +292,39 @@ class Mutation(PopulationDistribution):
       return hasattr(historyClass, 'lastPopulation')
  
 
+class Poisson(Mutation):
+   """
+      Poisson mutation. Randomly mutates a random selection of components
+      of a real vector.
+      
+      Config parameters
+      * lmbda -- The percentage of the space to jump, in [0,1]; poisson lambda is
+                 computed by multiplying this by the space width in each dim
+      * p -- The probability of mutating each component; defaults to 1.0
+      
+  """
+   config = Config(lmbda=.05,
+                   p=1.0)
+   
+   def __init__(self, **kwargs):
+      super(Poisson, self).__init__(**kwargs)
+      if self.config.space.type != np.ndarray:
+         raise ValueError("Space for Gaussian must have type numpy.ndarray")
+         
+   def lmbda(self):
+      sp = self.config.space
+      return self.config.lmbda * sp.scale
+         
+   def mutate(self, x):
+      p = np.random.binomial(1, self.config.p, len(x))
+      ret = x + p * np.random.poisson(1.0, len(x)) * self.lmbda()
+      ret = ret.astype(np.int64)
+      if not self.config.space.in_bounds(ret):
+         lower = self.config.space.lower
+         upper = self.config.space.upper
+         ret = np.maximum(np.minimum(ret, upper),lower)
+      return ret
+
 class Gaussian(Mutation):
    """
       Gaussian mutation. Randomly mutates a random selection of components
@@ -311,7 +344,7 @@ class Gaussian(Mutation):
          raise ValueError("Space for Gaussian must have type numpy.ndarray")
          
    def sd(self):
-      return self.config.sd
+      return self.config.sd * self.config.space.scale
          
    def mutate(self, x):
       p = np.random.binomial(1, self.config.p, len(x))
@@ -351,6 +384,68 @@ class DecayedGaussian(Gaussian):
       decayExp = self.config.decayExp
       return self.config.sd * np.exp(-(n * decay) ** decayExp) 
 
+
+class AreaSensitivePoisson(Poisson):
+   """
+      Poisson mutation with a lambda that depends on the size of a
+      partition of the space (see :class:`pyec.util.partitions.Partition`).
+      
+      Config parameters:
+      * decay -- A function ``decay(n,config)`` to compute the multiplier
+                 that controls the rate of decrease in standard deviation.
+                 Faster decay causes faster convergence, but may miss the
+                 optimum. Default is ``((1/generations))``
+      
+      Lambda is determined by::
+      
+         lmbda = .5 * ((upper-lower) * decay(n)
+         
+      where ``dim`` is the dimension of the space (``config.dim``) and 
+      ``area`` is the volume of the partition region for the object being mutated.
+      
+   """
+   config = Config(jogo2012=False,
+                   decay=lambda n,cfg: (1./n)) # **(1./cfg.space.dim))
+   
+   def __init__(self, **kwargs):
+      super(AreaSensitivePoisson, self).__init__(**kwargs)
+   
+   def compatible(self, history):
+      # N.B. we use a Markov history, but assume we are passed the partition nodes
+      return hasattr(history, 'lastPopulation')
+   
+   def mutate(self, x):
+      """Apply area-sensitive poisson mutation.
+         Assume that the passed value is a :class:`Point` object
+         
+         :param x: The point to mutate
+         :type x: :class:`Point`
+         :returns: A numpy.ndarray mutation the ``point`` property of ``x``.
+      
+      """
+      lower = self.config.space.lower
+      upper = self.config.space.upper
+      
+      y, node = x
+      y = y.point
+      area = node
+      lower, upper = area.bounds.extent()
+      lmbda = .5 * (upper - lower)
+      lmbda *= self.config.decay(self.history.updates, self.config)
+      
+      ret = y + np.random.poisson(1.0, len(y)) * lmbda
+      if not self.config.space.in_bounds(ret):
+         ret = np.maximum(np.minimum(ret, upper),lower)
+      
+      return ret
+
+   def density(self, info, point):
+      scale = self.config.space.scale
+      center, area = info
+      sd = self.config.sd * scale * (area ** (1./len(point)))
+      
+      return exp(-(1./ (2 * sd * sd)) *
+                 ((point - center) ** 2).sum()) / sd / np.sqrt(2*np.pi) 
 
 class AreaSensitiveGaussian(Gaussian):
    """
